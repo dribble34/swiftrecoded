@@ -1,0 +1,15 @@
+# Build output
+cs2/bin/
+*.obj
+*.dll
+*.pdb
+*.exe
+*.lib
+*.exp
+*.ilk
+*.idb
+
+# Visual Studio
+.vs/
+*.user
+*.suo

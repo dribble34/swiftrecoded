@@ -71,9 +71,6 @@ namespace features::combat {
 			&& has_target
 			&& this->should_stop_movement( stop_ctx );
 
-		// Hold the brake for as long as it's actually needed instead of on a
-		// fixed timer — should_stop_movement (with its own release hysteresis)
-		// is what decides when we no longer need to be stopped.
 		this->m_stop_active = wants_stop;
 		this->m_should_stop = wants_stop;
 
@@ -1038,11 +1035,6 @@ namespace features::combat {
 
 	namespace
 	{
-		// Cheap capsule pre-filter: skip the budgeted/SEH-guarded native penetration
-		// trace for points that are already blocked by another of the *same* target's
-		// torso hitboxes (e.g. an arm sitting in front of the chest). Only torso groups
-		// are considered occluders since those are the common self-blocking cases and
-		// keeping the list short keeps this check cheap relative to the trace it saves.
 		bool is_torso_occluder_hitgroup( int hitgroup )
 		{
 			switch ( hitgroup )
@@ -2284,11 +2276,6 @@ namespace features::combat {
 			const auto inaccuracy_move = memory::read<float>( shared_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flInaccuracyMove"_hash ) );
 			const auto inaccuracy_stand = memory::read<float>( shared_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flInaccuracyStand"_hash ) );
 
-			// Hysteresis: the engage threshold is unchanged, but once we're already
-			// braking, require speed to fall further below it before releasing.
-			// Without this, friction decay ticks speed just under the threshold,
-			// autostop lets go, our own re-acceleration ticks it back over, and the
-			// brake chatters on/off every couple ticks right at the boundary.
 			const auto release_margin = this->m_stop_active ? 0.75f : 1.0f;
 
 			return speed_2d * inaccuracy_move > inaccuracy_stand * release_margin;

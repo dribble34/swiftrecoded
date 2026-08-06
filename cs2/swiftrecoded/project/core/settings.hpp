@@ -16,12 +16,6 @@ namespace settings {
 			config::val<float> max_stop_duration{ 0.25f, "ragebot", "max stop duration" };
 			config::val<float> stop_cooldown{ 0.5f, "ragebot", "stop cooldown" };
 
-			// A full stop drives speed to ~0 and holds it there, which is more
-			// deceleration than accuracy needs: CS2 grants full accuracy at or
-			// under accurate_threshold (0.34x max speed), not only at a dead
-			// stop. Slow-walk mode releases the counter-strafe once speed has
-			// bled down to that threshold instead of continuing to zero, so
-			// movement keeps some momentum between shots.
 			xui::setting autostop_slowwalk{ false, {}, "slow-walk instead of full stop", "ragebot" };
 
 			struct weapon_group

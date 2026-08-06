@@ -842,11 +842,6 @@ namespace features::combat {
 		if ( !std::isfinite( speed ) || speed < 1.0f )
 			return;
 
-		// Full stop drives speed to ~0 and holds it there. CS2 grants full
-		// weapon accuracy at or under accurate_threshold, not only at a dead
-		// stop, so a full stop over-brakes by design. Slow-walk mode releases
-		// the counter-strafe as soon as speed has bled down to the accuracy
-		// threshold instead of continuing to zero.
 		if ( settings::g_combat.m_ragebot.autostop_slowwalk.value )
 		{
 			const auto accurate_threshold = g_shared.ctx( ).weapon_max_speed * 0.34f;

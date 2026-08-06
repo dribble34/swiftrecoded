@@ -1,8 +1,6 @@
 #pragma once
 
-// Lightweight diagnostics used before the rest of the project is initialized.
-// The logger deliberately uses Win32 file I/O so it remains usable from SEH
-// handlers and does not depend on the state of iostreams.
+// Uses raw Win32 file I/O so it stays usable from SEH handlers.
 namespace diag {
 
 	enum class level
@@ -338,9 +336,8 @@ namespace diag {
 		const char* m_previous_phase;
 	};
 
-	// Suppresses expected first-chance exceptions from an explicit SEH probe.
-	// Construct this in a caller of the function containing __try; MSVC does not
-	// permit unwindable C++ locals in the same function as SEH.
+	// Construct in a caller of the function containing __try; MSVC disallows
+	// unwindable locals in the same function as SEH.
 	class probe_scope
 	{
 	public:

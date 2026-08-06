@@ -154,9 +154,6 @@ namespace {
 			return EXCEPTION_CONTINUE_SEARCH;
 		}
 
-		// The host or Steam may replace the single process-wide last-chance
-		// filter after injection. Re-arm it at first chance and preserve the
-		// displaced handler so the host still receives the crash after us.
 		const auto displaced_filter =
 			SetUnhandledExceptionFilter( diag_unhandled_exception_filter );
 		if ( displaced_filter != diag_unhandled_exception_filter )

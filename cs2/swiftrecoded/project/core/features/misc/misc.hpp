@@ -247,13 +247,6 @@ namespace features::misc {
 		math::vector3 m_buffered_eye_position{};
 		float m_buffered_impact_time{ -1.0f };
 
-		// Client-side prediction replays unacknowledged commands every frame,
-		// so the native functions these two hooks watch can fire several times
-		// for one real bullet (all sharing this frame's current_tick). FIFO
-		// matching to "first unresolved" then lets a replay of an old command
-		// steal the slot meant for a later, genuinely new shot. Only one real
-		// shot is fired per weapon per tick, so accept at most one confirmation
-		// of each kind per tick and drop the rest instead of misattributing them.
 		int m_last_inaccuracy_confirm_tick{ -1 };
 		int m_last_shoot_position_confirm_tick{ -1 };
 	};

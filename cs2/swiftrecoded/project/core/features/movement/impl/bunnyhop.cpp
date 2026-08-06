@@ -110,8 +110,6 @@ namespace features::movement {
 				const auto movement_services = memory::read<std::uintptr_t>( local.pawn + SCHEMA( "C_BasePlayerPawn", "m_pMovementServices"_hash ) );
 				if ( movement_services )
 				{
-					// stamina builds up on every jump/land and scales movement speed down (see airstrafe's speed_scale) —
-					// pinning it to 0 removes the post-landing slowdown entirely
 					memory::write<float>( movement_services + SCHEMA( "CCSPlayer_MovementServices", "m_flStamina"_hash ), 0.0f );
 				}
 			}

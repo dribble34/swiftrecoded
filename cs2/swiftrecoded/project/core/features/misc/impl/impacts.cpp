@@ -105,7 +105,7 @@ namespace features::misc {
 			memory::call<void>( PATTERN (patterns::set_voice_data), voice, buf, 0xFFFFFFFF, flags );
 		}
 
-		void chat_print_velocity( const char* msg )
+		void chat_print_swiftfly( const char* msg )
 		{
 			chat_print( "[swift.fly]", k_periwinkle_start_r, k_periwinkle_start_g, k_periwinkle_start_b, k_periwinkle_end_r, k_periwinkle_end_g, k_periwinkle_end_b, msg );
 		}
@@ -460,12 +460,6 @@ namespace features::misc {
 
 		std::unique_lock lock( this->m_mtx );
 
-		// Prediction replays unacknowledged commands every frame, so this
-		// native can fire more than once for one real bullet. Only the first
-		// call this tick can be trusted to belong to a shot that hasn't been
-		// matched yet; later calls in the same tick are replays of an older
-		// command and would otherwise steal the FIFO slot meant for the next
-		// genuinely new shot.
 		const auto current_tick = features::combat::g_shared.ctx( ).current_tick;
 		if ( current_tick == this->m_last_inaccuracy_confirm_tick )
 		{
@@ -502,10 +496,6 @@ namespace features::misc {
 
 		std::unique_lock lock( this->m_mtx );
 
-		// Same replay hazard as on_base_fire_guns_get_inaccuracy: this can
-		// fire multiple times within the tick m_firing_this_tick covers, once
-		// per prediction re-simulation pass. Only one of those calls belongs
-		// to a shot that hasn't already been given a confirmed position.
 		const auto current_tick = features::combat::g_shared.ctx( ).current_tick;
 		if ( current_tick == this->m_last_shoot_position_confirm_tick )
 		{
@@ -1036,7 +1026,7 @@ namespace features::misc {
 
 			if ( cfg.chat_log.value )
 			{
-				detail::chat_print_velocity( chat_msg.c_str( ) );
+				detail::chat_print_swiftfly( chat_msg.c_str( ) );
 			}
 		}
 
@@ -1097,7 +1087,7 @@ namespace features::misc {
 
 			if ( cfg.chat_log.value )
 			{
-				detail::chat_print_velocity( chat_msg.c_str( ) );
+				detail::chat_print_swiftfly( chat_msg.c_str( ) );
 			}
 		}
 

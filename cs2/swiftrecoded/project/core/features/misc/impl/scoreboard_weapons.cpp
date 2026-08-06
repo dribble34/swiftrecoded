@@ -135,9 +135,6 @@ namespace features::misc {
 				container.style.border           = "1px solid rgba(255,255,255,0.18)";
 			}
 
-			// Scoreboard rows cache their paint commands. Keep panel identities stable:
-			// deleting children while Panorama is updating that cache can leave native
-			// panel references dangling until the next paint pass.
 			var children = container.Children();
 			for (var i = 0; i < children.length; ++i) {
 				if (isValid(children[i])) children[i].style.visibility = "collapse";
@@ -431,9 +428,6 @@ namespace features::misc {
 						state.active_name = active->name;
 				}
 
-				// Enemy inventory handles are not reliably populated in m_hMyWeapons.
-				// Weapon entities and their networked owner handles are, so mirror the
-				// working scoreboard implementation and collect by owner instead.
 				for (const auto& item : items) {
 					if (!item.ptr)
 						continue;

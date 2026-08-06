@@ -1136,12 +1136,6 @@ namespace features::combat {
 
 		auto hits{ 0 };
 
-		// When a pass/fail threshold is supplied, bail as soon as the outcome is
-		// mathematically decided instead of burning all 256 capsule/box tests.
-		// The fail-path returns an upper bound (remaining samples assumed to hit)
-		// rather than the partial ratio, so it never under-reports accuracy for
-		// callers that compare against a second, looser threshold (e.g. duckpeek's
-		// standing_hc < needed_hc * 0.85f).
 		const auto early_exit = needed >= 0.0f;
 		const auto needed_hits = early_exit
 			? std::max( 1, static_cast< int >( std::ceil( needed * static_cast< float >( samples ) ) ) )

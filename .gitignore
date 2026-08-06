@@ -13,3 +13,7 @@ cs2/bin/
 .vs/
 *.user
 *.suo
+
+# Local safety backups, never pushed
+backups/
+build_log.txt

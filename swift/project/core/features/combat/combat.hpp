@@ -340,9 +340,7 @@ namespace features::combat {
 		void clear_duckpeek_reduck( ) noexcept { this->m_duckpeek_reduck = false; }
 
 		static constexpr auto k_max_lagcomp_records{ 16 };
-		// Scanning the newest and oldest valid records covers the useful lag-comp
-		// extremes without multiplying every penetration and hitchance test.
-		static constexpr auto k_max_scan_records{ 2 };
+		static constexpr auto k_max_scan_records{ 3 };
 
 	private:
 		struct aim_context
@@ -452,6 +450,7 @@ namespace features::combat {
 		[[nodiscard]] std::vector<math::vector3> generate_multipoints( const systems::hitboxes::entry& hitbox, const math::vector3& center, const math::quaternion& bone_rot, float pointscale, const math::vector3& shoot_pos, float inaccuracy ) const;
 		[[nodiscard]] bool should_stop_movement( const aim_context& ctx ) const;
 		[[nodiscard]] float get_min_damage( const settings::combat::ragebot::weapon_group& config, int target_health, bool override_active ) const;
+		[[nodiscard]] float get_min_damage_for_shot( const settings::combat::ragebot::weapon_group& config, int target_health, float max_possible_damage ) const;
 
 		[[nodiscard]] int ideal_backtrack_ticks( ) const;
 		[[nodiscard]] shared::lagcomp::record* select_lagcomp_record( const std::vector<shared::lagcomp::record*>& records ) const;

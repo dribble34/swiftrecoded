@@ -13,6 +13,13 @@ namespace settings {
 
 			xui::setting enabled{ true, {}, "enabled", "ragebot" };
 
+			enum class prefer_mode : std::uint8_t
+			{
+				head,
+				damage,
+				reliable
+			};
+
 			struct weapon_group
 			{
 				xui::setting silent{ true, {}, "silent", "ragebot" };
@@ -27,6 +34,8 @@ namespace settings {
 				config::val<int> hitchance{ 80 };
 				config::val<int> min_damage{ 101 };
 
+				xui::setting ignore_hitchance_if_accurate{ false, {}, "ignore hitchance if accurate", "ragebot" };
+
 				config::val<int> min_damage_override_value{ 11 };
 				xui::setting min_damage_override{ false, {}, "min damage override", "ragebot" };
 
@@ -36,6 +45,8 @@ namespace settings {
 			config::val<float> pointscale{ 85.0f };
 			xui::setting dynamic_pointscale{ true, {}, "dynamic point scale", "ragebot" };
 			xui::setting debug_multipoints{ false, {}, "debug multipoints", "ragebot" };
+
+			config::enm<prefer_mode> prefer{ prefer_mode::head };
 
 			config::bools<6> hitboxes{ { true, true, true, true, true, true } };
 
@@ -51,6 +62,7 @@ namespace settings {
 				this->autostop.category = s;
 				this->min_damage_override.category = s;
 				this->hitchance_override.category = s;
+				this->ignore_hitchance_if_accurate.category = s;
 				this->dynamic_pointscale.category = s;
 				this->debug_multipoints.category = s;
 
@@ -61,6 +73,7 @@ namespace settings {
 				this->hitchance_override_value.reg( s, "hit chance override value" );
 				this->pointscale.reg( s, "point scale" );
 				this->hitboxes.reg( s, "hitboxes" );
+				this->prefer.reg( s, "target preference" );
 			}
 
 				void set_default_binds( )
@@ -215,6 +228,11 @@ namespace settings {
 			xui::setting hide_shots{ true, {}, "hide onshot", "anti aim" };
 			xui::setting avoid_backstab{ true, {}, "avoid backstab", "anti aim" };
 
+			xui::setting pitch_jitter{ false, {}, "pitch jitter", "anti aim" };
+			config::val<float> pitch_jitter_amount{ 45.0f, "anti aim", "pitch jitter amount" };
+			xui::setting yaw_jitter{ false, {}, "yaw jitter", "anti aim" };
+			config::val<float> yaw_jitter_amount{ 30.0f, "anti aim", "yaw jitter amount" };
+
 			xui::setting direction_indicator{ true, {}, "direction indicator", "anti aim" };
 			config::col direction_indicator_color{ { 173, 192, 255, 220 }, "anti aim", "direction indicator color" };
 			xui::setting direction_indicator_glow{ true, {}, "direction indicator glow", "anti aim" };
@@ -268,6 +286,8 @@ namespace settings {
 		struct penetration_crosshair
 		{
 			xui::setting enabled{ false, {}, "penetration crosshair", "pen crosshair" };
+			config::val<float> size{ 3.0f, "pen crosshair", "size" };
+			config::val<float> outline_size{ 1.0f, "pen crosshair", "outline size" };
 			config::col can_penetrate_fill{ { 173, 192, 255, 120 }, "pen crosshair", "can penetrate fill" };
 			config::col can_penetrate_outline{ { 173, 192, 255, 210 }, "pen crosshair", "can penetrate outline" };
 			config::col blocked_fill{ { 252, 217, 240, 80 }, "pen crosshair", "blocked fill" };
@@ -597,15 +617,41 @@ namespace settings {
 					.primary = {.enabled = { true, {}, "primary layer", "chams enemy" }, .color = { { 173, 192, 255, 150 }, "chams enemy", "primary color" }, .material = { cham_ids::flat, "chams enemy", "primary material" } },
 					.secondary = {.enabled = { true, {}, "secondary layer", "chams enemy" }, .color = { { 255, 208, 243, 118 }, "chams enemy", "secondary color" }, .material = { cham_ids::flat_ignorez, "chams enemy", "secondary material" } }
 				};
-				chams_config enemy_ragdoll{ .enabled = { false, {}, "ragdoll chams", "chams enemy ragdoll" } };
-				chams_config team{ .enabled = { false, {}, "chams", "chams team" } };
-				chams_config team_ragdoll{ .enabled = { false, {}, "ragdoll chams", "chams team ragdoll" } };
+				chams_config enemy_ragdoll
+				{
+					.enabled = { false, {}, "ragdoll chams", "chams enemy ragdoll" },
+					.primary = {.enabled = { false, {}, "primary layer", "chams enemy ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams enemy ragdoll", "primary color" }, .material = { cham_ids::matte, "chams enemy ragdoll", "primary material" } },
+					.secondary = {.enabled = { false, {}, "secondary layer", "chams enemy ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams enemy ragdoll", "secondary color" }, .material = { cham_ids::matte, "chams enemy ragdoll", "secondary material" } },
+					.overlay = {.enabled = { false, {}, "overlay layer", "chams enemy ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams enemy ragdoll", "overlay color" }, .material = { cham_ids::outlines, "chams enemy ragdoll", "overlay material" } }
+				};
+				chams_config team
+				{
+					.enabled = { false, {}, "chams", "chams team" },
+					.primary = {.enabled = { false, {}, "primary layer", "chams team" }, .color = { { 255, 255, 255, 255 }, "chams team", "primary color" }, .material = { cham_ids::flat, "chams team", "primary material" } },
+					.secondary = {.enabled = { false, {}, "secondary layer", "chams team" }, .color = { { 255, 255, 255, 255 }, "chams team", "secondary color" }, .material = { cham_ids::flat_ignorez, "chams team", "secondary material" } },
+					.overlay = {.enabled = { false, {}, "overlay layer", "chams team" }, .color = { { 255, 255, 255, 255 }, "chams team", "overlay color" }, .material = { cham_ids::outlines, "chams team", "overlay material" } }
+				};
+				chams_config team_ragdoll
+				{
+					.enabled = { false, {}, "ragdoll chams", "chams team ragdoll" },
+					.primary = {.enabled = { false, {}, "primary layer", "chams team ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams team ragdoll", "primary color" }, .material = { cham_ids::matte, "chams team ragdoll", "primary material" } },
+					.secondary = {.enabled = { false, {}, "secondary layer", "chams team ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams team ragdoll", "secondary color" }, .material = { cham_ids::matte, "chams team ragdoll", "secondary material" } },
+					.overlay = {.enabled = { false, {}, "overlay layer", "chams team ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams team ragdoll", "overlay color" }, .material = { cham_ids::outlines, "chams team ragdoll", "overlay material" } }
+				};
 				chams_config local
 				{
 					.enabled = { true, {}, "chams", "chams local" },
+					.primary = {.enabled = { false, {}, "primary layer", "chams local" }, .color = { { 255, 255, 255, 255 }, "chams local", "primary color" }, .material = { cham_ids::flat, "chams local", "primary material" } },
+					.secondary = {.enabled = { false, {}, "secondary layer", "chams local" }, .color = { { 255, 255, 255, 255 }, "chams local", "secondary color" }, .material = { cham_ids::flat_ignorez, "chams local", "secondary material" } },
 					.overlay = {.enabled = { true, {}, "overlay layer", "chams local" }, .color = { { 173, 192, 255, 175 }, "chams local", "overlay color" }, .material = { cham_ids::outlines, "chams local", "overlay material" } }
 				};
-				chams_config local_ragdoll{ .enabled = { false, {}, "ragdoll chams", "chams local ragdoll" } };
+				chams_config local_ragdoll
+				{
+					.enabled = { false, {}, "ragdoll chams", "chams local ragdoll" },
+					.primary = {.enabled = { false, {}, "primary layer", "chams local ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams local ragdoll", "primary color" }, .material = { cham_ids::matte, "chams local ragdoll", "primary material" } },
+					.secondary = {.enabled = { false, {}, "secondary layer", "chams local ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams local ragdoll", "secondary color" }, .material = { cham_ids::matte, "chams local ragdoll", "secondary material" } },
+					.overlay = {.enabled = { false, {}, "overlay layer", "chams local ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams local ragdoll", "overlay color" }, .material = { cham_ids::outlines, "chams local ragdoll", "overlay material" } }
+				};
 
 				chams_config backtrack
 				{
@@ -641,12 +687,15 @@ namespace settings {
 			chams_config weapon
 			{
 				.enabled = { true, {}, "weapon chams", "viewmodel" },
+				.primary = {.enabled = { false, {}, "primary layer", "viewmodel weapon" }, .color = { { 255, 255, 255, 255 }, "viewmodel weapon", "primary color" }, .material = { cham_ids::flat, "viewmodel weapon", "primary material" } },
+				.secondary = {.enabled = { false, {}, "secondary layer", "viewmodel weapon" }, .color = { { 255, 255, 255, 255 }, "viewmodel weapon", "secondary color" }, .material = { cham_ids::flat_ignorez, "viewmodel weapon", "secondary material" } },
 				.overlay = {.enabled = { true, {}, "overlay layer", "viewmodel weapon" }, .color = { { 217, 173, 202, 175 }, "viewmodel weapon", "overlay color" }, .material = { cham_ids::glow, "viewmodel weapon", "overlay material" } }
 			};
 			chams_config arms
 			{
 				.enabled = { true, {}, "arms chams", "viewmodel" },
 				.primary = {.enabled = { false, {}, "primary layer", "viewmodel arms" }, .color = { { 173, 192, 255, 255 }, "viewmodel arms", "primary color" }, .material = { cham_ids::outlines, "viewmodel arms", "primary material" } },
+				.secondary = {.enabled = { false, {}, "secondary layer", "viewmodel arms" }, .color = { { 255, 255, 255, 255 }, "viewmodel arms", "secondary color" }, .material = { cham_ids::flat_ignorez, "viewmodel arms", "secondary material" } },
 				.overlay = {.enabled = { true, {}, "overlay layer", "viewmodel arms" }, .color = { { 173, 192, 255, 255 }, "viewmodel arms", "overlay color" }, .material = { cham_ids::outlines, "viewmodel arms", "overlay material" } }
 			};
 		} m_viewmodel{};
@@ -1189,6 +1238,7 @@ namespace settings {
 
 			xui::setting bullet_impact_effect{ true, {}, "bullet impacts", "impacts" };
 			config::enm<bullet_impact_type> bullet_impact_effect_type{ bullet_impact_type::overlay, "impacts", "bullet impact type" };
+			config::val<float> bullet_impact_effect_size{ 1.75f, "impacts", "bullet impact size" };
 			config::col bullet_impact_effect_fill_color{ { 173, 192, 255, 85 }, "impacts", "bullet impact fill color" };
 			config::col bullet_impact_effect_edge_color{ { 173, 192, 255, 255 }, "impacts", "bullet impact edge color" };
 			config::col bullet_impact_effect_color_spark{ { 173, 192, 255, 255 }, "impacts", "bullet impact spark color" };
@@ -1267,17 +1317,17 @@ namespace settings {
 				config::val<float> anim_speed{ 10.0f, "scope overlay", "anim speed" };
 				config::col color{ { 173, 192, 255, 255 }, "scope overlay", "color" };
 				xui::setting fade_in{ true, {}, "fade in", "scope overlay" };
-
+				xui::setting dynamic_spread{ true, {}, "dynamic spread", "scope overlay" };
 				xui::setting glow{ true, {}, "glow", "scope overlay" };
 				config::val<float> glow_strength{ 1.0f, "scope overlay", "glow strength" };
 			} m_scope{};
 
 			struct hat
 			{
-				enum class hat_type : std::uint8_t { kasa, bucket };
+				enum class hat_type : std::uint8_t { chinese };
 
 				xui::setting enabled{ false, {}, "hat", "hat" };
-				config::enm<hat_type> type{ hat_type::kasa, "hat", "type" };
+				config::enm<hat_type> type{ hat_type::chinese, "hat", "type" };
 				config::col color{ { 255, 171, 234, 160 }, "hat", "color" };
 				config::col secondary_color{ { 173, 192, 255, 160 }, "hat", "secondary color" };
 				xui::setting glow{ true, {}, "glow", "hat" };
@@ -1384,9 +1434,9 @@ namespace settings {
 
 		struct theme
 		{
-			config::col accent{ { 255, 255, 255, 255 }, "theme", "menu color" };
+			config::col accent{ { 210, 214, 220, 255 }, "theme", "menu color" };
 			config::col text{ { 215, 215, 215, 235 }, "theme", "label color" };
-			config::col card{ { 23, 23, 23, 255 }, "theme", "island color" };
+			config::col card{ { 20, 21, 24, 230 }, "theme", "island color" };
 			config::col background{ { 16, 16, 16, 255 }, "theme", "background color" };
 			config::val<float> anim_speed{ 1.0f, "theme", "animation speed" };
 		} m_theme{};

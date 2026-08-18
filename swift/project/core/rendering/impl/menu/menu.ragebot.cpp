@@ -8,8 +8,12 @@ namespace rendering {
 	namespace detail {
 
 		constexpr const char* hitbox_names[ ]{ "head", "chest", "stomach", "arms", "legs", "feet" };
+		constexpr const char* prefer_items[ ]{ "head", "damage", "reliable" };
 		constexpr const char* pitch_items[ ]{ "none", "down", "up", "custom" };
 		constexpr const char* yaw_items[ ]{ "backwards", "forward", "custom" };
+		constexpr const char* cham_materials[ ]{ "liquid", "metallic", "matte", "flat", "bloom", "outlines", "glow", "electric", "distortion", "hologram", "pearl",
+			"liquid ignorez", "matte ignorez", "flat ignorez", "bloom ignorez", "outlines ignorez", "glow ignorez", "distortion ignorez", "hologram ignorez" };
+		constexpr auto k_cham_material_count{ static_cast< int >( std::size( cham_materials ) ) };
 
 	} // namespace detail
 
@@ -17,7 +21,6 @@ namespace rendering {
 	{
 		auto& s = settings::g_combat;
 		auto& rb = s.m_ragebot;
-		auto& aa = s.m_antiaim;
 		auto& qp = s.m_quickpeek;
 		auto& dp = s.m_duckpeek;
 		auto& zb = s.m_zeusbot;
@@ -29,9 +32,9 @@ namespace rendering {
 
 		const auto wx = this->m_x;
 		const auto wy = this->m_y;
-		const auto content_x = wx + tokens::sidebar_w + tokens::gap;
-		const auto body_y = wy + tokens::gap + tokens::subtab_bar_h + tokens::gap;
-		const auto content_w = this->m_w - tokens::sidebar_w - tokens::gap * 2.0f;
+		const auto content_x = wx + tokens::gap;
+		const auto body_y = wy + tokens::header_bar_h + tokens::gap * 2.0f + tokens::subtab_bar_h;
+		const auto content_w = this->m_w - tokens::gap * 2.0f;
 		const auto col_w = ( content_w - tokens::gap ) * 0.5f;
 		const auto right_x = content_x + col_w + tokens::gap;
 
@@ -52,6 +55,7 @@ namespace rendering {
 			}
 			xui::slider_float( "fov", wg.max_fov, 1.0f, 180.0f, "%.0f°" );
 			xui::slider_int( "hitchance", wg.hitchance, 0, 100, "%d%%" );
+			xui::checkbox( "ignore hitchance if accurate", wg.ignore_hitchance_if_accurate );
 			xui::slider_int( "mindamage", wg.min_damage, 5, 125, "%d" );
 			/*xui::slider_int( "max backtrack", s.m_lagcomp.max_backtrack_ticks, 1, 16, "%d tick(s)" );*/
 
@@ -72,53 +76,20 @@ namespace rendering {
 			xui::end_child( );
 		}
 
-		if ( xui::begin_child( "##ragebot_extras", col_w, 190.0f, true ) )
+		const auto extras_h = std::max( 150.0f, xui::layout::avail( ).second - xui::ctx( ).style.item_spacing_y - tokens::gap );
+		if ( xui::begin_child( "##ragebot_extras", col_w, extras_h, true ) )
 		{
 			xui::checkbox( "force bodyaim", wg.body_aim );
 		xui::checkbox( "dynamic point scale", wg.dynamic_pointscale );
 		xui::checkbox( "debug multipoints", wg.debug_multipoints );
 		xui::slider_float( "pointscale", wg.pointscale, 0.0f, 100.0f, "%.0f%%" );
 		xui::multicombo( "hitboxes", wg.hitboxes, detail::hitbox_names, 6 );
+		xui::combo( "prefer", wg.prefer.value, detail::prefer_items, 3 );
 
 			xui::end_child( );
 		}
 
 		xui::layout::set_cursor( right_x - wx, body_y - wy );
-
-		if ( xui::begin_child( "##ragebot_antiaim", col_w ) )
-		{
-			xui::checkbox( "anti aim", aa.enabled );
-
-			xui::combo( "pitch", aa.pitch.value, detail::pitch_items, 4 );
-				if ( aa.pitch.value == settings::combat::antiaim::pitch_mode::custom )
-				{
-					xui::slider_float( "custom pitch", aa.custom_pitch.value, -90.0f, 90.0f, "%.0f°" );
-				}
-
-			xui::combo( "yaw", aa.yaw.value, detail::yaw_items, 3 );
-			if ( aa.yaw.value == settings::combat::antiaim::yaw_mode::custom )
-			{
-				xui::slider_float( "custom yaw", aa.custom_yaw.value, -180.0f, 180.0f, "%.0f°" );
-			}
-
-			xui::checkbox( "yaw from view", aa.use_view_yaw );
-			xui::checkbox( "compensate roll", aa.auto_yaw_adjust );
-			xui::checkbox( "force left", aa.manual_left );
-			xui::checkbox( "force right", aa.manual_right );
-			xui::checkbox( "hide onshot", aa.hide_shots );
-			xui::checkbox( "avoid backstab", aa.avoid_backstab );
-			xui::checkbox( "direction indicator", aa.direction_indicator );
-
-			if ( xui::begin_popup( "##aa_indicator", 220.0f ) )
-			{
-				xui::color_picker( "color##aa_ind", aa.direction_indicator_color );
-				xui::checkbox( "glow##aa_ind", aa.direction_indicator_glow );
-				xui::slider_float( "glow strength##aa_ind", aa.direction_indicator_glow_strength, 0.1f, 1.0f, "%.2f" );
-				xui::end_popup( );
-			}
-
-			xui::end_child( );
-		}
 
 		if ( xui::begin_child( "##ragebot_otherbots", col_w ) )
 		{
@@ -143,6 +114,88 @@ namespace rendering {
 		}
 
 		if ( xui::begin_child( "##ragebot_peek", col_w ) )
+		{
+			xui::checkbox( "quick peek assist", qp.enabled );
+			if ( xui::begin_popup( "##qp_colors", 220.0f ) )
+			{
+				xui::color_picker( "base color##qp", qp.color );
+				xui::color_picker( "retracting color##qp", qp.retrack_color );
+				xui::end_popup( );
+			}
+
+			xui::checkbox( "duck peek assist", dp.enabled );
+
+			xui::end_child( );
+		}
+	}
+
+	void menu::draw_antiaim( float group_w ) const
+	{
+		auto& s = settings::g_combat;
+		auto& aa = s.m_antiaim;
+		auto& qp = s.m_quickpeek;
+		auto& dp = s.m_duckpeek;
+
+		const auto wx = this->m_x;
+		const auto wy = this->m_y;
+		const auto content_x = wx + tokens::gap;
+		const auto body_y = wy + tokens::header_bar_h + tokens::gap * 2.0f + tokens::subtab_bar_h;
+		const auto content_w = this->m_w - tokens::gap * 2.0f;
+		const auto col_w = ( content_w - tokens::gap ) * 0.5f;
+		const auto right_x = content_x + col_w + tokens::gap;
+
+		xui::layout::set_cursor( content_x - wx, body_y - wy );
+
+		if ( xui::begin_child( "##antiaim_main", col_w ) )
+		{
+			xui::checkbox( "anti aim", aa.enabled );
+
+			xui::combo( "pitch", aa.pitch.value, detail::pitch_items, 4 );
+			if ( aa.pitch.value == settings::combat::antiaim::pitch_mode::custom )
+			{
+				xui::slider_float( "custom pitch", aa.custom_pitch.value, -90.0f, 90.0f, "%.0f°" );
+			}
+
+			xui::combo( "yaw", aa.yaw.value, detail::yaw_items, 3 );
+			if ( aa.yaw.value == settings::combat::antiaim::yaw_mode::custom )
+			{
+				xui::slider_float( "custom yaw", aa.custom_yaw.value, -180.0f, 180.0f, "%.0f°" );
+			}
+
+			xui::checkbox( "yaw jitter", aa.yaw_jitter );
+			if ( aa.yaw_jitter )
+			{
+				xui::slider_float( "yaw jitter amount", aa.yaw_jitter_amount.value, 0.0f, 90.0f, "%.0f°" );
+			}
+
+			xui::checkbox( "pitch jitter", aa.pitch_jitter );
+			if ( aa.pitch_jitter )
+			{
+				xui::slider_float( "pitch jitter amount", aa.pitch_jitter_amount.value, 0.0f, 90.0f, "%.0f°" );
+			}
+
+			xui::checkbox( "yaw from view", aa.use_view_yaw );
+			xui::checkbox( "compensate roll", aa.auto_yaw_adjust );
+			xui::checkbox( "force left", aa.manual_left );
+			xui::checkbox( "force right", aa.manual_right );
+			xui::checkbox( "hide onshot", aa.hide_shots );
+			xui::checkbox( "avoid backstab", aa.avoid_backstab );
+
+			xui::checkbox( "direction indicator", aa.direction_indicator );
+			if ( xui::begin_popup( "##aa_indicator", 220.0f ) )
+			{
+				xui::color_picker( "color##aa_ind", aa.direction_indicator_color );
+				xui::checkbox( "glow##aa_ind", aa.direction_indicator_glow );
+				xui::slider_float( "glow strength##aa_ind", aa.direction_indicator_glow_strength, 0.1f, 1.0f, "%.2f" );
+				xui::end_popup( );
+			}
+
+			xui::end_child( );
+		}
+
+		xui::layout::set_cursor( right_x - wx, body_y - wy );
+
+		if ( xui::begin_child( "##antiaim_peek", col_w ) )
 		{
 			xui::checkbox( "quick peek assist", qp.enabled );
 			if ( xui::begin_popup( "##qp_colors", 220.0f ) )

@@ -38,7 +38,7 @@ namespace features::esp {
 
 			class onshot {
 			public:
-				void push (std::uintptr_t pawn);
+				void push (std::uintptr_t pawn, const systems::bones::data* bones, int bone_count);
 				void update ();
 				void shutdown ();
 

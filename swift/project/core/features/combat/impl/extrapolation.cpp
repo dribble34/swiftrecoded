@@ -36,9 +36,6 @@ namespace features::combat {
 
 		if ( trace_result.fraction != 1.0f )
 		{
-			logging::console::print( xs( "[extrap] predict_movement: wall hit (frac {:.2f}, normal {:.2f} {:.2f} {:.2f})\n" ),
-				trace_result.fraction, trace_result.normal.x, trace_result.normal.y, trace_result.normal.z );
-
 			for ( auto i = 0; i < 2; ++i )
 			{
 				const auto dot = data.velocity.dot( trace_result.normal );
@@ -139,7 +136,6 @@ namespace features::combat {
 
 		if ( speed < 0.1f )
 		{
-			logging::console::print( xs( "[extrap] {:x} | skip: player stationary (speed {:.2f})\n" ), pawn, speed );
 			return std::nullopt;
 		}
 
@@ -173,7 +169,6 @@ namespace features::combat {
 
 				if ( std::fabsf( angle_diff ) > 35.0f )
 				{
-					logging::console::print( xs( "[extrap] {:x} | skip: direction change too large ({:.1f} deg)\n" ), pawn, angle_diff );
 					return std::nullopt;
 				}
 
@@ -238,7 +233,6 @@ namespace features::combat {
 
 		if ( origin_delta.length_sqr( ) < 0.01f )
 		{
-			logging::console::print( xs( "[extrap] {:x} | skip: predicted origin unchanged after {} ticks\n" ), pawn, ticks_to_extrapolate );
 			return std::nullopt;
 		}
 
@@ -248,19 +242,31 @@ namespace features::combat {
 		extrap_record.tick = cstypes::time_to_ticks( data.sim_time );
 		extrap_record.extrapolated = true;
 
+		// The extrapolated body also turns while moving. Rotate the translated pose
+		// about the predicted origin by the accumulated yaw so the lead pose faces
+		// the direction of travel instead of staying frozen in the last orientation.
+		const auto total_yaw = direction_change * static_cast< float >( ticks_to_extrapolate );
+		const auto rotate_pose = std::fabsf( total_yaw ) > 0.5f;
+		const auto yaw_rad = math::helpers::deg_to_rad( total_yaw );
+		const auto cos_yaw = std::cosf( yaw_rad );
+		const auto sin_yaw = std::sinf( yaw_rad );
+		const auto pivot = data.origin;
+
 		for ( auto i = 0; i < extrap_record.bone_count && i < 128; ++i )
 		{
-			extrap_record.bones[ i ].position.x += origin_delta.x;
-			extrap_record.bones[ i ].position.y += origin_delta.y;
-			extrap_record.bones[ i ].position.z += origin_delta.z;
-		}
+			auto& pos = extrap_record.bones[ i ].position;
+			pos.x += origin_delta.x;
+			pos.y += origin_delta.y;
+			pos.z += origin_delta.z;
 
-		const auto dist = std::sqrtf( origin_delta.x * origin_delta.x + origin_delta.y * origin_delta.y + origin_delta.z * origin_delta.z );
-		logging::console::print(
-			xs( "[extrap] {:x} | ok: {} ticks | delta {:.2f} u | origin ({:.1f}, {:.1f}, {:.1f})\n" ),
-			pawn, ticks_to_extrapolate, dist,
-			data.origin.x, data.origin.y, data.origin.z
-		);
+			if ( rotate_pose )
+			{
+				const auto dx = pos.x - pivot.x;
+				const auto dz = pos.z - pivot.z;
+				pos.x = pivot.x + dx * cos_yaw - dz * sin_yaw;
+				pos.z = pivot.z + dx * sin_yaw + dz * cos_yaw;
+			}
+		}
 
 		return extrap_record;
 	}

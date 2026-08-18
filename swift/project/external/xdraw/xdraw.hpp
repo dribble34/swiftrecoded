@@ -228,23 +228,25 @@ namespace xdraw {
 
 namespace tokens {
 
-	inline xdraw::color col_accent{ 255, 120, 170, 255 };
-	inline xdraw::color col_accent_glow{ 255, 120, 170, 60 };
-	inline xdraw::color col_accent_soft{ 255, 150, 190, 255 };
-	inline xdraw::color col_dark{ 14, 14, 16, 255 };
-	inline xdraw::color col_text{ 255, 245, 250, 240 };
-	inline xdraw::color col_text_dim{ 255, 160, 200, 120 };
-	inline xdraw::color col_card{ 20, 18, 22, 160 };
-	inline xdraw::color col_card_hover{ 30, 26, 32, 180 };
-	inline xdraw::color col_elevated{ 28, 24, 30, 190 };
-	inline xdraw::color col_border{ 60, 45, 55, 200 };
-	inline xdraw::color col_border_focus{ 255, 120, 170, 180 };
-	inline xdraw::color col_surface{ 18, 16, 20, 200 };
-	inline xdraw::color col_surface_hover{ 28, 24, 30, 220 };
+	inline xdraw::color col_accent{ 210, 214, 220, 255 };
+	inline xdraw::color col_accent_glow{ 210, 214, 220, 60 };
+	inline xdraw::color col_accent_soft{ 180, 184, 190, 255 };
+	inline xdraw::color col_dark{ 12, 12, 14, 255 };
+	inline xdraw::color col_text{ 235, 237, 240, 240 };
+	inline xdraw::color col_text_dim{ 165, 169, 176, 130 };
+	inline xdraw::color col_card{ 20, 21, 24, 200 };
+	inline xdraw::color col_card_hover{ 32, 34, 38, 210 };
+	inline xdraw::color col_elevated{ 27, 29, 33, 210 };
+	inline xdraw::color col_border{ 0, 0, 0, 220 };
+	inline xdraw::color col_border_focus{ 210, 214, 220, 180 };
+	inline xdraw::color col_surface{ 15, 16, 18, 220 };
+	inline xdraw::color col_surface_hover{ 28, 30, 34, 230 };
 
 	constexpr auto sidebar_w{ 180.0f };
 	constexpr auto tab_icon_size{ 38.0f };
 	constexpr auto subtab_bar_h{ 40.0f };
+	constexpr auto header_bar_h{ 46.0f };
+	constexpr auto tab_bar_h{ 52.0f };
 	constexpr auto gap{ 10.0f };
 	constexpr auto card_rounding{ 14.0f };
 	constexpr auto btn_rounding{ 10.0f };

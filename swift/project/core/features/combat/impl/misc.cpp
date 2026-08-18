@@ -198,99 +198,120 @@ namespace features::combat {
 		}
 	}
 
-	float misc::antiaim::get_pitch( float view_pitch )
+float misc::antiaim::get_pitch( float view_pitch )
+{
+	const auto& cfg = settings::g_combat.m_antiaim;
+	float pitch = view_pitch;
+
+	if ( cfg.pitch_jitter.value )
 	{
-		switch ( settings::g_combat.m_antiaim.pitch )
-		{
-		case settings::combat::antiaim::pitch_mode::down:
-			return 89.0f;
-		case settings::combat::antiaim::pitch_mode::up:
-			return -89.0f;
-		case settings::combat::antiaim::pitch_mode::custom:
-			return std::clamp( settings::g_combat.m_antiaim.custom_pitch.value, -90.0f, 90.0f );
-		default:
-			return view_pitch;
-		}
+		static bool flip = false;
+		flip = !flip;
+		const auto amount = std::clamp( cfg.pitch_jitter_amount.value, 0.0f, 90.0f );
+		pitch += flip ? amount : -amount;
 	}
 
-	float misc::antiaim::get_yaw( const math::vector3& view_angles, const systems::local::snapshot& local )
+	switch ( cfg.pitch )
 	{
-		const auto view_yaw = view_angles.y;
-		auto base_yaw = view_yaw;
-		auto base_yaw_offset = 0.0f;
+	case settings::combat::antiaim::pitch_mode::down:
+		return 89.0f;
+	case settings::combat::antiaim::pitch_mode::up:
+		return -89.0f;
+	case settings::combat::antiaim::pitch_mode::custom:
+		return std::clamp( cfg.custom_pitch.value, -90.0f, 90.0f );
+	default:
+		return pitch;
+	}
+}
 
-		if ( settings::g_combat.m_antiaim.at_target.value )
-		{
-			const auto local_game_scene_node = memory::read<std::uintptr_t>( local.pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
-			const auto local_origin = memory::read<math::vector3>( local_game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
-			const auto eye_pos = local_origin + memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseModelEntity", "m_vecViewOffset"_hash ) );
+float misc::antiaim::get_yaw( const math::vector3& view_angles, const systems::local::snapshot& local )
+{
+	const auto& cfg = settings::g_combat.m_antiaim;
+	const auto view_yaw = view_angles.y;
+	auto base_yaw = view_yaw;
+	auto base_yaw_offset = 0.0f;
 
-			auto best_threat_score = std::numeric_limits<float>::max( );
-			auto best_target_yaw = base_yaw;
-
-			const auto players = systems::g_entities.get_by_type( systems::entities::type::player );
-			for ( const auto& p : players )
-			{
-				if ( !p.ptr || p.ptr == local.controller )
-					continue;
-				if ( !memory::read<bool>( p.ptr + SCHEMA( "CCSPlayerController", "m_bPawnIsAlive"_hash ) ) )
-					continue;
-
-				const auto pawn_handle = memory::read<std::uint32_t>( p.ptr + SCHEMA( "CBasePlayerController", "m_hPawn"_hash ) );
-				const auto pawn = systems::g_entities.lookup( pawn_handle );
-				if ( !pawn || pawn == local.pawn )
-					continue;
-
-				const auto team = memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iTeamNum"_hash ) );
-				if ( !local.is_this_other_team( team ) )
-					continue;
-
-				if ( memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iHealth"_hash ) ) <= 0 )
-					continue;
-
-				if ( memory::read<bool>( pawn + SCHEMA( "C_CSPlayerPawn", "m_bGunGameImmunity"_hash ) ) )
-					continue;
-
-				const auto enemy_game_scene_node = memory::read<std::uintptr_t>( pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
-				if ( !enemy_game_scene_node )
-					continue;
-
-				const auto enemy_origin = memory::read<math::vector3>( enemy_game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
-				const auto enemy_eye_pos = enemy_origin + memory::read<math::vector3>( pawn + SCHEMA( "C_BaseModelEntity", "m_vecViewOffset"_hash ) );
-				const auto angle_to_enemy = math::helpers::calculate_angle( eye_pos, enemy_eye_pos );
-				const auto distance = eye_pos.distance( enemy_eye_pos );
-
-				auto threat_score = distance * 0.01f;
-				if ( systems::g_tracing.is_visible( eye_pos, enemy_eye_pos, pawn, local.pawn ) )
-					threat_score -= 15.0f;
-
-				if ( threat_score < best_threat_score )
-				{
-					best_threat_score = threat_score;
-					best_target_yaw = angle_to_enemy.y;
-				}
-			}
-
-			if ( best_threat_score < std::numeric_limits<float>::max( ) )
-				base_yaw = best_target_yaw;
-		}
-
-		switch ( settings::g_combat.m_antiaim.yaw )
-		{
-		case settings::combat::antiaim::yaw_mode::backwards:
-			base_yaw_offset = 180.0f;
-			break;
-		case settings::combat::antiaim::yaw_mode::forward:
-			base_yaw_offset = 0.0f;
-			break;
-		case settings::combat::antiaim::yaw_mode::custom:
-			base_yaw_offset = -settings::g_combat.m_antiaim.custom_yaw.value;
-			break;
-		}
-
-		base_yaw -= base_yaw_offset;
-
+	if ( settings::g_combat.m_antiaim.at_target.value )
+	{
 		const auto local_game_scene_node = memory::read<std::uintptr_t>( local.pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+		const auto local_origin = memory::read<math::vector3>( local_game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+		const auto eye_pos = local_origin + memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseModelEntity", "m_vecViewOffset"_hash ) );
+
+		auto best_threat_score = std::numeric_limits<float>::max( );
+		auto best_target_yaw = base_yaw;
+
+		const auto players = systems::g_entities.get_by_type( systems::entities::type::player );
+		for ( const auto& p : players )
+		{
+			if ( !p.ptr || p.ptr == local.controller )
+				continue;
+			if ( !memory::read<bool>( p.ptr + SCHEMA( "CCSPlayerController", "m_bPawnIsAlive"_hash ) ) )
+				continue;
+
+			const auto pawn_handle = memory::read<std::uint32_t>( p.ptr + SCHEMA( "CBasePlayerController", "m_hPawn"_hash ) );
+			const auto pawn = systems::g_entities.lookup( pawn_handle );
+			if ( !pawn || pawn == local.pawn )
+				continue;
+
+			const auto team = memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iTeamNum"_hash ) );
+			if ( !local.is_this_other_team( team ) )
+				continue;
+
+			if ( memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iHealth"_hash ) ) <= 0 )
+				continue;
+
+			if ( memory::read<bool>( pawn + SCHEMA( "C_CSPlayerPawn", "m_bGunGameImmunity"_hash ) ) )
+				continue;
+
+			const auto enemy_game_scene_node = memory::read<std::uintptr_t>( pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+			if ( !enemy_game_scene_node )
+				continue;
+
+			const auto enemy_origin = memory::read<math::vector3>( enemy_game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+			const auto enemy_eye_pos = enemy_origin + memory::read<math::vector3>( pawn + SCHEMA( "C_BaseModelEntity", "m_vecViewOffset"_hash ) );
+			const auto angle_to_enemy = math::helpers::calculate_angle( eye_pos, enemy_eye_pos );
+			const auto distance = eye_pos.distance( enemy_eye_pos );
+
+			auto threat_score = distance * 0.01f;
+			if ( systems::g_tracing.is_visible( eye_pos, enemy_eye_pos, pawn, local.pawn ) )
+				threat_score -= 15.0f;
+
+			if ( threat_score < best_threat_score )
+			{
+				best_threat_score = threat_score;
+				best_target_yaw = angle_to_enemy.y;
+			}
+		}
+
+		if ( best_threat_score < std::numeric_limits<float>::max( ) )
+			base_yaw = best_target_yaw;
+	}
+
+	const auto yaw_mode = static_cast< int >( cfg.yaw.value );
+	switch ( yaw_mode )
+	{
+	case static_cast< int >( settings::combat::antiaim::yaw_mode::backwards ):
+		base_yaw_offset = 180.0f;
+		break;
+	case static_cast< int >( settings::combat::antiaim::yaw_mode::forward ):
+		base_yaw_offset = 0.0f;
+		break;
+	case static_cast< int >( settings::combat::antiaim::yaw_mode::custom ):
+		base_yaw_offset = -cfg.custom_yaw.value;
+		break;
+	}
+
+	if ( cfg.yaw_jitter.value )
+	{
+		static bool flip = false;
+		flip = !flip;
+		const auto amount = std::clamp( cfg.yaw_jitter_amount.value, 0.0f, 90.0f );
+		base_yaw_offset += flip ? amount : -amount;
+	}
+
+	base_yaw -= base_yaw_offset;
+
+	const auto local_game_scene_node = memory::read<std::uintptr_t>( local.pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
 		const auto local_origin = memory::read<math::vector3>( local_game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
 		const auto players = systems::g_entities.get_by_type( systems::entities::type::player );
 		const auto eye_pos = local_origin + memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseModelEntity", "m_vecViewOffset"_hash ) );
@@ -906,6 +927,22 @@ namespace features::combat {
 
 		if ( speed <= 1.0f )
 		{
+			base->set_forwardmove( 0.0f );
+			base->set_leftmove( 0.0f );
+
+			const auto subtick_moves = base->mutable_subtick_moves( );
+			if ( subtick_moves )
+			{
+				const auto step = systems::g_input.acquire_subtick_step( subtick_moves );
+				if ( step )
+				{
+					step->set_button( 0 );
+					step->set_pressed( false );
+					step->set_when( 0.0f );
+					step->set_analog_forward_delta( 0.0f - prestate.last_movement_impulses.x );
+					step->set_analog_left_delta( 0.0f - prestate.last_movement_impulses.y );
+				}
+			}
 			return;
 		}
 

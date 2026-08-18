@@ -325,7 +325,7 @@ namespace features::combat {
 			c.health = health;
 			c.armor = memory::read<int>( pawn + SCHEMA( "C_CSPlayerPawn", "m_ArmorValue"_hash ) );
 
-			const auto pick_record_indices = [ &records ]( std::array<int, k_max_scan_records>& out_indices ) -> int
+			const auto pick_record_indices = [ & ]( std::array<int, k_max_scan_records>& out_indices ) -> int
 				{
 					const auto count = records.size( );
 					if ( count == 0 )
@@ -336,7 +336,7 @@ namespace features::combat {
 					auto picked{ 0 };
 					const auto add_index = [ & ]( int idx )
 						{
-							if ( picked >= k_max_scan_records )
+							if ( picked >= k_max_scan_records || idx < 0 || idx >= static_cast< int >( count ) )
 							{
 								return;
 							}
@@ -358,6 +358,30 @@ namespace features::combat {
 					{
 						add_index( static_cast< int >( count - 1 ) );
 					}
+
+					const auto bt = this->ideal_backtrack_ticks( );
+					if ( bt > 0 )
+					{
+						const auto target_tick = g_shared.ctx( ).current_tick - bt;
+						auto best_i = 0;
+						auto best_diff = 1 << 30;
+						for ( auto i = 0; i < static_cast< int >( count ); ++i )
+						{
+							if ( !records[ i ] || !records[ i ]->valid )
+							{
+								continue;
+							}
+							const auto diff = records[ i ]->tick > target_tick ? records[ i ]->tick - target_tick : target_tick - records[ i ]->tick;
+							if ( diff < best_diff )
+							{
+								best_diff = diff;
+								best_i = i;
+							}
+						}
+						add_index( best_i );
+					}
+
+					add_index( static_cast< int >( count ) / 3 );
 
 					return picked;
 				};
@@ -497,7 +521,7 @@ namespace features::combat {
 			cmd->buttons.value_scroll |= cstypes::command_buttons::in_second_attack;
 		}
 
-		const auto needed_hc = config.hitchance_override.value ? static_cast< float >( config.hitchance_override_value ) / 100.0f : static_cast< float >( config.hitchance ) / 100.0f;
+		const auto needed_hc = std::clamp( config.hitchance_override.value ? static_cast< float >( config.hitchance_override_value ) / 100.0f : static_cast< float >( config.hitchance ) / 100.0f, 0.0f, 1.0f );
 		const auto duckpeek_active = settings::g_combat.m_duckpeek.enabled.value && ctx.on_ground;
 		const auto is_ducked = ( prestate.flags & cstypes::entity_flags::ducking ) != 0;
 
@@ -506,15 +530,43 @@ namespace features::combat {
 			? ( duckpeek_active ? this->evaluate_hitchance( best.hit, ctx, standing_inaccuracy ) : best.hitchance )
 			: 0.0f;
 
-		const auto accurate = best.valid && standing_hc >= needed_hc;
+		const auto velocity = prestate.networked_velocity;
+		const auto inac_jump_initial = memory::read<float>( shared_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flInaccuracyJumpInitial"_hash ) );
+		const auto inac_jump_apex = memory::read<float>( shared_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flInaccuracyJumpApex"_hash ) );
+		const auto shootable_threshold = inac_jump_apex + 0.001f;
+		const auto early_threshold = inac_jump_initial * 0.55f + inac_jump_apex * 0.45f;
+
 		const auto max_acc = g_shared.is_max_accuracy( standing_inaccuracy );
+		const auto is_air_shot = !ctx.on_ground && ( shared_ctx.weapon_type == cstypes::weapon_type::sniper || shared_ctx.is_jump_scouting );
+		const auto air_inaccuracy = is_air_shot ? g_shared.get_air_inaccuracy( velocity.z, inac_jump_initial, inac_jump_apex ) : standing_inaccuracy;
+		const auto air_shootable = is_air_shot && air_inaccuracy <= shootable_threshold * 1.5f;
+		const auto accurate = best.valid && ( ( config.ignore_hitchance_if_accurate.value && max_acc ) || standing_hc >= needed_hc );
 		const auto force = best.valid && ( ctx.on_ground ? ( config.force_shot.value && max_acc ) : ( config.force_shot_air.value && max_acc ) );
-		const auto shot_viable = accurate || force;
+		const auto lethal = best.valid && best.is_lethal( );
+		const auto dist = best.valid ? ( best.hit.position - best.hit.source_eye.position ).length( ) : 0.0f;
+		const auto hc_floor = dist <= 400.0f ? std::min( needed_hc, 0.35f ) : std::min( needed_hc, 0.45f );
+
+		const auto max_possible_damage = best.valid ? best.hit.damage : 0.0f;
+		const auto target_min_damage = best.valid
+			? this->get_min_damage_for_shot( config, best.hit.health, max_possible_damage )
+			: 0.0f;
+		const auto meets_min_damage = best.valid && best.hit.damage >= target_min_damage;
+		const auto air_hc_floor = is_air_shot && lethal ? 0.35f : ( is_air_shot && meets_min_damage ? 0.30f : 0.50f );
+		const auto effective_hc_floor = is_air_shot ? air_hc_floor : hc_floor;
+
+		const auto min_hc_floor = dist <= 400.0f ? 0.30f : 0.40f;
+
+		const auto reliable = max_acc || standing_hc >= 0.85f;
+
+		const auto shot_viable = best.valid && ( force || accurate || ( lethal && reliable && standing_hc >= effective_hc_floor ) || ( !lethal && reliable && meets_min_damage && standing_hc >= min_hc_floor ) );
+		const auto air_shot_viable = is_air_shot && air_shootable && ( ( lethal && standing_hc >= air_hc_floor ) || ( meets_min_damage && standing_hc >= 0.30f ) );
+		const auto final_viable = shot_viable || air_shot_viable;
 
 		// Autostop planning is independent from firing. Ground movement can use a
 		// predicted stopped eye; airborne stopping keeps the current target context.
 		const auto ticks_to_accurate = this->estimate_ticks_to_accurate( local, ctx );
-		if ( autostop_enabled && !shot_viable && ticks_to_accurate <= 30 && this->should_stop_movement( ctx ) )
+		const auto should_stop = autostop_enabled && !final_viable && ticks_to_accurate <= 30 && this->should_stop_movement( ctx );
+		if ( should_stop )
 		{
 			const auto stop = this->predict_stop( ctx, primary_eye, local );
 			if ( stop )
@@ -537,7 +589,7 @@ namespace features::combat {
 
 		if ( duckpeek_active && allow_fire )
 		{
-			if ( shot_viable )
+			if ( final_viable )
 			{
 				this->m_release_duck_for_shot = true;
 			}
@@ -547,7 +599,7 @@ namespace features::combat {
 			}
 		}
 
-		auto ready_to_fire = shot_viable;
+		auto ready_to_fire = final_viable;
 		if ( duckpeek_active )
 		{
 			if ( is_ducked )
@@ -557,6 +609,15 @@ namespace features::combat {
 			else
 			{
 				ready_to_fire = ready_to_fire && this->m_release_duck_for_shot;
+			}
+		}
+
+		if ( ready_to_fire && allow_fire )
+		{
+			if ( best.valid && !best.hit.penetrated &&
+				!systems::g_tracing.is_visible( best.hit.source_eye.position, best.hit.position, best.hit.pawn, local.pawn ) )
+			{
+				ready_to_fire = false;
 			}
 		}
 
@@ -933,6 +994,8 @@ namespace features::combat {
 			const auto hitbox_center = ( hb->mins + hb->maxs ) * 0.5f;
 			const auto center = bone.rotation.rotate_vector( hitbox_center ) + bone.position;
 
+			const auto local_start = points.size( );
+
 			trace_point cp{};
 			cp.position = center;
 			cp.hitbox_index = hitbox_index;
@@ -953,7 +1016,7 @@ namespace features::combat {
 
 				for ( const auto& mp : mps )
 				{
-					const auto duplicate = std::any_of( points.begin( ), points.end( ), [ & ]( const trace_point& point )
+					const auto duplicate = std::any_of( points.begin( ) + local_start, points.end( ), [ & ]( const trace_point& point )
 						{
 							return point.hitbox_index == hitbox_index && ( point.position - mp ).length_sqr( ) < 0.01f;
 						} );
@@ -1017,13 +1080,18 @@ namespace features::combat {
 				continue;
 			}
 
-			// Any head point whose trace actually lands on another hitgroup is
-			// occluded by a body part in the record pose (arm/shoulder over the
-			// head). Firing it would produce an "expected head" miss, so reject
-			// it regardless of whether it is the center or a multipoint.
 			if ( tp.hitbox_index == 0 && pen.hitgroup != systems::g_hitboxes.hitgroup_from_hitbox( tp.hitbox_index ) )
 			{
-				continue;
+				const auto occluded_limb = pen.hitgroup >= 4 && pen.hitgroup <= 7;
+				const auto non_lethal_body = pen.damage < static_cast< float >( cand.health );
+				// A head point that is really reaching a body part is only worth
+				// taking as a clean, direct, lethal body hit. If it has to punch
+				// through geometry, the shot is aimed at the head but lands through
+				// a wall - too unreliable, skip it and let a proper body point run.
+				if ( occluded_limb || non_lethal_body || pen.penetrated )
+				{
+					continue;
+				}
 			}
 
 			if ( tp.is_center && tp.hitbox_index > 0 && tp.hitbox_index < static_cast< int >( center_sufficient.size( ) ) )
@@ -1147,9 +1215,9 @@ namespace features::combat {
 		evaluated.reserve( hits.size( ) );
 
 		const auto& config = settings::g_combat.m_ragebot.get_group( g_shared.ctx( ).weapon_type );
-		const auto needed_hc = config.hitchance_override.value
+		const auto needed_hc = std::clamp( config.hitchance_override.value
 			? static_cast< float >( config.hitchance_override_value ) / 100.0f
-			: static_cast< float >( config.hitchance ) / 100.0f;
+			: static_cast< float >( config.hitchance ) / 100.0f, 0.0f, 1.0f );
 
 		const auto range = g_shared.ctx( ).range;
 
@@ -1175,12 +1243,13 @@ namespace features::combat {
 				}
 
 				const auto& bone = group.record->bones[ h.bone_index ];
+				const auto max_acc = g_shared.is_max_accuracy( eval_inaccuracy );
 				const auto hc = config.no_spread.value
 					? 1.0f
 					: g_shared.calculate_hitchance( h.source_eye.position, h.aim_angle, h.hitbox, bone, eval_inaccuracy, aim_ctx.spread );
 				const auto hp = static_cast< float >( h.health );
 				const auto can_kill = h.damage >= hp;
-				const auto passes_hitchance = config.no_spread.value || hc >= needed_hc;
+				const auto passes_hitchance = config.no_spread.value || ( config.ignore_hitchance_if_accurate.value && max_acc ) || hc >= needed_hc;
 
 				// Dynamic distance scaling: at long range, hit chance matters more
 				// than raw damage since bullets drop and spread increases.
@@ -1190,30 +1259,36 @@ namespace features::combat {
 
 				auto score = passes_hitchance ? 100.0f : 0.0f;
 
+				const auto prefer_reliable = config.prefer.value == settings::combat::ragebot::prefer_mode::reliable;
+				const auto prefer_damage = config.prefer.value == settings::combat::ragebot::prefer_mode::damage;
+				const auto hc_w = prefer_reliable ? 1.7f : 1.0f;
+				const auto dmg_w = prefer_damage ? 2.0f : 1.0f;
+				const auto hp_w = prefer_damage ? 0.25f : 1.0f;
+
 				if ( can_kill )
 				{
 					// Among lethal shots, prioritize hit chance at range, with
 					// damage scaling falloff. A clean kill with 50% hit chance
 				 // beats a 100% hit chance shot that deals 10 less damage.
 					score += 100000.0f * distance_weight;
-					score += hc * 15000.0f * (1.0f - range_ratio * 0.5f);
-					score += h.damage * 10.0f * (1.0f - range_ratio * 0.3f);
+					score += hc * 15000.0f * hc_w * (1.0f - range_ratio * 0.5f);
+					score += h.damage * 10.0f * dmg_w * (1.0f - range_ratio * 0.3f);
 				}
 				else
 				{
 // Non-lethal points weighted by hit chance and reliability.
 				// Distance penalty scales with range - we still want damage,
 				// but a low-chance long-range shot is risky.
-				score += h.damage * hc * hc * 150.0f * distance_weight;
-				score += h.damage * 5.0f * (1.0f - range_ratio * 0.5f);
+				score += h.damage * hc * hc * 150.0f * distance_weight * dmg_w;
+				score += h.damage * 5.0f * dmg_w * (1.0f - range_ratio * 0.5f);
 				// Reduce penalty for low-hc shots at long range - we still want to shoot
 				score *= 1.0f - range_ratio * 0.1f;
 				}
 
-				// Wallbang bonus: penalize penetrated shots less at long range
-				// since hitting through walls is more valuable when distance makes
-				// clean shots difficult.
-				const auto penetration_bonus = h.penetrated ? ( 5000.0f * (1.0f - range_ratio * 0.5f) ) : 5000.0f;
+				// Wallbang bonus: penetrated shots are less predictable than clean hits, so
+				// strongly prefer a direct shot when one exists; a wallbang is only
+				// picked when no reliable clean option is available.
+				const auto penetration_bonus = h.penetrated ? 1500.0f : 5000.0f;
 				score += penetration_bonus;
 
 				// Center hit bonus decreases slightly at range (multipoints become
@@ -1222,7 +1297,7 @@ namespace features::combat {
 
 				// Hitgroup priority scales with distance - at long range, any hit
 				// is better than no hit, but head shots remain priority.
-				score += static_cast< float >( hitgroup_priority( h.hitbox_index ) ) * 2.0f * distance_weight;
+				score += static_cast< float >( hitgroup_priority( h.hitbox_index ) ) * 2.0f * distance_weight * hp_w;
 
 				// FOV penalty also scales - at long range, slightly more tolerance
 				score -= h.fov * 0.1f * (1.0f + range_ratio * 0.5f);
@@ -1596,33 +1671,12 @@ namespace features::combat {
 		const auto& shared_ctx = g_shared.ctx( );
 		const auto& config = settings::g_combat.m_ragebot.get_group( shared_ctx.weapon_type );
 		const auto aim_punch = g_shared.get_aim_punch( local.pawn );
-		auto aim_angle = config.no_spread.value ? math::helpers::calculate_angle( shoot_eye, tgt.hit.position ) : tgt.hit.aim_angle;
+		auto aim_angle = tgt.hit.aim_angle;
 
-		if ( config.no_spread.value )
+		const auto record_time = cstypes::tick_fraction::from_value( tgt.hit.record->simulation_time / cstypes::tick_interval );
+		const auto corrected = g_shared.find_spread_correction( aim_angle, record_time.tick + 1 );
+		if ( !( corrected.x == 0.0f && corrected.y == 0.0f && corrected.z == 0.0f ) )
 		{
-			auto stamp_tick = tick_base;
-			auto stamp_frac{ 0.0f };
-
-			if ( !tgt.hit.source_eye.is_uninterpolated )
-			{
-				auto tick_add = [ ]( int t, float f, int tick_delta, float frac_delta )
-					{
-						f += frac_delta;
-						auto carry = static_cast< int >( std::floor( f ) );
-						f -= static_cast< float >( carry );
-						return std::pair{ t + tick_delta + carry, f };
-					};
-
-				std::tie( stamp_tick, stamp_frac ) = tick_add( tgt.hit.source_eye.player_tick, tgt.hit.source_eye.player_frac, tgt.hit.source_eye.lerp_ticks_int, tgt.hit.source_eye.lerp_ticks_frac );
-			}
-
-			const auto corrected = g_shared.find_spread_correction( aim_angle, stamp_tick );
-			if ( corrected.x == 0.0f && corrected.y == 0.0f && corrected.z == 0.0f )
-			{
-				this->m_firing_this_tick = false;
-				return;
-			}
-
 			aim_angle = corrected;
 		}
 
@@ -1644,8 +1698,7 @@ namespace features::combat {
 		}
 
 		features::misc::g_impacts.on_boom( tgt.hit.pawn, tgt.hit.hitgroup, tgt.hit.damage, tgt.hitchance, shared_ctx.inaccuracy, shared_ctx.spread, aim_angle, shoot_eye, tgt.hit.record->tick, g_shared.lc( ).get_skeleton( *tgt.hit.record ), was_forced );
-		features::esp::player::g_chams.os ().push (tgt.hit.pawn);
-		const auto record_time = cstypes::tick_fraction::from_value( tgt.hit.record->simulation_time / cstypes::tick_interval );
+		features::esp::player::g_chams.os ().push (tgt.hit.pawn, tgt.hit.record->bones, tgt.hit.record->bone_count);
 		const auto history_size = cmd->csgo_user_cmd.input_history_size( );
 		for ( auto i = 0; i < history_size; ++i )
 		{
@@ -2019,18 +2072,6 @@ std::vector<math::vector3> rage::generate_multipoints( const systems::hitboxes::
 			return false;
 		}
 
-		if ( shared_ctx.is_jump_scouting )
-		{
-			const auto speed_2d = velocity.length_2d( );
-			const auto inaccuracy_move = memory::read<float>( shared_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flInaccuracyMove"_hash ) );
-			const auto inaccuracy_stand = memory::read<float>( shared_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flInaccuracyStand"_hash ) );
-			if ( speed_2d <= 0.1f )
-			{
-				return false;
-			}
-			return speed_2d * inaccuracy_move > inaccuracy_stand || speed_2d > 1.0f;
-		}
-
 		if ( ctx.on_ground )
 		{
 			const auto speed_2d = velocity.length_2d( );
@@ -2045,9 +2086,23 @@ std::vector<math::vector3> rage::generate_multipoints( const systems::hitboxes::
 			return speed_2d * inaccuracy_move > inaccuracy_stand;
 		}
 
-		if ( shared_ctx.weapon_type != cstypes::weapon_type::sniper )
+		if ( shared_ctx.is_jump_scouting )
 		{
 			return false;
+		}
+
+		if ( shared_ctx.weapon_type != cstypes::weapon_type::sniper )
+		{
+			const auto speed_2d = velocity.length_2d( );
+			if ( speed_2d <= 0.1f )
+			{
+				return false;
+			}
+
+			const auto inaccuracy_move = memory::read<float>( shared_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flInaccuracyMove"_hash ) );
+			const auto inaccuracy_stand = memory::read<float>( shared_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flInaccuracyStand"_hash ) );
+
+			return speed_2d * inaccuracy_move > inaccuracy_stand;
 		}
 
 		if ( velocity.z > 140.0f )
@@ -2085,7 +2140,7 @@ std::vector<math::vector3> rage::generate_multipoints( const systems::hitboxes::
 		const auto early_threshold = inac_jump_initial * 0.55f + inac_jump_apex * 0.45f;
 		const auto air_inaccuracy = g_shared.get_air_inaccuracy( velocity.z, inac_jump_initial, inac_jump_apex );
 
-		if ( air_inaccuracy <= shootable_threshold || air_inaccuracy <= early_threshold )
+		if ( air_inaccuracy <= shootable_threshold * 1.15f || air_inaccuracy <= early_threshold )
 		{
 			return true;
 		}
@@ -2136,23 +2191,41 @@ std::vector<math::vector3> rage::generate_multipoints( const systems::hitboxes::
 		return ticks_to_shootable <= ticks_to_stop + 2;
 	}
 
-	float rage::get_min_damage( const settings::combat::ragebot::weapon_group& config, int target_health, bool override_active ) const
+float rage::get_min_damage( const settings::combat::ragebot::weapon_group& config, int target_health, bool override_active ) const
+{
+	if ( override_active )
 	{
-		if ( override_active )
-		{
-			return static_cast< float >( config.min_damage_override_value );
-		}
-
-		const auto base = static_cast< float >( config.min_damage );
-
-		const auto hp = static_cast< float >( target_health );
-		if ( hp < base )
-		{
-			return hp;
-		}
-
-		return base;
+		return static_cast< float >( config.min_damage_override_value );
 	}
+
+	const auto base = static_cast< float >( config.min_damage );
+
+	const auto hp = static_cast< float >( target_health );
+	if ( hp < base )
+	{
+		return hp;
+	}
+
+	return base;
+}
+
+float rage::get_min_damage_for_shot( const settings::combat::ragebot::weapon_group& config, int target_health, float max_possible_damage ) const
+{
+	if ( config.min_damage_override.value )
+	{
+		return static_cast< float >( config.min_damage_override_value );
+	}
+
+	const auto base = static_cast< float >( config.min_damage );
+	const auto hp = static_cast< float >( target_health );
+
+	if ( hp < base )
+	{
+		return std::min( hp, max_possible_damage );
+	}
+
+	return base;
+}
 
 	float rage::get_knife_damage( float raw, int armor, float armor_ratio ) const
 	{
@@ -2294,8 +2367,8 @@ std::vector<math::vector3> rage::generate_multipoints( const systems::hitboxes::
 		const auto [ screen_w, screen_h ] = xdraw::viewport_size( );
 		const auto cx = std::floorf( static_cast< float >( screen_w ) * 0.5f );
 		const auto cy = std::floorf( static_cast< float >( screen_h ) * 0.5f );
-		constexpr auto half_size{ 3.0f };
-		constexpr auto outline_size{ 1.0f };
+		const auto half_size = cfg.size.value;
+		const auto outline_size = cfg.outline_size.value;
 
 		if ( cfg.glow )
 		{
@@ -2357,7 +2430,7 @@ std::vector<math::vector3> rage::generate_multipoints( const systems::hitboxes::
 			}
 
 			const auto diff = rec->tick > target_tick ? rec->tick - target_tick : target_tick - rec->tick;
-			if ( diff < best_diff )
+			if ( diff < best_diff || ( diff == best_diff && rec->tick > best->tick ) )
 			{
 				best_diff = diff;
 				best = rec;

@@ -5,7 +5,10 @@ namespace features::movement {
 	class bhop
 	{
 	public:
-		void on_create_move( systems::input::usercmd* cmd ) const;
+		void on_create_move( systems::input::usercmd* cmd );
+
+	private:
+		bool m_stripped{};
 	};
 
 	class airstrafe

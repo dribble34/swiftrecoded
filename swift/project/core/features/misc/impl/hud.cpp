@@ -299,7 +299,7 @@ namespace features::misc {
 				}
 			};
 
-		if ( cfg.type == settings::misc::hud::hat::hat_type::kasa )
+		if ( cfg.type == settings::misc::hud::hat::hat_type::chinese )
 		{
 			constexpr auto base_radius{ 10.0f };
 			constexpr auto rim_points{ 24 };

@@ -606,20 +606,15 @@ namespace features::esp::player {
 		}
 	}
 
-	void chams::onshot::push (std::uintptr_t pawn) {
+	void chams::onshot::push (std::uintptr_t pawn, const systems::bones::data* bones, int bone_count) {
 		const auto& cfg = settings::g_esp.m_player.m_chams;
-		if (!cfg.onshot.enabled.value)
+		if (!cfg.onshot.enabled.value || !bones || bone_count <= 0)
 			return;
 
-		const auto records = combat::g_shared.lc ().get_valid_records (pawn);
-		if (records.empty ())
-			return;
-
-		auto* record = records.front (); /* just the newest for now, kiro make this customizable or smth */
-		const auto bone_count = std::clamp (record->bone_count, 0, 27);
+		const auto count = std::clamp (bone_count, 0, 27);
 		auto& pending = this->m_pending [pawn];
-		pending.bone_count = bone_count;
-		std::copy_n (record->bones, bone_count, pending.bones.begin ());
+		pending.bone_count = count;
+		std::copy_n (bones, count, pending.bones.begin ());
 	}
 
 	void chams::onshot::update () {

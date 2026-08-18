@@ -57,7 +57,6 @@ namespace features::movement {
 			trace_end.x = trace_origin.x + velocity.x * cstypes::tick_interval;
 			trace_end.y = trace_origin.y + velocity.y * cstypes::tick_interval;
 			trace_end.z = trace_origin.z + velocity.z * cstypes::tick_interval;
-			trace_end.z -= 2.0f;
 
 			const auto result = systems::g_tracing.trace_player_bbox(trace_start, trace_end, { mins, maxs }, filter, movement_services);
 			if (result.fraction <= 0.0f || result.fraction >= 1.0f) {
@@ -159,7 +158,10 @@ namespace features::movement {
 
 	} // namespace
 
-	void bhop::on_create_move(systems::input::usercmd* cmd) const {
+	void bhop::on_create_move(systems::input::usercmd* cmd) {
+		const auto was_stripped = this->m_stripped;
+		this->m_stripped = false;
+
 		if (!settings::g_movement.bhop.value) {
 			return;
 		}
@@ -187,11 +189,18 @@ namespace features::movement {
 		}
 
 		const auto& prestate = systems::g_prediction.pre();
+
 		if (prestate.flags & cstypes::entity_flags::on_ground) {
+			if (was_stripped) {
+				if (auto* base = cmd->csgo_user_cmd.mutable_base()) {
+					apply_landing_jump(base, 2.0f / 64.0f);
+				}
+			}
 			return;
 		}
 
 		cmd->buttons.value &= ~cstypes::command_buttons::in_jump;
+		this->m_stripped = true;
 
 		const auto movement_services = memory::read<std::uintptr_t>(local.pawn + SCHEMA("C_BasePlayerPawn", "m_pMovementServices"_hash));
 		if (!movement_services) {
@@ -202,11 +211,10 @@ namespace features::movement {
 
 		const auto landing = predict_landing_fraction_flat(local.pawn, movement_services, prestate, holding_duck);
 		if (landing) {
-			const auto base = cmd->csgo_user_cmd.mutable_base();
-			if (base) {
-				apply_landing_jump(base, *landing, false);
+			const auto when = std::clamp(*landing + 1.0f / 64.0f, 2.0f / 64.0f, 63.0f / 64.0f);
+			if (auto* base = cmd->csgo_user_cmd.mutable_base()) {
+				apply_landing_jump(base, when);
 			}
-			return;
 		}
 	}
 

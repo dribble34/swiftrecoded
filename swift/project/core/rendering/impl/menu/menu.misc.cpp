@@ -58,7 +58,10 @@ namespace rendering {
 		constexpr const char* secondary_weapons[ ]{ "none", "dual elites", "five-seven/tec-9", "deagle", "revolver" };
 		constexpr const char* grenade_names[ ]{ "molotov", "he grenade", "smoke", "flashbang", "decoy" };
 
-		constexpr const char* hat_types[ ]{ "kasa", "bucket" };
+		constexpr const char* hat_types[ ]{ "chinese" };
+		constexpr const char* cham_materials[ ]{ "liquid", "metallic", "matte", "flat", "bloom", "outlines", "glow", "electric", "distortion", "hologram", "pearl",
+			"liquid ignorez", "matte ignorez", "flat ignorez", "bloom ignorez", "outlines ignorez", "glow ignorez", "distortion ignorez", "hologram ignorez" };
+		constexpr auto k_cham_material_count{ static_cast< int >( std::size( cham_materials ) ) };
 
 	} // namespace detail
 
@@ -68,9 +71,9 @@ namespace rendering {
 
 		const auto wx = this->m_x;
 		const auto wy = this->m_y;
-		const auto content_x = wx + tokens::sidebar_w + tokens::gap;
-		const auto body_y = wy + tokens::gap + tokens::subtab_bar_h + tokens::gap;
-		const auto content_w = this->m_w - tokens::sidebar_w - tokens::gap * 2.0f;
+		const auto content_x = wx + tokens::gap;
+		const auto body_y = wy + tokens::header_bar_h + tokens::gap * 2.0f + tokens::subtab_bar_h;
+		const auto content_w = this->m_w - tokens::gap * 2.0f;
 		const auto col_w = ( content_w - tokens::gap ) * 0.5f;
 		const auto right_x = content_x + col_w + tokens::gap;
 
@@ -180,6 +183,7 @@ namespace rendering {
 					if ( show_overlay )
 					{
 						xui::slider_float( "duration##bulletfx", impacts.bullet_impact_effect_duration, 0.1f, 5.0f, "%.1fs" );
+						xui::slider_float( "size##bulletfx", impacts.bullet_impact_effect_size, 0.25f, 10.0f, "%.2f" );
 						xui::color_picker( "fill##bulletfx", impacts.bullet_impact_effect_fill_color );
 						xui::color_picker( "edge##bulletfx", impacts.bullet_impact_effect_edge_color );
 
@@ -234,6 +238,8 @@ namespace rendering {
 				xui::checkbox( "penetration crosshair", pen.enabled );
 				if ( xui::begin_popup( "##pen_popup", 220.0f ) )
 				{
+					xui::slider_float( "size##pen", pen.size, 0.5f, 20.0f, "%.1f" );
+					xui::slider_float( "outline size##pen", pen.outline_size, 0.0f, 10.0f, "%.1f" );
 					xui::checkbox( "glow##pen", pen.glow );
 					xui::slider_float( "glow strength##pen", pen.glow_strength, 0.1f, 1.0f, "%.2f" );
 					xui::color_picker( "can penetrate##pen", pen.can_penetrate_fill );
@@ -420,22 +426,23 @@ namespace rendering {
 					xui::end_popup( );
 				}
 
-				xui::checkbox( "scope overlay", hud.m_scope.enabled );
-				if ( xui::begin_popup( "##scope_popup", 220.0f ) )
-				{
-					xui::slider_float( "line length", hud.m_scope.line_length, 10.0f, 500.0f, "%.0f" );
-					xui::slider_float( "gap##scope", hud.m_scope.gap, 0.0f, 50.0f, "%.0f" );
-					xui::slider_float( "thickness##scope", hud.m_scope.thickness, 0.5f, 5.0f, "%.2f" );
-					xui::slider_float( "anim speed", hud.m_scope.anim_speed, 1.0f, 30.0f, "%.0f" );
-					xui::color_picker( "color##scope", hud.m_scope.color );
-					xui::checkbox( "fade in##scope", hud.m_scope.fade_in );
+xui::checkbox( "scope overlay", hud.m_scope.enabled );
+			if ( xui::begin_popup( "##scope_popup", 220.0f ) )
+			{
+				xui::slider_float( "line length", hud.m_scope.line_length, 10.0f, 500.0f, "%.0f" );
+				xui::slider_float( "gap##scope", hud.m_scope.gap, 0.0f, 50.0f, "%.0f" );
+				xui::slider_float( "thickness##scope", hud.m_scope.thickness, 0.5f, 5.0f, "%.2f" );
+				xui::slider_float( "anim speed", hud.m_scope.anim_speed, 1.0f, 30.0f, "%.0f" );
+				xui::color_picker( "color##scope", hud.m_scope.color );
+				xui::checkbox( "fade in##scope", hud.m_scope.fade_in );
+				xui::checkbox( "dynamic spread##scope", hud.m_scope.dynamic_spread );
 
-					xui::layout::separator( );
+				xui::layout::separator( );
 
-					xui::checkbox( "glow##scope", hud.m_scope.glow );
-					xui::slider_float( "glow strength##scope", hud.m_scope.glow_strength, 0.1f, 1.0f, "%.2f" );
-					xui::end_popup( );
-				}
+				xui::checkbox( "glow##scope", hud.m_scope.glow );
+				xui::slider_float( "glow strength##scope", hud.m_scope.glow_strength, 0.1f, 1.0f, "%.2f" );
+				xui::end_popup( );
+			}
 
 				xui::checkbox( "velocity counter", hud.m_velocity.counter );
 				xui::checkbox( "velocity chart", hud.m_velocity.chart );
@@ -465,7 +472,7 @@ namespace rendering {
 				xui::checkbox( "hat", hud.m_hat.enabled );
 				if ( xui::begin_popup( "##hat_popup", 220.0f ) )
 				{
-					xui::combo( "type##hat", hud.m_hat.type.value, detail::hat_types, 2 );
+					xui::combo( "type##hat", hud.m_hat.type.value, detail::hat_types, 1 );
 					xui::color_picker( "color##hat", hud.m_hat.color );
 					xui::color_picker( "secondary color##hat", hud.m_hat.secondary_color );
 					xui::checkbox( "glow##hat", hud.m_hat.glow );

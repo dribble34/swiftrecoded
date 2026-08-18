@@ -130,11 +130,82 @@ namespace rendering {
 
 		xui::text_input( "##cfg_search", detail::search_buf, 64, "search configs..." );
 
-		constexpr auto btn_h{ 28.0f };
-		const auto [ avail_w, avail_h ] = xui::layout::avail( );
-		const auto list_h = std::max( 80.0f, avail_h - btn_h - s.item_spacing_y );
+		xui::layout::spacing( );
 
-		if ( xui::begin_child( "##cfg_list", avail_w, list_h, true ) )
+		constexpr auto btn_h{ 28.0f };
+		const auto avail_w = xui::layout::avail( ).first;
+		const auto btn_w = ( avail_w - s.item_spacing_x * 4.0f ) / 5.0f;
+		const auto has_selection = detail::selected >= 0 && detail::selected < static_cast< int >( detail::config_list.size( ) );
+		const auto save_name = has_selection ? detail::selected_name( ) : detail::search_buf;
+		const auto can_save = !save_name.empty( );
+
+		if ( xui::button( "save", btn_w, btn_h ) && can_save )
+		{
+			config::registry::save( detail::utf8_to_wide( save_name ) );
+			detail::needs_refresh = true;
+		}
+
+		xui::layout::same_line( );
+
+		if ( xui::button( "refresh", btn_w, btn_h ) )
+		{
+			detail::needs_refresh = true;
+		}
+
+		xui::layout::same_line( );
+
+		if ( detail::confirm_reset )
+		{
+			if ( xui::button( "confirm", btn_w, btn_h ) )
+			{
+				detail::reset_defaults( );
+				detail::confirm_reset = false;
+			}
+		}
+		else if ( xui::button( "reset", btn_w, btn_h ) )
+		{
+			detail::confirm_reset = true;
+			detail::confirm_delete = false;
+			detail::confirm_timer = 0.0f;
+		}
+
+		xui::layout::same_line( );
+
+		if ( detail::confirm_delete )
+		{
+			if ( xui::button( "confirm", btn_w, btn_h ) && has_selection )
+			{
+				config::registry::remove( detail::config_list[ detail::selected ] );
+				detail::selected = -1;
+				detail::needs_refresh = true;
+				detail::confirm_delete = false;
+			}
+		}
+		else if ( xui::button( "delete", btn_w, btn_h ) && has_selection )
+		{
+			detail::confirm_delete = true;
+			detail::confirm_reset = false;
+			detail::confirm_timer = 0.0f;
+		}
+
+		xui::layout::same_line( );
+
+		if ( xui::button( "open folder", btn_w, btn_h ) )
+		{
+			const auto dir = config::registry::directory( );
+
+			std::error_code ec;
+			std::filesystem::create_directories( dir, ec );
+
+			ShellExecuteW( nullptr, L"open", dir.c_str( ), nullptr, nullptr, SW_SHOWNORMAL );
+		}
+
+		xui::layout::spacing( );
+
+		const auto [ lw, lh ] = xui::layout::avail( );
+		const auto list_h = std::max( 80.0f, lh - s.item_spacing_y );
+
+		if ( xui::begin_child( "##cfg_list", lw, list_h, true ) )
 		{
 			const auto row_w = xui::layout::avail( ).first;
 			constexpr auto row_h{ 28.0f };
@@ -194,65 +265,6 @@ namespace rendering {
 			}
 
 			xui::end_child( );
-		}
-
-		const auto btn_w = ( avail_w - s.item_spacing_x * 3.0f ) / 4.0f;
-		const auto has_selection = detail::selected >= 0 && detail::selected < static_cast< int >( detail::config_list.size( ) );
-		const auto save_name = has_selection ? detail::selected_name( ) : detail::search_buf;
-		const auto can_save = !save_name.empty( );
-
-		if ( xui::button( "save", btn_w, btn_h ) && can_save )
-		{
-			config::registry::save( detail::utf8_to_wide( save_name ) );
-			detail::needs_refresh = true;
-		}
-
-		xui::layout::same_line( );
-
-		if ( detail::confirm_reset )
-		{
-			if ( xui::button( "confirm", btn_w, btn_h ) )
-			{
-				detail::reset_defaults( );
-				detail::confirm_reset = false;
-			}
-		}
-		else if ( xui::button( "reset", btn_w, btn_h ) )
-		{
-			detail::confirm_reset = true;
-			detail::confirm_delete = false;
-			detail::confirm_timer = 0.0f;
-		}
-
-		xui::layout::same_line( );
-
-		if ( detail::confirm_delete )
-		{
-			if ( xui::button( "confirm", btn_w, btn_h ) && has_selection )
-			{
-				config::registry::remove( detail::config_list[ detail::selected ] );
-				detail::selected = -1;
-				detail::needs_refresh = true;
-				detail::confirm_delete = false;
-			}
-		}
-		else if ( xui::button( "delete", btn_w, btn_h ) && has_selection )
-		{
-			detail::confirm_delete = true;
-			detail::confirm_reset = false;
-			detail::confirm_timer = 0.0f;
-		}
-
-		xui::layout::same_line( );
-
-		if ( xui::button( "open folder", btn_w, btn_h ) )
-		{
-			const auto dir = config::registry::directory( );
-
-			std::error_code ec;
-			std::filesystem::create_directories( dir, ec );
-
-			ShellExecuteW( nullptr, L"open", dir.c_str( ), nullptr, nullptr, SW_SHOWNORMAL );
 		}
 
 		xui::end_child( );

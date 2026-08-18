@@ -1414,10 +1414,10 @@ namespace features::combat {
 		if ( this->m_ctx.weapon_type == cstypes::weapon_type::knife )
 		{
 			const auto next_secondary = memory::read<int>( this->m_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_nNextSecondaryAttackTick"_hash ) );
-			return tick_base >= this->m_last_shoot_tick + 2 && ( client_tick >= next_primary || client_tick >= next_secondary );
+			return tick_base >= this->m_last_shoot_tick && ( client_tick >= next_primary || client_tick >= next_secondary );
 		}
 
-		return tick_base >= this->m_last_shoot_tick + 2 && client_tick >= next_primary;
+		return tick_base >= this->m_last_shoot_tick && client_tick >= next_primary;
 	}
 
 	bool shared::is_max_accuracy( float inaccuracy ) const

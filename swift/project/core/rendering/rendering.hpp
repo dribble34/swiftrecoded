@@ -49,12 +49,12 @@ namespace rendering {
 
         enum class tab : int
         {
-            ragebot, legitbot, player, world, skins, misc, config, count
+            ragebot, antiaim, legitbot, player, world, skins, misc, config, count
         };
 
     private:
 		bool draw_intro( );
-        void draw_grouped_sidebar( float w, float h );
+        void draw_bottom_tabs( float w, float h, float y );
         void draw_profile_section( float sb_x, float sb_y, float w, float h );
         void draw_profile_settings( );
         void apply_style_preset( int preset );
@@ -70,6 +70,7 @@ namespace rendering {
         void activate_search_result( std::size_t index );
 
         void draw_ragebot( float group_w ) const;
+        void draw_antiaim( float group_w ) const;
         void draw_legitbot( float group_w ) const;
         void draw_player( float group_w ) const;
         void draw_world( float group_w ) const;
@@ -91,7 +92,7 @@ namespace rendering {
         float m_x{ 100.0f };
         float m_y{ 100.0f };
         float m_w{ 700.0f };
-        float m_h{ 550.0f };
+        float m_h{ 600.0f };
         float m_body_x{};
         float m_body_y{};
         float m_body_w{};
@@ -164,6 +165,7 @@ namespace rendering {
         static constexpr subtab_info k_subtab_defs[ static_cast< int >( tab::count ) ]
         {
             { { "pistol", "smg", "rifle", "shotgun", "sniper", "lmg" }, 6 },
+            { { "main" },                                               1 },
             { { "pistol", "smg", "rifle", "shotgun", "sniper", "lmg" }, 6 },
             { { "enemies", "allies", "local" },                         3 },
             { { "esp", "scene", "weather" },                            3 },

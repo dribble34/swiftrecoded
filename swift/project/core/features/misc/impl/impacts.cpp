@@ -1626,7 +1626,7 @@ namespace features::misc {
 		std::unique_lock lock( this->m_mtx );
 
 		const auto duration = cfg.bullet_impact_effect_duration.value;
-		constexpr auto half_size{ 1.75f };
+		const auto half_size = cfg.bullet_impact_effect_size.value;
 
 		for ( auto it = this->m_bullet_impacts.begin( ); it != this->m_bullet_impacts.end( ); )
 		{

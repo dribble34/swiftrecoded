@@ -5,30 +5,30 @@
       <Configuration>Development</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|x64">
-      <Configuration>Release</Configuration>
+    <ProjectConfiguration Include="Ship|x64">
+      <Configuration>Ship</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{d30ae6e8-620d-42e0-b3f4-804cafe20f44}</ProjectGuid>
-    <RootNamespace>swift</RootNamespace>
+    <RootNamespace>swiftcs2</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>false</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
     <EnableUnitySupport>true</EnableUnitySupport>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
     <EnableUnitySupport>true</EnableUnitySupport>
@@ -42,31 +42,46 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
-    <OutDir>$(ProjectDir)..\bin\</OutDir>
-    <IntDir>$(ProjectDir)..\bin\intermediates\</IntDir>
-    <IncludePath>project/external/phnt;project/external/xdraw/dependencies/freetype;project/;$(IncludePath)</IncludePath>
-    <TargetName>velocity-debug</TargetName>
+    <OutDir>../bin/</OutDir>
+    <IntDir>../bin/intermediates/</IntDir>
+    <IncludePath>project/external/phnt;project/;$(IncludePath)</IncludePath>
+    <TargetName>swift-cs2-dev</TargetName>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(ProjectDir)..\bin\</OutDir>
-    <IntDir>$(ProjectDir)..\bin\intermediates\</IntDir>
-    <IncludePath>project/external/phnt;project/external/xdraw/dependencies/freetype;project/;$(IncludePath)</IncludePath>
-    <TargetName>swift</TargetName>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">
+    <OutDir>../bin/</OutDir>
+    <IntDir>../bin/intermediates/</IntDir>
+    <IncludePath>project/external/phnt;project/;$(IncludePath)</IncludePath>
+    <TargetName>cs2</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnabled>true</VcpkgEnabled>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <VcpkgRoot Condition="'$(VcpkgRoot)'=='' and Exists('$(VCInstallDir)vcpkg\vcpkg.exe')">$(VCInstallDir)vcpkg\</VcpkgRoot>
+    <VelocityImportVcpkg Condition="'$(VcpkgPropsImported)'!='true' and Exists('$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.props')">true</VelocityImportVcpkg>
+  </PropertyGroup>
+  <Import Project="$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.props" Condition="'$(VelocityImportVcpkg)'=='true'" />
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'" Label="Vcpkg">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <ClCompile>
       <WarningLevel>Level1</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>false</IntrinsicFunctions>
-            <PreprocessorDefinitions>swift_EXPORTS;_WINDOWS;_USRDLL;DEV;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>VELOCITYCS2_EXPORTS;_WINDOWS;_USRDLL;DEV;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch/pch.hpp</PrecompiledHeaderFile>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
@@ -79,33 +94,28 @@
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <Optimization>Disabled</Optimization>
       <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
-      <MinimalRebuild>false</MinimalRebuild>
-      <SmallerTypeCheck>false</SmallerTypeCheck>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <UseFullPaths>false</UseFullPaths>
-      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
-      <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <EntryPointSymbol>entry</EntryPointSymbol>
-      <AdditionalDependencies>Synchronization.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>freetype.lib;Synchronization.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
-      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
     </Link>
   </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">
     <ClCompile>
       <WarningLevel>Level1</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-            <PreprocessorDefinitions>NDEBUG;swift_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;VELOCITYCS2_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch/pch.hpp</PrecompiledHeaderFile>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
@@ -113,24 +123,16 @@
       <OmitFramePointers>true</OmitFramePointers>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <IncludeInUnityFile>false</IncludeInUnityFile>
-      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExceptionHandling>false</ExceptionHandling>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
-      <MinimalRebuild>false</MinimalRebuild>
-      <SmallerTypeCheck>false</SmallerTypeCheck>
-      <DebugInformationFormat>None</DebugInformationFormat>
-      <UseFullPaths>false</UseFullPaths>
-      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
-      <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <EntryPointSymbol>entry</EntryPointSymbol>
-      <AdditionalDependencies>Synchronization.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <AdditionalDependencies>freetype.lib;Synchronization.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -207,16 +209,20 @@
     <ClCompile Include="project\entry.cpp" />
     <ClCompile Include="project\external\lz4\lz4.c">
       <IncludeInUnityFile Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</IncludeInUnityFile>
-      <IncludeInUnityFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</IncludeInUnityFile>
+      <IncludeInUnityFile Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">false</IncludeInUnityFile>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Development|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="project\external\stackwalker\stackwalker.cpp" />
     <ClCompile Include="project\external\xdraw\xdraw.cpp" />
     <ClCompile Include="project\external\xdraw\xui\xui.cpp" />
     <ClCompile Include="project\external\zydis\zydis.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Development|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="project\pch\pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="project\protection\patterns.cpp" />
     <ClCompile Include="project\utilities\addresses\impl\functions.cpp" />
@@ -252,6 +258,7 @@
     <ClInclude Include="project\core\features\world\world.hpp" />
     <ClInclude Include="project\core\hooks\hooks.hpp" />
     <ClInclude Include="project\core\rendering\rendering.hpp" />
+    <ClInclude Include="project\core\resources\fonts\font_awesome.hpp" />
     <ClInclude Include="project\core\resources\fonts\hurme_geometric.hpp" />
     <ClInclude Include="project\core\resources\fonts\inter.hpp" />
     <ClInclude Include="project\core\resources\fonts\pixel7.hpp" />
@@ -341,11 +348,16 @@
   <ItemGroup>
     <None Include=".editorconfig" />
     <None Include="project\external\inline-syscall\inline_syscall.inl" />
+    <None Include="vcpkg.json" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="project\external\inline-syscall\syscall_impl.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.targets" Condition="'$(VelocityImportVcpkg)'=='true'" />
+  <Target Name="EnsureVcpkgAvailable" BeforeTargets="PrepareForBuild" Condition="'$(VcpkgPropsImported)'!='true'">
+    <Error Text="vcpkg was not found. Install the Visual Studio vcpkg component or set VCPKG_ROOT to a vcpkg installation." />
+  </Target>
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
   </ImportGroup>

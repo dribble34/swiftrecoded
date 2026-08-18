@@ -19,9 +19,9 @@ namespace rendering {
 
 		const auto wx = this->m_x;
 		const auto wy = this->m_y;
-		const auto content_x = wx + tokens::sidebar_w + tokens::gap;
-		const auto body_y = wy + tokens::gap + tokens::subtab_bar_h + tokens::gap;
-		const auto content_w = this->m_w - tokens::sidebar_w - tokens::gap * 2.0f;
+		const auto content_x = wx + tokens::gap;
+		const auto body_y = wy + tokens::header_bar_h + tokens::gap * 2.0f + tokens::subtab_bar_h;
+		const auto content_w = this->m_w - tokens::gap * 2.0f;
 		const auto col_w = ( content_w - tokens::gap ) * 0.5f;
 		const auto right_x = content_x + col_w + tokens::gap;
 

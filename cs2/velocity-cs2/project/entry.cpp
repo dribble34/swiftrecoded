@@ -4,6 +4,7 @@
 
 #include <utilities/logging/logging.hpp>
 #include <utilities/addresses/addresses.hpp>
+#include <utilities/anti_debug/anti_debug.hpp>
 #include <utilities/security/security.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/threadpool/threadpool.hpp>
@@ -302,6 +303,12 @@ namespace {
 
 		diag::step( "stage: thread start" );
 		diag::initialize_crash_dumps( );
+
+		// Anti-debug / anti-tamper watchdog. Ship builds only — a debugger
+		// attached during local development would trip its own checks.
+#if !defined( DEV )
+		anti_debug::initialize( );
+#endif
 
 		g_previous_exception_filter.store(
 			SetUnhandledExceptionFilter( diag_unhandled_exception_filter ),

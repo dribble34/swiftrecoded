@@ -4079,6 +4079,7 @@ namespace xui {
 					this->m_hue = h.h / 360.0f;
 					this->m_sat = h.s;
 					this->m_val = h.v;
+					this->m_hex_edit = color_to_hex( *col, show_alpha ).substr( 1 );
 				}
 			}
 
@@ -4111,21 +4112,76 @@ namespace xui {
 				const auto sv = rect{ popup.x + pad, popup.y + pad, sv_size, sv_size };
 				const auto hue = rect{ popup.x + pad, sv.bottom( ) + bar_spacing, sv_size, hue_bar_h };
 				const auto alpha_r = rect{ sv.right( ) + bar_spacing, popup.y + pad, bar_w, sv_size + bar_spacing + hue_bar_h };
+				const auto hex_r = rect{ popup.x + pad, hue.bottom( ) + bar_spacing, popup.w - pad * 2.0f, k_hex_row_h };
 
 				if ( input.mouse_clicked )
 				{
 					if ( sv.contains( input.mouse_x, input.mouse_y ) )
 					{
 						this->m_active = 1;
+						this->m_hex_active = false;
 					}
 					else if ( hue.contains( input.mouse_x, input.mouse_y ) )
 					{
 						this->m_active = 2;
+						this->m_hex_active = false;
 					}
 					else if ( this->m_show_alpha && alpha_r.contains( input.mouse_x, input.mouse_y ) )
 					{
 						this->m_active = 3;
+						this->m_hex_active = false;
 					}
+					else if ( hex_r.contains( input.mouse_x, input.mouse_y ) )
+					{
+						this->m_hex_active = true;
+					}
+					else
+					{
+						this->m_hex_active = false;
+					}
+				}
+
+				if ( this->m_hex_active )
+				{
+					for ( const auto pk : input.key_presses( ) )
+					{
+						if ( pk == VK_BACK )
+						{
+							if ( !this->m_hex_edit.empty( ) )
+							{
+								this->m_hex_edit.pop_back( );
+							}
+						}
+						else if ( pk == VK_RETURN || pk == VK_ESCAPE )
+						{
+							this->m_hex_active = false;
+						}
+					}
+
+					for ( const auto ch : input.chars( ) )
+					{
+						const auto is_hex_digit = ( ch >= L'0' && ch <= L'9' ) || ( ch >= L'a' && ch <= L'f' ) || ( ch >= L'A' && ch <= L'F' );
+
+						if ( is_hex_digit && this->m_hex_edit.size( ) < 8u )
+						{
+							this->m_hex_edit.push_back( static_cast< char >( ch ) );
+						}
+					}
+
+					if ( const auto parsed = hex_to_color( this->m_hex_edit ); parsed.has_value( ) && this->m_col )
+					{
+						*this->m_col = *parsed;
+
+						const auto h = rgb_to_hsv( *this->m_col );
+						this->m_hue = h.h / 360.0f;
+						this->m_sat = h.s;
+						this->m_val = h.v;
+						this->m_changed = true;
+					}
+				}
+				else if ( this->m_col )
+				{
+					this->m_hex_edit = color_to_hex( *this->m_col, this->m_show_alpha ).substr( 1 );
 				}
 
 				if ( input.mouse_released )
@@ -4332,6 +4388,41 @@ namespace xui {
 					dl.rect( pill_x, pill_y, pill_w, pill_h, dark, xdraw::corner_radius{ pill_r } );
 				}
 
+				{
+					const auto hex_rect = rect{ sx + pad, hue_rect.bottom( ) + bar_spacing, sw - pad * 2.0f, k_hex_row_h };
+
+					auto box_bg = style.text_input_bg;
+					box_bg.a = static_cast< std::uint8_t >( box_bg.a * ca );
+					auto box_border = this->m_hex_active ? style.accent : style.text_input_border;
+					box_border.a = static_cast< std::uint8_t >( std::max( static_cast< int >( box_border.a ), 60 ) * ca );
+
+					dl.rect_filled( hex_rect.x, hex_rect.y, hex_rect.w, hex_rect.h, box_bg, xdraw::corner_radius{ style.text_input_rounding } );
+					dl.rect( hex_rect.x, hex_rect.y, hex_rect.w, hex_rect.h, box_border, xdraw::corner_radius{ style.text_input_rounding } );
+
+					const auto display = "#" + this->m_hex_edit;
+					auto text_col = style.text;
+					text_col.a = a;
+
+					const auto [tw, th] = xdraw::measure_text( display );
+					dl.text( hex_rect.x + 8.0f, hex_rect.y + ( hex_rect.h - th ) * 0.5f, display, text_col );
+
+					if ( this->m_hex_active )
+					{
+						this->m_blink_timer += dt;
+
+						if ( this->m_blink_timer > 1.0f )
+						{
+							this->m_blink_timer -= 1.0f;
+						}
+
+						const auto blink_a = std::sin( this->m_blink_timer * 6.28318f ) * 0.5f + 0.5f;
+						auto cursor_col = style.accent;
+						cursor_col.a = static_cast< std::uint8_t >( blink_a * a );
+
+						dl.rect_filled( hex_rect.x + 8.0f + tw + 1.0f, hex_rect.y + 4.0f, 1.5f, hex_rect.h - 8.0f, cursor_col );
+					}
+				}
+
 				dl.pop_clip( );
 			}
 
@@ -4347,9 +4438,11 @@ namespace xui {
 				const auto hue_bar_h{ 14.0f };
 				const auto sv_size{ 170.0f };
 				const auto w = this->m_show_alpha ? ( pad + sv_size + bar_spacing + bar_w + pad ) : ( pad + sv_size + pad );
-				const auto h = pad + sv_size + bar_spacing + hue_bar_h + pad;
+				const auto h = pad + sv_size + bar_spacing + hue_bar_h + bar_spacing + k_hex_row_h + pad;
 				return { this->m_anchor.x, this->m_anchor.bottom( ) + 2.0f, w, h };
 			}
+
+			static constexpr auto k_hex_row_h{ 22.0f };
 
 			xdraw::color* m_col{};
 			float m_hue{};
@@ -4359,6 +4452,9 @@ namespace xui {
 			bool m_show_alpha{};
 			float m_open_anim{};
 			bool m_changed{};
+			std::string m_hex_edit{};
+			bool m_hex_active{};
+			float m_blink_timer{};
 		};
 
 		class color_context_overlay : public overlay

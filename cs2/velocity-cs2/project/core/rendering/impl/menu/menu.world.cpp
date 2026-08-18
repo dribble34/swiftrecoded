@@ -30,8 +30,7 @@ namespace rendering {
 
 			constexpr const char* display_types[ ]{ "text", "icon", "text + icon" };
 			constexpr const char* cham_material_names[ ]{
-				"liquid", "metallic", "matte", "flat", "bloom", "outlines", "glow", "electric", "distortion", "hologram", "pearl",
-				"liquid (iz)", "matte (iz)", "flat (iz)", "bloom (iz)", "outlines (iz)", "glow (iz)", "distortion (iz)", "hologram (iz)"
+				"liquid", "matte", "flat", "bloom", "outlines", "glow", "distortion", "hologram"
 			};
 			constexpr auto cham_material_count = static_cast< int >( settings::esp::cham_ids::count );
 

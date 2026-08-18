@@ -283,8 +283,7 @@ namespace settings {
 	{
 		enum class cham_ids : std::uint8_t
 		{
-			liquid, metallic, matte, flat, bloom, outlines, glow, electric, distortion, hologram, pearl,
-			liquid_ignorez, matte_ignorez, flat_ignorez, bloom_ignorez, outlines_ignorez, glow_ignorez, distortion_ignorez, hologram_ignorez,
+			liquid, matte, flat, bloom, outlines, glow, distortion, hologram,
 			count
 		};
 
@@ -597,7 +596,7 @@ namespace settings {
 				{
 					.enabled = { true, {}, "chams", "chams enemy" },
 					.primary = {.enabled = { true, {}, "primary layer", "chams enemy" }, .color = { { 173, 192, 255, 150 }, "chams enemy", "primary color" }, .material = { cham_ids::flat, "chams enemy", "primary material" } },
-					.secondary = {.enabled = { true, {}, "secondary layer", "chams enemy" }, .color = { { 255, 208, 243, 118 }, "chams enemy", "secondary color" }, .material = { cham_ids::flat_ignorez, "chams enemy", "secondary material" } }
+					.secondary = {.enabled = { true, {}, "secondary layer", "chams enemy" }, .color = { { 255, 208, 243, 118 }, "chams enemy", "secondary color" }, .material = { cham_ids::flat, "chams enemy", "secondary material" } }
 				};
 				chams_config enemy_ragdoll{ .enabled = { false, {}, "ragdoll chams", "chams enemy ragdoll" } };
 				chams_config team{ .enabled = { false, {}, "chams", "chams team" } };
@@ -620,7 +619,7 @@ namespace settings {
 				{
 					.enabled = { false, {}, "onshot chams",    "chams onshot" },
 					.primary = {.enabled = { true,  {}, "primary layer",   "chams onshot" }, .color = { { 255, 100, 100, 200 }, "chams onshot", "primary color" }, .material = { cham_ids::flat, "chams onshot", "primary material" } },
-					.secondary = {.enabled = { false, {}, "secondary layer", "chams onshot" }, .color = { { 255, 100, 100, 100 }, "chams onshot", "secondary color" }, .material = { cham_ids::flat_ignorez, "chams onshot", "secondary material" } },
+					.secondary = {.enabled = { false, {}, "secondary layer", "chams onshot" }, .color = { { 255, 100, 100, 100 }, "chams onshot", "secondary color" }, .material = { cham_ids::flat, "chams onshot", "secondary material" } },
 					.overlay = {.enabled = { false, {}, "overlay layer",   "chams onshot" }, .color = { { 255, 100, 100, 255 }, "chams onshot", "overlay color" }, .material = { cham_ids::outlines, "chams onshot", "overlay material" } },
 				};
 				config::val<float> onshot_fade_time {0.8f, "chams onshot", "fade time"};

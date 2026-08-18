@@ -229,6 +229,12 @@
     <ClCompile Include="project\utilities\addresses\impl\globals.cpp" />
     <ClCompile Include="project\utilities\addresses\impl\interfaces\engine_cvar.cpp" />
     <ClCompile Include="project\utilities\addresses\impl\modules.cpp" />
+    <ClCompile Include="project\utilities\anti_debug\impl\anti_debug.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Development|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">NotUsing</PrecompiledHeader>
+      <IncludeInUnityFile Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</IncludeInUnityFile>
+      <IncludeInUnityFile Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">false</IncludeInUnityFile>
+    </ClCompile>
     <ClCompile Include="project\utilities\hooking\impl\allocator.cpp" />
     <ClCompile Include="project\utilities\hooking\impl\jmp.cpp" />
     <ClCompile Include="project\utilities\hooking\impl\manager.cpp" />
@@ -332,6 +338,7 @@
     <ClInclude Include="project\utilities\addresses\addresses.hpp" />
     <ClInclude Include="project\utilities\addresses\interfaces.hpp" />
     <ClInclude Include="project\utilities\animation.hpp" />
+    <ClInclude Include="project\utilities\anti_debug\anti_debug.hpp" />
     <ClInclude Include="project\utilities\cstypes.hpp" />
     <ClInclude Include="project\utilities\fnv1a.hpp" />
     <ClInclude Include="project\utilities\game_path.hpp" />

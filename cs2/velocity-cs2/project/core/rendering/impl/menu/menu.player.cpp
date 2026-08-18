@@ -8,8 +8,7 @@ namespace rendering {
 	namespace detail {
 
 		constexpr const char* k_cham_material_names[ ]{
-			"liquid", "metallic", "matte", "flat", "bloom", "outlines", "glow", "electric", "distortion", "hologram", "pearl",
-			"liquid (iz)", "matte (iz)", "flat (iz)", "bloom (iz)", "outlines (iz)", "glow (iz)", "distortion (iz)", "hologram (iz)"
+			"liquid", "matte", "flat", "bloom", "outlines", "glow", "distortion", "hologram"
 		};
 		constexpr auto k_cham_material_count = static_cast< int >( settings::esp::cham_ids::count );
 

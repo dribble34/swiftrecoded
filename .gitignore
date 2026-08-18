@@ -17,3 +17,6 @@ cs2/bin/
 # Local safety backups, never pushed
 backups/
 build_log.txt
+
+# vcpkg-restored dependencies (reproducible via vcpkg install)
+cs2/velocity-cs2/vcpkg_installed/

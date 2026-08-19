@@ -73,6 +73,8 @@ namespace rendering {
 				xui::end_popup( );
 			}
 
+			xui::checkbox( "refine shot", wg.refine_shot );
+
 			xui::end_child( );
 		}
 

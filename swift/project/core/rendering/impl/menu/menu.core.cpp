@@ -10,6 +10,8 @@
 #include "../../rendering.hpp"
 #include <intsafe.h>
 
+#include "menu.logo.hpp"
+
 namespace rendering {
 
 	namespace detail {
@@ -90,6 +92,10 @@ namespace rendering {
 			{
 				return { 4, 3 };
 			}
+			if ( category_lower.find( "model" ) != std::string::npos )
+			{
+				return { 4, 4 };
+			}
 			if ( category_lower.find( "skin" ) != std::string::npos || category_lower.find( "paint" ) != std::string::npos || category_lower.find( "sticker" ) != std::string::npos || category_lower.find( "wear" ) != std::string::npos )
 			{
 				return { 4, 0 };
@@ -107,7 +113,6 @@ namespace rendering {
 
 	namespace svgs {
 
-		constexpr auto logo = R"(<svg width="17" height="14" viewBox="0 0 17 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0.148138 10.5306L7.19953 0.643266C7.81122 -0.214422 9.08773 -0.214422 9.69942 0.643266L16.7254 10.4949C17.099 11.0189 16.7236 11.7453 16.0792 11.7453H14.5344C14.1378 11.7453 13.7815 11.5036 13.6355 11.1356L11.5458 5.86857C11.4326 5.58318 11.1562 5.3957 10.8486 5.3957C10.7131 5.3957 10.6149 5.52457 10.651 5.65485L12.6899 12.9972C12.8299 13.5014 12.4499 14 11.9256 14H10.5367C10.2323 14 9.97322 13.7786 9.92648 13.4784L8.68012 4.66254C8.64757 4.45362 8.28767 4.45728 8.24676 4.66475L6.57384 13.5028C6.51683 13.7917 6.26301 14 5.96795 14H4.58215C4.04293 14 3.66094 13.4746 3.8282 12.9631L6.17936 5.7721C6.23588 5.59921 6.10678 5.4216 5.92452 5.4216H5.87377C5.57672 5.4216 5.30764 5.59658 5.1877 5.86781L2.81532 11.2326C2.65733 11.5899 2.29903 11.8169 1.9078 11.8076L0.775512 11.7808C0.139818 11.7656 -0.220464 11.0476 0.148214 10.5306H0.148138Z" fill="#111111"/> </svg>)";
 		constexpr auto search = R"(<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 6.66667C2 7.2795 2.12071 7.88634 2.35523 8.45252C2.58975 9.01871 2.93349 9.53316 3.36683 9.9665C3.80017 10.3998 4.31462 10.7436 4.88081 10.9781C5.447 11.2126 6.05383 11.3333 6.66667 11.3333C7.2795 11.3333 7.88634 11.2126 8.45252 10.9781C9.01871 10.7436 9.53316 10.3998 9.9665 9.9665C10.3998 9.53316 10.7436 9.01871 10.9781 8.45252C11.2126 7.88634 11.3333 7.2795 11.3333 6.66667C11.3333 6.05383 11.2126 5.447 10.9781 4.88081C10.7436 4.31462 10.3998 3.80017 9.9665 3.36683C9.53316 2.93349 9.01871 2.58975 8.45252 2.35523C7.88634 2.12071 7.2795 2 6.66667 2C6.05383 2 5.447 2.12071 4.88081 2.35523C4.31462 2.58975 3.80017 2.93349 3.36683 3.36683C2.93349 3.80017 2.58975 4.31462 2.35523 4.88081C2.12071 5.447 2 6.05383 2 6.66667Z" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 14L10 10" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>)";
 		constexpr auto settings = R"(<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.5937 3.65661C11.7942 3.77063 11.9607 3.93601 12.0761 4.13573C12.1914 4.33546 12.2514 4.56231 12.25 4.79294V9.04194C12.25 9.51386 11.9916 9.94903 11.5745 10.1783L7.637 12.6691C7.44179 12.7763 7.2227 12.8325 7 12.8325C6.7773 12.8325 6.55821 12.7763 6.363 12.6691L2.4255 10.1783C2.22143 10.0668 2.05107 9.90245 1.93224 9.70255C1.81341 9.50265 1.75047 9.2745 1.75 9.04194V4.79236C1.75 4.32044 2.00842 3.88586 2.4255 3.65661L6.363 1.33494C6.56398 1.22413 6.78975 1.16602 7.01925 1.16602C7.24875 1.16602 7.47452 1.22413 7.6755 1.33494L11.613 3.65661H11.5937Z" stroke="#111111" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.25 7C5.25 7.46413 5.43437 7.90925 5.76256 8.23744C6.09075 8.56563 6.53587 8.75 7 8.75C7.46413 8.75 7.90925 8.56563 8.23744 8.23744C8.56563 7.90925 8.75 7.46413 8.75 7C8.75 6.53587 8.56563 6.09075 8.23744 5.76256C7.90925 5.43437 7.46413 5.25 7 5.25C6.53587 5.25 6.09075 5.43437 5.76256 5.76256C5.43437 6.09075 5.25 6.53587 5.25 7Z" stroke="#111111" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>)";
 		constexpr auto tab_rage = R"(<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3C15.866 3 19 6.134 19 10C19 12.5 17.5 14.5 15.5 15.5V17C15.5 17.828 14.828 18.5 14 18.5H10C9.172 18.5 8.5 17.828 8.5 17V15.5C6.5 14.5 5 12.5 5 10C5 6.134 8.134 3 12 3Z" stroke="#ADC0FF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="9" r="1.5" fill="#ADC0FF"/><circle cx="14.5" cy="9" r="1.5" fill="#ADC0FF"/><path d="M10 13H14" stroke="#ADC0FF" stroke-width="1.5" stroke-linecap="round"/><path d="M11 20H13" stroke="#ADC0FF" stroke-width="1.5" stroke-linecap="round"/></svg>)";
@@ -930,7 +935,11 @@ namespace rendering {
 		}
 
 		constexpr auto icon_target{ 16.0f };
-		this->m_textures.logo.resource = xdraw::load_svg( svgs::logo, icon_target / 14.0f, &this->m_textures.logo.width, &this->m_textures.logo.height );
+		this->m_textures.logo.resource = xdraw::load_texture(
+			std::span<const std::byte>{ reinterpret_cast< const std::byte* >( images::logo_png ), sizeof( images::logo_png ) },
+			&this->m_textures.logo.width,
+			&this->m_textures.logo.height
+		);
 
 		constexpr float k_intro_logo_view_w{ 4421.68f };
 		constexpr float k_intro_logo_px_w{ 240.0f };
@@ -1292,8 +1301,37 @@ this->m_textures.user.resource = xdraw::load_texture(
 
 			const auto menu_reveal = this->m_open_anim;
 
-			if ( !xui::begin_window( "##menu", this->m_x, this->m_y, this->m_w, this->m_h, true, 200.0f, 200.0f, menu_reveal ) )
+			this->m_w = 850.0f;
+			this->m_h = 700.0f;
+
+			const float scale = static_cast< float >( this->m_menu_scale ) / 100.0f;
+			auto& input = xui::ctx( ).input;
+			const float old_mx = input.mouse_x;
+			const float old_my = input.mouse_y;
+			const float old_pmx = input.prev_mouse_x;
+			const float old_pmy = input.prev_mouse_y;
+
+			if ( scale != 1.0f )
 			{
+				input.mouse_x = this->m_x + ( input.mouse_x - this->m_x ) / scale;
+				input.mouse_y = this->m_y + ( input.mouse_y - this->m_y ) / scale;
+				input.prev_mouse_x = this->m_x + ( input.prev_mouse_x - this->m_x ) / scale;
+				input.prev_mouse_y = this->m_y + ( input.prev_mouse_y - this->m_y ) / scale;
+			}
+
+			auto& dl_scale = xdraw::get( xdraw::layer::middle );
+			const auto start_vtx_count = dl_scale.vertices.size( );
+			const auto start_cmd_count = dl_scale.commands.size( );
+
+			if ( !xui::begin_window( "##menu", this->m_x, this->m_y, this->m_w, this->m_h, false, 200.0f, 200.0f, menu_reveal ) )
+			{
+				if ( scale != 1.0f )
+				{
+					input.mouse_x = old_mx;
+					input.mouse_y = old_my;
+					input.prev_mouse_x = old_pmx;
+					input.prev_mouse_y = old_pmy;
+				}
 				return;
 			}
 
@@ -1314,15 +1352,26 @@ this->m_textures.user.resource = xdraw::load_texture(
 			const auto header_h = tokens::header_bar_h;
 
 			// Header bar
-			dl.rect_filled( wx + tokens::gap, header_y, ww - tokens::gap * 2.0f, header_h, tokens::col_card, xdraw::corner_radius{ tokens::card_rounding } );
-			dl.rect_filled_gradient( wx + tokens::gap, header_y + header_h - 1.0f, ww - tokens::gap * 2.0f, 1.0f, tokens::col_accent.alpha( 0 ), tokens::col_accent.alpha( 140 ), tokens::col_accent.alpha( 140 ), tokens::col_accent.alpha( 0 ) );
+			dl.rect_filled( wx + tokens::gap, header_y, ww - tokens::gap * 2.0f, header_h, tokens::col_card, xdraw::corner_radius{ 0.0f } );
+			dl.rect_filled_gradient( std::floor(wx + tokens::gap), std::floor(header_y + header_h - 1.0f), ww - tokens::gap * 2.0f, 1.0f, tokens::col_accent.alpha( 0 ), tokens::col_accent.alpha( 140 ), tokens::col_accent.alpha( 140 ), tokens::col_accent.alpha( 0 ) );
 
 			{
-				xdraw::push_font( rendering::g_fonts.hurme_black[ rendering::fonts::size::big ] );
-				const auto title = "swift";
-				const auto [ title_tw, title_th ] = xdraw::measure_text( title );
-				dl.text( std::floor( wx + ww * 0.5f - title_tw * 0.5f ), header_y + ( header_h - title_th ) * 0.5f, title, tokens::col_accent );
-				xdraw::pop_font( );
+				const auto logo_target_h = 87.0f;
+				const auto logo_w = logo_target_h;
+				const auto logo_x = wx + ww * 0.5f - logo_w * 0.5f;
+				const auto logo_y = header_y + ( header_h - logo_target_h ) * 0.5f;
+				if ( this->m_textures.logo.resource )
+				{
+					dl.image( std::floor( logo_x ), std::floor( logo_y ), logo_w, logo_target_h, this->m_textures.logo.resource.Get( ), xdraw::color{ 255, 255, 255, 255 } );
+				}
+				else
+				{
+					xdraw::push_font( rendering::g_fonts.hurme_black[ rendering::fonts::size::big ] );
+					const auto title = "swift";
+					const auto [ title_tw, title_th ] = xdraw::measure_text( title );
+					dl.text( std::floor( wx + ww * 0.5f - title_tw * 0.5f ), header_y + ( header_h - title_th ) * 0.5f, title, tokens::col_accent );
+					xdraw::pop_font( );
+				}
 			}
 
 			// Header settings button
@@ -1403,16 +1452,32 @@ this->m_textures.user.resource = xdraw::load_texture(
 			xdraw::pop_font( );
 
 			// Outer glow
-			dl.rect( wx + 2.0f, wy + 2.0f, ww - 4.0f, wh - 4.0f, tokens::col_accent_glow, xdraw::corner_radius{ tokens::card_rounding - 2.0f }, 1.5f );
-			dl.rect( wx + 4.0f, wy + 4.0f, ww - 8.0f, wh - 8.0f, tokens::col_border, xdraw::corner_radius{ tokens::card_rounding - 4.0f }, 1.0f );
+			dl.rect( wx + 2.0f, wy + 2.0f, ww - 4.0f, wh - 4.0f, tokens::col_accent_glow, xdraw::corner_radius{ 0.0f }, 1.5f );
+			dl.rect( wx + 4.0f, wy + 4.0f, ww - 8.0f, wh - 8.0f, tokens::col_border, xdraw::corner_radius{ 0.0f }, 1.0f );
+			
+			if ( scale != 1.0f )
+			{
+				input.mouse_x = old_mx;
+				input.mouse_y = old_my;
+				input.prev_mouse_x = old_pmx;
+				input.prev_mouse_y = old_pmy;
 
-			// Resize grip indicator
-			const auto grip_col = tokens::col_text_dim.alpha( 150 );
-			const auto gx = wx + ww - 8.0f;
-			const auto gy = wy + wh - 8.0f;
-			dl.line( gx - 7.0f, gy + 2.0f, gx + 2.0f, gy - 7.0f, grip_col, 1.5f );
-			dl.line( gx - 11.0f, gy + 2.0f, gx + 2.0f, gy - 11.0f, grip_col, 1.5f );
+				for ( auto i = start_vtx_count; i < dl_scale.vertices.size( ); ++i )
+				{
+					auto& v = dl_scale.vertices[ i ];
+					v.pos[ 0 ] = wx + ( v.pos[ 0 ] - wx ) * scale;
+					v.pos[ 1 ] = wy + ( v.pos[ 1 ] - wy ) * scale;
+				}
 
+				for ( auto i = start_cmd_count; i < dl_scale.commands.size( ); ++i )
+				{
+					auto& cmd = dl_scale.commands[ i ];
+					cmd.scissor.left = static_cast<LONG>(wx + ( cmd.scissor.left - wx ) * scale);
+					cmd.scissor.right = static_cast<LONG>(wx + ( cmd.scissor.right - wx ) * scale);
+					cmd.scissor.top = static_cast<LONG>(wy + ( cmd.scissor.top - wy ) * scale);
+					cmd.scissor.bottom = static_cast<LONG>(wy + ( cmd.scissor.bottom - wy ) * scale);
+				}
+			}
 		}
 
 		if ( this->m_profile_settings_open )
@@ -1648,15 +1713,15 @@ this->m_textures.user.resource = xdraw::load_texture(
 		style.text = tokens::col_text;
 		style.text_dim = tokens::col_text_dim;
 		style.accent = tokens::col_accent;
-		style.window_rounding = tokens::card_rounding;
+		style.window_rounding = 0.0f;
 		style.checkbox_rounding = 6.0f;
 		style.slider_rounding = 4.0f;
-		style.button_rounding = tokens::btn_rounding;
+		style.button_rounding = 0.0f;
 		style.keybind_rounding = 6.0f;
 		style.combo_rounding = 8.0f;
-		style.popup_rounding = tokens::card_rounding;
+		style.popup_rounding = 0.0f;
 		style.combo_popup_rounding = 10.0f;
-		style.picker_popup_rounding = tokens::card_rounding;
+		style.picker_popup_rounding = 0.0f;
 		style.color_swatch_rounding = 6.0f;
 		style.text_input_rounding = 8.0f;
 		style.window_pad_x = tokens::gap;
@@ -1696,21 +1761,21 @@ this->m_textures.user.resource = xdraw::load_texture(
 		const auto subtabs_w = w - util_w - tokens::gap;
 		const auto btn_w = ( subtabs_w - inner_pad * 2.0f ) / static_cast< float >( subtab_count );
 
-		dl.rect_filled( content_x, bar_y, subtabs_w, tokens::subtab_bar_h, tokens::col_card, xdraw::corner_radius{ tokens::card_rounding } );
-		dl.rect_filled( content_x + subtabs_w + tokens::gap, bar_y, util_w, tokens::subtab_bar_h, tokens::col_card, xdraw::corner_radius{ tokens::card_rounding } );
+		dl.rect_filled( content_x, bar_y, subtabs_w, tokens::subtab_bar_h, tokens::col_card, xdraw::corner_radius{ 0.0f } );
+		dl.rect_filled( content_x + subtabs_w + tokens::gap, bar_y, util_w, tokens::subtab_bar_h, tokens::col_card, xdraw::corner_radius{ 0.0f } );
 
 		const auto by = bar_y + ( tokens::subtab_bar_h - subtab_h ) * 0.5f;
-		const auto pill_target_x = content_x + inner_pad + btn_w * static_cast< float >( this->m_subtab );
+		const auto pill_target_offset = inner_pad + btn_w * static_cast< float >( this->m_subtab );
 
 		if ( this->m_subtab_pill_tab != this->m_tab || this->m_subtab_pill_x < 0.0f )
 		{
-			this->m_subtab_pill_x = pill_target_x;
+			this->m_subtab_pill_x = pill_target_offset;
 			this->m_subtab_pill_tab = this->m_tab;
 		}
 		else
 		{
 			const auto dt = xdraw::delta_time( );
-			this->m_subtab_pill_x += ( pill_target_x - this->m_subtab_pill_x ) * std::min( 18.0f * settings::g_misc.m_theme.anim_speed.value * dt, 1.0f );
+			this->m_subtab_pill_x += ( pill_target_offset - this->m_subtab_pill_x ) * std::min( 18.0f * settings::g_misc.m_theme.anim_speed.value * dt, 1.0f );
 		}
 
 		if ( subtab_count > 0 )
@@ -1723,11 +1788,17 @@ this->m_textures.user.resource = xdraw::load_texture(
 			const auto transparent = tokens::col_accent.alpha( 0 );
 			const auto bright = tokens::col_accent.alpha( 200 ); // Reduced opacity: 200 instead of 255 (about 20% less)
 			
+			const auto absolute_pill_x = std::floor(content_x + this->m_subtab_pill_x);
+			const auto w_40 = std::floor(btn_w * 0.4f);
+			const auto w_20 = std::floor(btn_w * 0.2f);
+			const auto p_center = absolute_pill_x + w_40;
+			const auto p_right = p_center + w_20;
+
 			// Draw the bright center part (20% width)
 			dl.rect_filled_gradient( 
-				this->m_subtab_pill_x + btn_w * 0.4f, 
-				underline_y, 
-				btn_w * 0.2f, 
+				p_center, 
+				std::floor(underline_y), 
+				w_20, 
 				underline_h, 
 				bright,  // top-left
 				bright,  // top-right
@@ -1737,9 +1808,9 @@ this->m_textures.user.resource = xdraw::load_texture(
 			
 			// Draw left fade gradient (40% width)
 			dl.rect_filled_gradient( 
-				this->m_subtab_pill_x, 
-				underline_y, 
-				btn_w * 0.4f, 
+				absolute_pill_x, 
+				std::floor(underline_y), 
+				w_40, 
 				underline_h, 
 				transparent,  // top-left (transparent)
 				bright,       // top-right (bright)
@@ -1749,9 +1820,9 @@ this->m_textures.user.resource = xdraw::load_texture(
 			
 			// Draw right fade gradient (40% width)
 			dl.rect_filled_gradient( 
-				this->m_subtab_pill_x + btn_w * 0.6f, 
-				underline_y, 
-				btn_w * 0.4f, 
+				p_right, 
+				std::floor(underline_y), 
+				w_40, 
 				underline_h, 
 				bright,       // top-left (bright)
 				transparent,  // top-right (transparent)
@@ -1910,8 +1981,8 @@ this->m_textures.user.resource = xdraw::load_texture(
 		const auto inner_pad{ 5.0f };
 		const auto tab_h = h - inner_pad * 2.0f;
 
-		dl.rect_filled( bx, y, w, h, tokens::col_card, xdraw::corner_radius{ tokens::card_rounding } );
-		dl.rect_filled_gradient( bx, y, w, 1.0f, tokens::col_accent.alpha( 0 ), tokens::col_accent.alpha( 140 ), tokens::col_accent.alpha( 140 ), tokens::col_accent.alpha( 0 ) );
+		dl.rect_filled( bx, y, w, h, tokens::col_card, xdraw::corner_radius{ 0.0f } );
+		dl.rect_filled_gradient( std::floor(bx), std::floor(y), w, 1.0f, tokens::col_accent.alpha( 0 ), tokens::col_accent.alpha( 140 ), tokens::col_accent.alpha( 140 ), tokens::col_accent.alpha( 0 ) );
 
 		constexpr auto k_tab_count = static_cast< int >( tab::count );
 		const struct { const char* name; const char* icon; } defs[ k_tab_count ]
@@ -2062,19 +2133,6 @@ this->m_textures.user.resource = xdraw::load_texture(
 			}
 
 			xui::layout::spacing( );
-
-			// Menu scale setting
-			{
-				xui::text( "Menu Scale", tokens::col_text );
-				xui::layout::same_line( );
-				
-				if ( xui::slider_int( "##menu_scale", this->m_menu_scale, 50, 200, "%d%%" ) )
-				{
-					// Menu scale changed - could apply scaling here
-				}
-			}
-
-			xui::layout::spacing( );
 		}
 
 		xui::end_child( );
@@ -2110,4 +2168,4 @@ this->m_textures.user.resource = xdraw::load_texture(
 		this->sync_theme_style( );
 	}
 
-} // namespace rendering
+	} // namespace rendering

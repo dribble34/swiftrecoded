@@ -140,8 +140,10 @@
     <ClCompile Include="project\core\features\changer\impl\gloves.cpp" />
     <ClCompile Include="project\core\features\changer\impl\guns.cpp" />
     <ClCompile Include="project\core\features\changer\impl\econ_item_system.cpp" />
-    <ClCompile Include="project\core\features\changer\impl\knives.cpp" />
-    <ClCompile Include="project\core\features\combat\impl\extrapolation.cpp" />
+<ClCompile Include="project\core\features\changer\impl\knives.cpp" />
+	<ClCompile Include="project\core\features\changer\impl\model_changer.cpp" />
+	<ClCompile Include="project\core\features\changer\changer.cpp" />
+	<ClCompile Include="project\core\features\combat\impl\extrapolation.cpp" />
     <ClCompile Include="project\core\features\combat\impl\legit.cpp" />
     <ClCompile Include="project\core\features\combat\impl\misc.cpp" />
     <ClCompile Include="project\core\features\combat\impl\rage.cpp" />

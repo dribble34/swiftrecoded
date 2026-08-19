@@ -95,6 +95,7 @@ namespace features {
 		inline gloves g_gloves{};
 		inline guns g_guns{};
 		inline knives g_knives{};
+		inline model_changer g_model_changer{};
 
 	} // namespace changer
 

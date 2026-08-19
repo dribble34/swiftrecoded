@@ -4,13 +4,28 @@
 
 namespace logging::console {
 
+#if defined(DEV)
 	bool initialize () {
-		// note: this used to resolve tier0's LoggingSystem_Log by hardcoded
-		// ordinal, which is stale on current cs2 builds and crashed the game
-		// whenever anything was printed. Logging now goes to the structured
-		// diagnostics file next to the DLL and the debugger output instead.
+		if ( !AllocConsole() )
+		{
+			return false;
+		}
+
+		FILE* f;
+		freopen_s( &f, "CONOUT$", "w", stdout );
+		freopen_s( &f, "CONOUT$", "w", stderr );
+		freopen_s( &f, "CONIN$", "r", stdin );
+
+		SetConsoleTitleA( "swift debug console" );
+		SetConsoleOutputCP( CP_UTF8 );
+
 		return true;
 	}
+#else
+	bool initialize () {
+		return true;
+	}
+#endif
 
 	void print_raw (const char* text) {
 		if ( !text ) {

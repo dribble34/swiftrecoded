@@ -348,6 +348,29 @@ namespace math {
 			return yaw;
 		}
 
+		vector3 predict_position( const vector3& origin, const vector3& velocity, float tick_count )
+		{
+			const auto tick_interval = cstypes::tick_interval;
+			const auto predicted_origin = origin + velocity * ( tick_count * tick_interval );
+			return predicted_origin;
+		}
+
+		float estimate_inaccuracy_penalty( float base_inaccuracy, float velocity, bool on_ground )
+		{
+			if ( on_ground )
+			{
+				// Ground movement inaccuracy penalty based on speed
+				const auto speed_factor = velocity * 0.01f;
+				return base_inaccuracy + std::max( speed_factor, 0.001f );
+			}
+			else
+			{
+				// Airborne inaccuracy is typically higher
+				const auto air_factor = velocity * 0.02f;
+				return base_inaccuracy + std::max( air_factor, 0.005f );
+			}
+		}
+
 	} // namespace helpers
 
 } // namespace math

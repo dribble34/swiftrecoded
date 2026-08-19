@@ -188,16 +188,13 @@ namespace features::combat {
 			float current_time{};
 			float weapon_max_speed{};
 			float range{};
-		bool is_jump_scouting{};
-		bool is_scoped{};
-		bool valid{};
-		bool at_target_yaw_correction{};
+			bool is_jump_scouting{};
+			bool is_scoped{};
+			bool valid{};
 
-		float inaccuracy{};
-		float spread{};
-		float at_target_inaccuracy{};
-		float at_target_spread{};
-	};
+			float inaccuracy{};
+			float spread{};
+		};
 
 		void update( );
 		void invalidate_if_needed( );
@@ -340,7 +337,9 @@ namespace features::combat {
 		void clear_duckpeek_reduck( ) noexcept { this->m_duckpeek_reduck = false; }
 
 		static constexpr auto k_max_lagcomp_records{ 16 };
-		static constexpr auto k_max_scan_records{ 3 };
+		// Scanning the newest and oldest valid records covers the useful lag-comp
+		// extremes without multiplying every penetration and hitchance test.
+		static constexpr auto k_max_scan_records{ 2 };
 
 	private:
 		struct aim_context
@@ -355,10 +354,6 @@ namespace features::combat {
 			float accurate_threshold{};
 			bool on_ground{};
 			bool is_scoped{};
-			float recent_target_yaw{};
-			float at_target_adjustment{};
-			float predicted_spread{};
-			float convergence_angle{};
 		};
 
 		struct stop_prediction
@@ -422,10 +417,6 @@ namespace features::combat {
 
 		[[nodiscard]] aim_context build_context( systems::input::usercmd* cmd, const systems::local::snapshot& local ) const;
 		[[nodiscard]] std::optional<stop_prediction> predict_stop( const aim_context& ctx, const math::vector3& current_eye, const systems::local::snapshot& local ) const;
-		[[nodiscard]] std::optional<float> get_at_target_yaw( std::uintptr_t local_pawn ) const;
-		[[nodiscard]] float get_target_preference( std::uintptr_t pawn, float target_yaw ) const;
-		[[nodiscard]] bool is_safe_point( const math::vector3& point, std::uintptr_t threat_pawn ) const;
-		[[nodiscard]] float get_damage_priority( float damage, int health, float hitbox_priority ) const;
 		[[nodiscard]] std::vector<candidate> gather_candidates( const systems::local::snapshot& local, float max_distance_sq = 0.0f ) const;
 
 		void run_gun( systems::input::usercmd* cmd, const aim_context& ctx, const systems::local::snapshot& local, bool allow_fire = true );
@@ -438,6 +429,7 @@ namespace features::combat {
 		[[nodiscard]] target select_best( const aim_context& aim_ctx, const std::vector<scan_hit>& hits, float eval_inaccuracy ) const;
 		[[nodiscard]] float evaluate_hitchance( const scan_hit& hit, const aim_context& ctx, float inaccuracy ) const;
 		[[nodiscard]] float get_standing_inaccuracy( const systems::local::snapshot& local, const aim_context& ctx ) const;
+		[[nodiscard]] bool refine_shot( const aim_context& ctx, const target& tgt, const systems::local::snapshot& local ) const;
 
 		[[nodiscard]] std::vector<scan_hit> scan_taser( const math::vector3& eye, const aim_context& ctx, std::vector<candidate>& candidates, const systems::local::snapshot& local ) const;
 
@@ -450,12 +442,6 @@ namespace features::combat {
 		[[nodiscard]] std::vector<math::vector3> generate_multipoints( const systems::hitboxes::entry& hitbox, const math::vector3& center, const math::quaternion& bone_rot, float pointscale, const math::vector3& shoot_pos, float inaccuracy ) const;
 		[[nodiscard]] bool should_stop_movement( const aim_context& ctx ) const;
 		[[nodiscard]] float get_min_damage( const settings::combat::ragebot::weapon_group& config, int target_health, bool override_active ) const;
-		[[nodiscard]] float get_min_damage_for_shot( const settings::combat::ragebot::weapon_group& config, int target_health, float max_possible_damage ) const;
-
-		[[nodiscard]] int ideal_backtrack_ticks( ) const;
-		[[nodiscard]] shared::lagcomp::record* select_lagcomp_record( const std::vector<shared::lagcomp::record*>& records ) const;
-		[[nodiscard]] math::vector3 get_compensated_eye( std::uintptr_t local_pawn ) const;
-		[[nodiscard]] int estimate_ticks_to_accurate( const systems::local::snapshot& local, const aim_context& ctx ) const;
 		[[nodiscard]] float get_knife_damage( float raw, int armor, float armor_ratio ) const;
 		[[nodiscard]] systems::tracing::result trace_taser_hit( const math::vector3& origin, const math::vector3& forward, float range, std::uintptr_t target_pawn, std::uintptr_t local_pawn ) const;
 		[[nodiscard]] systems::tracing::result trace_knife_hit( const math::vector3& origin, const math::vector3& forward, float reach, std::uintptr_t target_pawn, std::uintptr_t local_pawn ) const;
@@ -474,11 +460,6 @@ namespace features::combat {
 		bool m_firing_this_tick{};
 		bool m_release_duck_for_shot{};
 		bool m_duckpeek_reduck{};
-
-		mutable std::optional<float> m_at_target_yaw{};
-		mutable std::optional<float> m_at_target_damage_bias{};
-		mutable float m_last_convergence{};
-		mutable int m_spread_samples{};
 
 		std::uint8_t m_knife_attack{};
 		bool m_zeus_fired{};

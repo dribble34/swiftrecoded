@@ -225,6 +225,7 @@ namespace hooks {
 			if ( stage == 6 )
 			{
 				features::changer::g_guns.on_frame_stage_notify( );
+				ModelChanger->SetPlayerModel( );
 			}
 
 			if ( stage == 7 )

@@ -384,21 +384,27 @@ namespace features::esp::player {
 				continue;
 			}
 
-			const auto oldest = combat::g_shared.lc( ).get_oldest_was_valid( pawn );
+			auto oldest = combat::g_shared.lc( ).get_oldest_was_valid( pawn );
+			combat::shared::lagcomp::record live{};
+			bool use_live = false;
 			if ( !oldest )
 			{
-				auto it = this->m_objects.find( pawn );
-				if ( it != this->m_objects.end( ) )
+				if ( !live.setup( pawn ) )
 				{
-					it->second.destroy( );
-					this->m_objects.erase( it );
+					auto it = this->m_objects.find( pawn );
+					if ( it != this->m_objects.end( ) )
+					{
+						it->second.destroy( );
+						this->m_objects.erase( it );
+					}
+					continue;
 				}
-
-				continue;
+				use_live = true;
+				oldest = &live;
 			}
 
 			const auto game_scene_node = memory::read<std::uintptr_t>( pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
-			if ( game_scene_node )
+			if ( game_scene_node && !use_live )
 			{
 				if ( oldest->origin.distance( memory::read<math::vector3>( game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) ) ) < 0.25f )
 				{

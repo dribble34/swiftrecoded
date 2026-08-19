@@ -25,22 +25,22 @@
 */
 
 namespace protection::addresses {
-	constexpr std::uint32_t hash_const (const char* str, std::uint32_t value = 0x811C9DC5u) {
-		return *str ? hash_const (str + 1, (value ^ std::uint32_t (*str)) * 0x01000193u) : value;
+	constexpr std::uint32_t hash_const(const char* str, std::uint32_t value = 0x811C9DC5u) {
+		return *str ? hash_const(str + 1, (value ^ std::uint32_t(*str)) * 0x01000193u) : value;
 	}
 
 	template <std::size_t N>
-	consteval std::uint32_t hash (const char (&str) [N]) {
-		return hash_const (str);
+	consteval std::uint32_t hash(const char(&str)[N]) {
+		return hash_const(str);
 	}
 
 	template <std::size_t N>
 	struct fixed_string {
-		char value [N] {};
+		char value[N]{};
 
-		constexpr fixed_string (const char (&str) [N]) {
+		constexpr fixed_string(const char(&str)[N]) {
 			for (std::size_t i = 0; i < N; ++i)
-				value [i] = str [i];
+				value[i] = str[i];
 		}
 
 		constexpr operator const char* () const {
@@ -49,7 +49,7 @@ namespace protection::addresses {
 	};
 
 	template <std::size_t N>
-	fixed_string (const char (&) [N]) -> fixed_string<N>;
+	fixed_string(const char(&)[N]) -> fixed_string<N>;
 
 	enum class address_type : std::uint32_t {
 		pattern,
@@ -71,23 +71,23 @@ namespace protection::addresses {
 			volatile std::uint64_t  key;
 		};
 
-		constexpr address_t (std::uintptr_t addr = 0) : encoded (addr), key (0) {}
-		constexpr address_t (address_type type, const char* str) : data {type, str} {}
+		constexpr address_t(std::uintptr_t addr = 0) : encoded(addr), key(0) {}
+		constexpr address_t(address_type type, const char* str) : data{ type, str } {}
 	};
 
-	__forceinline std::uintptr_t decode (const address_t& e) noexcept {
+	__forceinline std::uintptr_t decode(const address_t& e) noexcept {
 		return static_cast<std::uintptr_t>(e.encoded ^ e.key);
 	}
 
 	template <std::uint32_t Hash, address_type Type, fixed_string Str>
 	struct address_holder {
 		[[gnu::section("_addr"), gnu::used, gnu::retain]]
-		inline static constexpr address_t entry {Type, Str.value};
+		inline static constexpr address_t entry{ Type, Str.value };
 	};
 
 	struct sentinel_holder {
 		[[gnu::section("_addr"), gnu::used, gnu::retain]]
-		inline static constexpr address_t entry {};
+		inline static constexpr address_t entry{};
 	};
 
 }

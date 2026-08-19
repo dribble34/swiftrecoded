@@ -1197,6 +1197,101 @@ namespace rendering {
 				return;
 			}
 
+			if ( this->m_subtab == 4 )
+			{
+				auto& models_cfg = settings::g_changer.models;
+
+				xui::layout::set_cursor( 12.0f, 12.0f );
+				xui::checkbox( "enabled##model_changer", models_cfg.enabled );
+
+				static const char* source_names[ 4 ] = { "Disabled", "Custom", "CT", "T" };
+
+				xui::layout::set_cursor( 12.0f, 40.0f );
+				xui::text( "CT Source:", tokens::col_text );
+				xui::layout::same_line( );
+				xui::combo( "##ct_source", models_cfg.ct_source.value, source_names, 4 );
+
+				xui::layout::set_cursor( 12.0f, 70.0f );
+				xui::text( "T Source:", tokens::col_text );
+				xui::layout::same_line( );
+				xui::combo( "##t_source", models_cfg.t_source.value, source_names, 4 );
+
+				xui::layout::set_cursor( 12.0f, 100.0f );
+				xui::text( "CT Custom:", tokens::col_text );
+				xui::layout::same_line( );
+				xui::text_input( "##ct_custom", models_cfg.ct_custom.value, 128, "models/player/custom_player/ctm/..." );
+
+				xui::layout::set_cursor( 12.0f, 130.0f );
+				xui::text( "T Custom:", tokens::col_text );
+				xui::layout::same_line( );
+				xui::text_input( "##t_custom", models_cfg.t_custom.value, 128, "models/player/custom_player/tm/..." );
+
+				if ( xui::button( "Apply & Prec##model_changer", 120.0f, 24.0f ) )
+				{
+					features::changer::g_model_changer.reset_cache( );
+				}
+
+				xui::layout::set_cursor( 12.0f, 176.0f );
+				{
+					static xui::setting custom_toggle{ false, {}, "model changer", "local custom model" };
+					custom_toggle.value = ModelChanger->bPlayerModelChanger;
+					xui::checkbox( "local custom model##model_changer", custom_toggle );
+					ModelChanger->bPlayerModelChanger = custom_toggle.value;
+				}
+
+				if ( xui::button( "Refresh list##custom_models", 120.0f, 24.0f ) )
+				{
+					ModelChanger->UpdatePlayerModels( );
+					ModelChanger->uLastPlayerModelHash = 0;
+				}
+
+				static std::vector<std::string> model_names_owner;
+				static std::vector<const char*> model_items;
+				if ( ModelChanger->vecPlayerModels.empty( ) )
+				{
+					model_items.clear( );
+					model_names_owner.clear( );
+				}
+				else if ( model_items.size( ) != ModelChanger->vecPlayerModels.size( ) )
+				{
+					model_names_owner.clear( );
+					model_items.clear( );
+					model_names_owner.reserve( ModelChanger->vecPlayerModels.size( ) );
+					model_items.reserve( ModelChanger->vecPlayerModels.size( ) );
+					for ( const auto& m : ModelChanger->vecPlayerModels )
+					{
+						model_names_owner.emplace_back( m.strModelName );
+						model_items.push_back( model_names_owner.back( ).c_str( ) );
+					}
+				}
+
+				if ( model_items.empty( ) )
+				{
+					xui::layout::set_cursor( 12.0f, 220.0f );
+					xui::text( "no custom models found (csgo/characters/models)", tokens::col_text_dim );
+				}
+				else
+				{
+					auto selected = static_cast< int >( ModelChanger->nSelectedPlayerModel );
+					if ( selected < 0 || selected >= static_cast< int >( model_items.size( ) ) )
+					{
+						selected = 0;
+					}
+
+					xui::layout::set_cursor( 12.0f, 220.0f );
+					xui::text( "Custom Model:", tokens::col_text );
+					xui::layout::same_line( );
+					if ( xui::combo( "##custom_model", selected, model_items.data( ), static_cast< int >( model_items.size( ) ), 240.0f ) )
+					{
+						ModelChanger->nSelectedPlayerModel = static_cast< unsigned long long >( selected );
+						ModelChanger->uLastPlayerModelHash = 0;
+					}
+				}
+
+				xui::end_child( );
+				return;
+			}
+
 			const auto& weapons = detail::select_weapons( this->m_subtab );
 
 			std::unordered_set<std::int16_t> defs_with_skins;

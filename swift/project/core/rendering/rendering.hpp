@@ -47,10 +47,10 @@ namespace rendering {
 		[[nodiscard]] float open_anim( ) const { return this->m_open_anim; }
 		void apply_saved_cursor( );
 
-        enum class tab : int
-        {
-            ragebot, antiaim, legitbot, player, world, skins, misc, config, count
-        };
+enum class tab : int
+    {
+        ragebot, antiaim, legitbot, player, world, skins, misc, config, count
+    };
 
     private:
 		bool draw_intro( );
@@ -162,17 +162,17 @@ namespace rendering {
             int count{};
         };
 
-        static constexpr subtab_info k_subtab_defs[ static_cast< int >( tab::count ) ]
-        {
-            { { "pistol", "smg", "rifle", "shotgun", "sniper", "lmg" }, 6 },
-            { { "main" },                                               1 },
-            { { "pistol", "smg", "rifle", "shotgun", "sniper", "lmg" }, 6 },
-            { { "enemies", "allies", "local" },                         3 },
-            { { "esp", "scene", "weather" },                            3 },
-            { { "guns", "knives", "gloves", "agents" },                 4 },
-            { { "main", "removals", "camera", "hud" },                  4 },
-            { { "general" },                                            1 }
-        };
+static constexpr subtab_info k_subtab_defs[ static_cast< int >( tab::count ) ]
+		{
+			{ { "pistol", "smg", "rifle", "shotgun", "sniper", "lmg" }, 6 },
+			{ { "main" },                                               1 },
+			{ { "pistol", "smg", "rifle", "shotgun", "sniper", "lmg" }, 6 },
+			{ { "enemies", "allies", "local" },                         3 },
+			{ { "esp", "scene", "weather" },                            3 },
+			{ { "guns", "knives", "gloves", "agents", "models" },       5 },
+			{ { "main", "removals", "camera", "hud" },                 4 },
+			{ { "general" },                                            1 }
+		};
     };
 
 	class widgets

@@ -445,7 +445,6 @@ xui::checkbox( "scope overlay", hud.m_scope.enabled );
 			}
 
 				xui::checkbox( "velocity counter", hud.m_velocity.counter );
-				xui::checkbox( "velocity chart", hud.m_velocity.chart );
 				xui::checkbox( "velocity graph", hud.m_velocity.graph );
 				xui::checkbox( "velocity indicator", hud.m_velocity.indicator );
 				if ( xui::begin_popup( "##velocity_hud_popup", 220.0f ) )
@@ -453,8 +452,6 @@ xui::checkbox( "scope overlay", hud.m_scope.enabled );
 					xui::color_picker( "color##velocity", hud.m_velocity.color );
 					xui::color_picker( "max color##velocity", hud.m_velocity.max_color );
 					xui::slider_float( "bottom offset", hud.m_velocity.bottom_offset, 20.0f, 200.0f, "%.0f" );
-					xui::slider_float( "chart width", hud.m_velocity.chart_width, 120.0f, 320.0f, "%.0f" );
-					xui::slider_float( "chart height", hud.m_velocity.chart_height, 24.0f, 80.0f, "%.0f" );
 					xui::slider_float( "graph width", hud.m_velocity.graph_width, 120.0f, 400.0f, "%.0f" );
 					xui::slider_float( "graph height", hud.m_velocity.graph_height, 60.0f, 200.0f, "%.0f" );
 					xui::slider_float( "graph line width", hud.m_velocity.graph_line_width, 0.5f, 5.0f, "%.1f" );
@@ -492,6 +489,28 @@ xui::checkbox( "scope overlay", hud.m_scope.enabled );
 				xui::color_picker( "island color", theme.card );
 				xui::color_picker( "background color", theme.background );
 				xui::slider_float( "animation speed", theme.anim_speed, 0.5f, 2.0f, "%.2fx" );
+
+				static int scale_idx = -1;
+				if ( scale_idx == -1 )
+				{
+					if ( this->m_menu_scale >= 200 ) scale_idx = 4;
+					else if ( this->m_menu_scale >= 175 ) scale_idx = 3;
+					else if ( this->m_menu_scale >= 150 ) scale_idx = 2;
+					else if ( this->m_menu_scale >= 125 ) scale_idx = 1;
+					else scale_idx = 0;
+				}
+				
+				constexpr const char* dpi_options[] = { "100%", "125%", "150%", "175%", "200%" };
+
+				if ( xui::combo( "dpi scale", scale_idx, dpi_options, 5 ) )
+				{
+					auto non_const_this = const_cast<menu*>(this);
+					if ( scale_idx == 0 ) non_const_this->m_menu_scale = 100;
+					else if ( scale_idx == 1 ) non_const_this->m_menu_scale = 125;
+					else if ( scale_idx == 2 ) non_const_this->m_menu_scale = 150;
+					else if ( scale_idx == 3 ) non_const_this->m_menu_scale = 175;
+					else if ( scale_idx == 4 ) non_const_this->m_menu_scale = 200;
+				}
 
 				xui::end_child( );
 			}

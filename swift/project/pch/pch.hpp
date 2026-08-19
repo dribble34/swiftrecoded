@@ -3,6 +3,7 @@
 // macros
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
+#define DEV
 
 // windows
 #ifndef PHNT_VERSION

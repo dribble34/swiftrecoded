@@ -36,6 +36,9 @@ namespace features::combat {
 
 		if ( trace_result.fraction != 1.0f )
 		{
+			logging::console::print( xs( "[extrap] predict_movement: wall hit (frac {:.2f}, normal {:.2f} {:.2f} {:.2f})\n" ),
+				trace_result.fraction, trace_result.normal.x, trace_result.normal.y, trace_result.normal.z );
+
 			for ( auto i = 0; i < 2; ++i )
 			{
 				const auto dot = data.velocity.dot( trace_result.normal );
@@ -82,7 +85,7 @@ namespace features::combat {
 		}
 	}
 
-	std::optional<shared::lagcomp::record> shared::lagcomp::extrapolate( std::uintptr_t pawn )
+std::optional<shared::lagcomp::record> shared::lagcomp::extrapolate( std::uintptr_t pawn )
 	{
 		if ( !settings::g_combat.m_lagcomp.extrapolation.value )
 		{
@@ -163,21 +166,21 @@ namespace features::combat {
 						prev_dir = std::atan2f( origin_delta.y, origin_delta.x ) * ( 180.0f / 3.14159265f );
 					}
 
-				auto angle_diff = direction - prev_dir;
-				while ( angle_diff > 180.0f ) angle_diff -= 360.0f;
-				while ( angle_diff < -180.0f ) angle_diff += 360.0f;
+					auto angle_diff = direction - prev_dir;
+					while ( angle_diff > 180.0f ) angle_diff -= 360.0f;
+					while ( angle_diff < -180.0f ) angle_diff += 360.0f;
 
-				if ( std::fabsf( angle_diff ) > 35.0f )
-				{
-					return std::nullopt;
-				}
+					if ( std::fabsf( angle_diff ) > 45.0f )
+					{
+						return std::nullopt;
+					}
 
-				direction_change = ( angle_diff / dt ) * cstypes::tick_interval;
+					direction_change = ( angle_diff / dt ) * cstypes::tick_interval;
 				}
 			}
 		}
 
-		if ( std::fabsf( direction_change ) > 6.0f )
+		if ( std::fabsf( direction_change ) > 10.0f )
 		{
 			direction_change = 0.0f;
 		}
@@ -231,42 +234,25 @@ namespace features::combat {
 
 		const auto origin_delta = data.origin - latest.origin;
 
-		if ( origin_delta.length_sqr( ) < 0.01f )
-		{
-			return std::nullopt;
-		}
-
 		record extrap_record = latest;
 		extrap_record.origin = data.origin;
 		extrap_record.simulation_time = data.sim_time;
 		extrap_record.tick = cstypes::time_to_ticks( data.sim_time );
 		extrap_record.extrapolated = true;
 
-		// The extrapolated body also turns while moving. Rotate the translated pose
-		// about the predicted origin by the accumulated yaw so the lead pose faces
-		// the direction of travel instead of staying frozen in the last orientation.
-		const auto total_yaw = direction_change * static_cast< float >( ticks_to_extrapolate );
-		const auto rotate_pose = std::fabsf( total_yaw ) > 0.5f;
-		const auto yaw_rad = math::helpers::deg_to_rad( total_yaw );
-		const auto cos_yaw = std::cosf( yaw_rad );
-		const auto sin_yaw = std::sinf( yaw_rad );
-		const auto pivot = data.origin;
-
 		for ( auto i = 0; i < extrap_record.bone_count && i < 128; ++i )
 		{
-			auto& pos = extrap_record.bones[ i ].position;
-			pos.x += origin_delta.x;
-			pos.y += origin_delta.y;
-			pos.z += origin_delta.z;
-
-			if ( rotate_pose )
-			{
-				const auto dx = pos.x - pivot.x;
-				const auto dz = pos.z - pivot.z;
-				pos.x = pivot.x + dx * cos_yaw - dz * sin_yaw;
-				pos.z = pivot.z + dx * sin_yaw + dz * cos_yaw;
-			}
+			extrap_record.bones[ i ].position.x += origin_delta.x;
+			extrap_record.bones[ i ].position.y += origin_delta.y;
+			extrap_record.bones[ i ].position.z += origin_delta.z;
 		}
+
+		const auto dist = std::sqrtf( origin_delta.x * origin_delta.x + origin_delta.y * origin_delta.y + origin_delta.z * origin_delta.z );
+		logging::console::print(
+			xs( "[extrap] {:x} | ok: {} ticks | delta {:.2f} u | origin ({:.1f}, {:.1f}, {:.1f})\n" ),
+			pawn, ticks_to_extrapolate, dist,
+			data.origin.x, data.origin.y, data.origin.z
+		);
 
 		return extrap_record;
 	}

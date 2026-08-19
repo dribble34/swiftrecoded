@@ -2,6 +2,31 @@
 
 #include <filesystem>
 #include <core/systems/systems.hpp>
+#include <utilities/memory/memory.hpp>
+#include <protection/patterns.hpp>
+
+struct Model_t
+{
+	std::string strModelName;
+	std::string strModelPath;
+};
+
+class CModelChanger
+{
+public:
+	std::vector<Model_t> vecPlayerModels;
+	std::vector<Model_t> vecWeaponModels;
+	unsigned long long nSelectedPlayerModel = ~1U;
+	uint32_t uLastPlayerModelHash;
+
+	bool bPlayerModelChanger{ false };
+
+	void UpdateWeaponModels();
+	void UpdatePlayerModels();
+	bool SetPlayerModel();
+};
+
+inline CModelChanger* ModelChanger = new CModelChanger();
 
 namespace features::changer {
 
@@ -276,6 +301,34 @@ namespace features::changer {
 		bool m_overridden{};
 		std::uintptr_t m_pending_hud_iv{};
 		std::chrono::steady_clock::time_point m_hud_clear_time{};
+	};
+
+	class model_changer
+	{
+	public:
+		void on_frame_stage_notify( );
+		void reset_cache( );
+
+	private:
+		struct model_entry
+		{
+			std::string path{};
+			bool precached{};
+		};
+
+		[[nodiscard]] bool precache_model( const std::string& path );
+		[[nodiscard]] bool set_model( std::uintptr_t pawn, const std::string& path );
+		void apply_model( std::uintptr_t pawn, int team );
+		void restore_model( std::uintptr_t pawn, int team );
+
+		std::unordered_map<int, model_entry> m_ct_models{};
+		std::unordered_map<int, model_entry> m_t_models{};
+		std::unordered_map<std::uintptr_t, std::string> m_original_models{};
+		std::uintptr_t m_resource_system{};
+		void* m_precache_fn{};
+		void* m_set_model_fn{};
+		void* m_cbuffer_insert_fn{};
+		bool m_initialized{};
 	};
 
 } // namespace features::changer

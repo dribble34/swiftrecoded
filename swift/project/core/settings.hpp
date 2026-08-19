@@ -28,11 +28,12 @@ namespace settings {
 				xui::setting force_shot_air{ false, {}, "force shot in air", "ragebot" };
 				xui::setting force_shot{ false, {}, "force shot on ground", "ragebot" };
 				xui::setting autostop{ true, {}, "autostop", "ragebot" };
+				xui::setting refine_shot{ false, {}, "refine shot", "ragebot" };
 
 				config::val<float> max_fov{ 180.0f };
 
 				config::val<int> hitchance{ 80 };
-				config::val<int> min_damage{ 101 };
+				config::val<int> min_damage{ 1 };
 
 				xui::setting ignore_hitchance_if_accurate{ false, {}, "ignore hitchance if accurate", "ragebot" };
 
@@ -60,6 +61,7 @@ namespace settings {
 				this->force_shot_air.category = s;
 				this->force_shot.category = s;
 				this->autostop.category = s;
+				this->refine_shot.category = s;
 				this->min_damage_override.category = s;
 				this->hitchance_override.category = s;
 				this->ignore_hitchance_if_accurate.category = s;
@@ -261,7 +263,7 @@ namespace settings {
 		{
 			config::val<int> max_backtrack_ticks{ 12, "ragebot", "max backtrack ticks" };
 			xui::setting extrapolation{ true, {}, "extrapolation", "ragebot" };
-			config::val<int> max_extrapolate_ticks{ 8, "ragebot", "max extrapolate ticks" };
+			config::val<int> max_extrapolate_ticks{ 16, "ragebot", "max extrapolate ticks" };
 		} m_lagcomp{};
 
 		struct zeusbot
@@ -1165,13 +1167,51 @@ namespace settings {
 			}
 		};
 
+		struct model_changer_field : config::custom_field
+		{
+			enum class model_source : int { disabled = 0, custom = 1, ct = 2, t = 3 };
+			config::val< int > ct_source{ static_cast< int >( model_source::ct ), "model changer", "CT source" };
+			config::val< int > t_source{ static_cast< int >( model_source::t ), "model changer", "T source" };
+			config::str ct_custom{ "models/player/custom_player/ctm/ctm_gsg9.vmdl", "model changer", "CT custom model" };
+			config::str t_custom{ "models/player/custom_player/tm/tm_phoenix.vmdl", "model changer", "T custom model" };
+			xui::setting enabled{ false, {}, "model changer", "enabled" };
+
+			nlohmann::json serialize( ) const override
+			{
+				return nlohmann::json
+				{
+					{ "ct_source", ct_source.value },
+					{ "t_source", t_source.value },
+					{ "ct_custom", ct_custom.value },
+					{ "t_custom", t_custom.value },
+					{ "enabled", enabled.value }
+				};
+			}
+
+			void deserialize( const nlohmann::json& j ) override
+			{
+				if ( !j.is_object( ) )
+				{
+					return;
+				}
+
+				ct_source.value = j.value( "ct_source", static_cast< int >( model_source::ct ) );
+				t_source.value = j.value( "t_source", static_cast< int >( model_source::t ) );
+				ct_custom.value = j.value( "ct_custom", "models/player/custom_player/ctm/ctm_gsg9.vmdl" );
+				t_custom.value = j.value( "t_custom", "models/player/custom_player/tm/tm_phoenix.vmdl" );
+				enabled.value = j.value( "enabled", false );
+			}
+		};
+
 		skin_map_field skins{};
 		agent_selection_field agents{};
+		model_changer_field models{};
 
 		changer( )
 		{
 			config::detail::register_field( { .key = config::detail::make_key( "changer", "applied skins" ), .type = config::field_type::custom, .ptr = &skins, .count = 1 } );
 			config::detail::register_field( { .key = config::detail::make_key( "changer", "agents" ), .type = config::field_type::custom, .ptr = &agents, .count = 1 } );
+			config::detail::register_field( { .key = config::detail::make_key( "changer", "models" ), .type = config::field_type::custom, .ptr = &models, .count = 1 } );
 		}
 	};
 

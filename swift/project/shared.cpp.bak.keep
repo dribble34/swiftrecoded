@@ -4,7 +4,6 @@
 #include <utilities/logging/logging.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
-#include <core/settings.hpp>
 #include <protection/game_addresses.hpp>
 
 namespace features::combat {
@@ -90,7 +89,8 @@ namespace features::combat {
 		const auto trace_delta = direction * this->m_weapon_data.range;
 
 		auto filter = systems::g_tracing.make_filter( local_pawn, 0x1c300b, 3, 15 );
-
+		// Rage scanning calls this hundreds of times in a frame. Reuse the large
+		// trace buffer per worker instead of allocating and freeing 7 KB per point.
 		thread_local systems::tracing::trace_data trace_storage{};
 		trace_storage = {};
 		auto* trace = &trace_storage;
@@ -100,6 +100,8 @@ namespace features::combat {
 		g_shared.m_current_autowall_record = ctx.record;
 		g_shared.m_autowalling = true;
 
+		// The hitbox-transform hook supplies this thread's record directly.
+		// Do not swap the live entity pose: Present may read it concurrently.
 		systems::g_tracing.setup_trace( trace, start, trace_delta, filter, 4, true );
 
 		g_shared.m_autowalling = false;
@@ -120,11 +122,8 @@ namespace features::combat {
 
 		auto actual_hitbox{ -1 };
 		auto closest_hitbox_fraction{ 1.0f };
-		auto closest_hitbox_projection{ 1.0f };
-		auto fallback_hitbox{ -1 };
 		if ( ctx.record )
 		{
-			const auto ray_direction = direction.normalized( );
 			for ( const auto& hitbox : ctx.hitboxes )
 			{
 				if ( hitbox.bone < 0 || hitbox.bone >= ctx.record->bone_count )
@@ -180,20 +179,7 @@ namespace features::combat {
 					closest_hitbox_fraction = fraction;
 					actual_hitbox = hitbox.index;
 				}
-
-				const auto center = bone.rotation.rotate_vector( ( hitbox.mins + hitbox.maxs ) * 0.5f ) + bone.position;
-				const auto projection = ( center - start ).dot( ray_direction ) / trace_delta.length( );
-				if ( projection >= 0.0f && projection < closest_hitbox_projection )
-				{
-					closest_hitbox_projection = projection;
-					fallback_hitbox = hitbox.index;
-				}
 			}
-		}
-
-		if ( actual_hitbox < 0 && fallback_hitbox >= 0 )
-		{
-			actual_hitbox = fallback_hitbox;
 		}
 
 		auto penetrated{ false };
@@ -229,17 +215,12 @@ namespace features::combat {
 				continue;
 			}
 
-			int hitbox_to_use = actual_hitbox;
-			if ( hitbox_to_use < 0 )
-			{
-				hitbox_to_use = fallback_hitbox;
-			}
-			if ( hitbox_to_use < 0 )
+			if ( actual_hitbox < 0 )
 			{
 				continue;
 			}
 
-			out.hitbox = hitbox_to_use;
+			out.hitbox = actual_hitbox;
 			out.hitgroup = systems::g_hitboxes.hitgroup_from_hitbox( actual_hitbox );
 			out.penetrated = penetrated;
 			out.damage = damage;

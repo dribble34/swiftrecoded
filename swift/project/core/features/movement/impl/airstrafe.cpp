@@ -56,14 +56,26 @@ namespace features::movement {
 			const auto subtick_moves = base->mutable_subtick_moves( );
 			if ( subtick_moves )
 			{
-				const auto step = systems::g_input.acquire_subtick_step( subtick_moves );
-				if ( step )
+				constexpr auto subtick_count{ 32 };
+				auto current_forward = prestate.last_movement_impulses.x;
+				auto current_left = prestate.last_movement_impulses.y;
+
+				for ( auto i = 0; i < subtick_count; ++i )
 				{
+					const auto step = systems::g_input.acquire_subtick_step( subtick_moves );
+					if ( !step )
+					{
+						break;
+					}
+
 					step->set_button( 0 );
 					step->set_pressed( false );
-					step->set_when( 0.0f );
-					step->set_analog_forward_delta( forward_move - prestate.last_movement_impulses.x );
-					step->set_analog_left_delta( left_move - prestate.last_movement_impulses.y );
+					step->set_when( static_cast< float >( i ) / static_cast< float >( subtick_count ) );
+					step->set_analog_forward_delta( forward_move - current_forward );
+					step->set_analog_left_delta( left_move - current_left );
+
+					current_forward = forward_move;
+					current_left = left_move;
 				}
 			}
 			return;
@@ -157,6 +169,16 @@ namespace features::movement {
 
 		const auto has_direction_input = ( this->m_last_pressed & cstypes::command_buttons::in_moveleft ) || ( this->m_last_pressed & cstypes::command_buttons::in_moveright ) || ( this->m_last_pressed & cstypes::command_buttons::in_forward ) || ( this->m_last_pressed & cstypes::command_buttons::in_back );
 		const auto effective_wants_stop = wants_stop || ( settings::g_movement.airstrafe_fully_directional.value && !has_direction_input );
+
+		if ( effective_wants_stop && features::combat::g_rage.should_stop( ) )
+		{
+			const auto& stop_ctx = features::combat::g_shared.ctx( );
+			const auto& stop_wgroup = settings::g_combat.m_ragebot.get_group( stop_ctx.weapon_type );
+			if ( stop_wgroup.crouch_to_stop.value )
+			{
+				cmd->buttons.value |= cstypes::command_buttons::in_duck;
+			}
+		}
 
 		auto velocity = prestate.networked_velocity;
 		auto last_impulses = prestate.last_movement_impulses;

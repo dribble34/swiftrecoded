@@ -1319,13 +1319,19 @@ namespace xui {
 			win->line_h = h;
 			win->content_h = std::max( win->content_h, win->cursor_y + h );
 
-			return rect
+			auto result = rect
 			{
 				std::floorf( local.x + win->bounds.x ),
 				std::floorf( local.y + win->bounds.y ),
 				std::floorf( local.w ),
 				std::floorf( local.h )
 			};
+
+			// Clip to the current window's visible bounds so content that is scrolled
+			// out of view (rendered via the child clip) is not interactable.
+			result = result.intersect( win->bounds );
+
+			return result;
 		}
 
 		void same_line( float offset )

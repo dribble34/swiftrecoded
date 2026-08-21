@@ -52,6 +52,7 @@ namespace hooks {
 		static void __fastcall process_input_event( std::uintptr_t thisptr, int slot, float frametime );
 		static std::uintptr_t __fastcall render_decals( std::uintptr_t render_context, std::uintptr_t** render_view, bool pass_flag_a, bool pass_flag_b );
 		static void __fastcall render_smoke( std::uintptr_t a1, std::uintptr_t a2, int a3, int a4, std::uintptr_t a5, std::uintptr_t a6 );
+		static void* __fastcall calc_viewmodel( float* unk, float* offsets, float* fov );
 		static std::uintptr_t __fastcall render_smoke_map( std::uintptr_t thisptr, std::size_t size, std::uintptr_t* out_ptr );
 		static void __fastcall render_smoke_unmap( std::uintptr_t thisptr, std::uintptr_t ctx, std::size_t size );
 		static void __fastcall draw_flash_effect( std::uintptr_t a1, int a2, std::uintptr_t* a3, std::uintptr_t a4, __m128* a5 );
@@ -98,6 +99,7 @@ namespace hooks {
 		inline static hooking::jmp m_process_input_event{};
 		inline static hooking::jmp m_render_decals{};
 		inline static hooking::jmp m_render_smoke{};
+		inline static hooking::jmp m_calc_viewmodel{};
 		inline static hooking::jmp m_render_smoke_map{};
 		inline static hooking::jmp m_render_smoke_unmap{};
 		inline static hooking::jmp m_draw_flash_effect{};

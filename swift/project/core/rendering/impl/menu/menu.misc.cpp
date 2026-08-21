@@ -8,7 +8,7 @@ namespace rendering {
 
 	namespace detail {
 
-		constexpr const char* sound_types[ ]{ "shop click", "home click", "bell", "killcard", "bullet casing", "coin pickup", "item drop", "popcan", "key press", "custom" };
+		constexpr const char* sound_types[ ]{ "shop click", "home click", "bell", "killcard", "bullet casing", "coin pickup", "item drop", "popcan", "key press", "custom", "hit", "bubble", "metal", "neverlose", "rust headshot", "agpa2" };
 		constexpr auto k_sound_type_count{ static_cast< int >( std::size( sound_types ) ) };
 
 		void draw_custom_sound_picker( config::str& file_setting, std::string_view combo_label, std::string_view preview_id, float preview_volume )
@@ -436,6 +436,7 @@ xui::checkbox( "scope overlay", hud.m_scope.enabled );
 				xui::color_picker( "color##scope", hud.m_scope.color );
 				xui::checkbox( "fade in##scope", hud.m_scope.fade_in );
 				xui::checkbox( "dynamic spread##scope", hud.m_scope.dynamic_spread );
+				xui::checkbox( "spread circle##scope", hud.m_scope.spread_circle );
 
 				xui::layout::separator( );
 

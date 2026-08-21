@@ -80,8 +80,8 @@
       <PreprocessorDefinitions>VELOCITYCS2_EXPORTS;_WINDOWS;_USRDLL;DEV;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch/pch.hpp</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
@@ -140,14 +140,16 @@
     <ClCompile Include="project\core\features\changer\impl\gloves.cpp" />
     <ClCompile Include="project\core\features\changer\impl\guns.cpp" />
     <ClCompile Include="project\core\features\changer\impl\econ_item_system.cpp" />
-<ClCompile Include="project\core\features\changer\impl\knives.cpp" />
-	<ClCompile Include="project\core\features\changer\impl\model_changer.cpp" />
-	<ClCompile Include="project\core\features\changer\changer.cpp" />
-	<ClCompile Include="project\core\features\combat\impl\extrapolation.cpp" />
+    <ClCompile Include="project\core\features\changer\impl\knives.cpp" />
+    <ClCompile Include="project\core\features\changer\impl\model_changer.cpp" />
+    <ClCompile Include="project\core\features\changer\changer.cpp" />
+    <ClCompile Include="project\core\features\combat\impl\aimbot\shared.cpp" />
+    <ClCompile Include="project\core\features\combat\impl\autowall\autowall.cpp" />
+    <ClCompile Include="project\core\features\combat\impl\engineprediction\enginepredict.cpp" />
+    <ClCompile Include="project\core\features\combat\impl\engineprediction\extrapolation.cpp" />
     <ClCompile Include="project\core\features\combat\impl\legit.cpp" />
     <ClCompile Include="project\core\features\combat\impl\misc.cpp" />
-    <ClCompile Include="project\core\features\combat\impl\rage.cpp" />
-    <ClCompile Include="project\core\features\combat\impl\shared.cpp" />
+    <ClCompile Include="project\core\features\combat\impl\rage\rage.cpp" />
     <ClCompile Include="project\core\features\esp\item\item.chams.cpp" />
     <ClCompile Include="project\core\features\esp\item\item.glow.cpp" />
     <ClCompile Include="project\core\features\esp\item\item.overlay.cpp" />
@@ -266,6 +268,12 @@
     <ClInclude Include="project\core\resources\fonts\pixel7.hpp" />
     <ClInclude Include="project\core\resources\particles\effects.hpp" />
     <ClInclude Include="project\core\resources\particles\weather.hpp" />
+    <ClInclude Include="project\core\resources\sounds\embedded_agpa2_sound.hpp" />
+    <ClInclude Include="project\core\resources\sounds\embedded_bubble_sound.hpp" />
+    <ClInclude Include="project\core\resources\sounds\embedded_hit_sound.hpp" />
+    <ClInclude Include="project\core\resources\sounds\embedded_metal_sound.hpp" />
+    <ClInclude Include="project\core\resources\sounds\embedded_neverlose_sound.hpp" />
+    <ClInclude Include="project\core\resources\sounds\embedded_rust_headshot_sound.hpp" />
     <ClInclude Include="project\core\settings.hpp" />
     <ClInclude Include="project\core\systems\systems.hpp" />
     <ClInclude Include="project\external\bc7.hpp" />

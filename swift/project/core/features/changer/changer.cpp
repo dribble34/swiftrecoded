@@ -11,8 +11,8 @@ namespace {
 
 	struct cbuffer_string
 	{
-		int m_nLength{};
-		int m_nAllocatedSize{};
+		int m_nLength{ 0 };
+		int m_nAllocatedSize{ static_cast< int >( 0x80000000 | 0x40000000 | 8 ) };
 		union
 		{
 			char* m_pString;
@@ -55,11 +55,11 @@ namespace {
 
 		// Precache function pattern from project's patterns.cpp
 		g_precache_fn = reinterpret_cast< void* >(
-			memory::resolve_pattern( "resourcesystem.dll:405355574881EC80000000" ) );
+			memory::resolve_pattern( "resourcesystem.dll:405355574881EC80000000488B01498BE8488BFA" ) );
 
 		// SetModel pattern from cs2-sdk.com (client.dll RVA 0x922120)
 		g_set_model_fn = reinterpret_cast< void* >(
-			memory::resolve_pattern( "client.dll:40534883EC20488BD94C8BC2488B0D9D28A801488D5424" ) );
+			memory::resolve_pattern( "client.dll:40534883EC?488BD94C8BC2488B0D????????488D5424" ) );
 
 		// CBufferString::Insert export
 		g_cbuffer_insert_fn = reinterpret_cast< void* >(
@@ -90,7 +90,7 @@ namespace {
 
 		cbuffer_string names{};
 		names.fnInsert = reinterpret_cast< decltype( cbuffer_string::fnInsert ) >( g_cbuffer_insert_fn );
-		names.Insert( 0, path.c_str( ), static_cast< int >( path.length( ) ), true );
+		names.Insert( 0, path.c_str( ), -1, false );
 
 		auto precache = reinterpret_cast< fn_precache_t >( g_precache_fn );
 		precache( g_resource_system, &names, "" );
@@ -250,6 +250,60 @@ void CModelChanger::UpdatePlayerModels( )
 
 	logging::console::print( xs( "[ModelChanger] Found {} player models" ), result.size( ) );
 	vecPlayerModels = std::move( result );
+}
+
+void CModelChanger::UpdateCustomAgentModels( )
+{
+	std::vector<Model_t> result;
+
+	const auto dir = game_path::csgo_directory( );
+	if ( !dir )
+	{
+		logging::console::print( xs( "[ModelChanger] UpdateCustomAgentModels: csgo_directory not found" ) );
+		vecCustomAgentModels = std::move( result );
+		return;
+	}
+
+	std::error_code error;
+	const auto models_dir = *dir / "characters" / "models";
+	if ( !std::filesystem::is_directory( models_dir, error ) )
+	{
+		logging::console::print( xs( "[ModelChanger] models dir not found: {}" ), models_dir.string( ) );
+		vecCustomAgentModels = std::move( result );
+		return;
+	}
+
+	for ( const auto& entry : std::filesystem::recursive_directory_iterator( models_dir, error ) )
+	{
+		if ( error || !entry.is_regular_file( error ) )
+		{
+			error.clear( );
+			continue;
+		}
+
+		if ( entry.path( ).extension( ).string( ) != ".vmdl_c" )
+		{
+			continue;
+		}
+
+		auto model_path = entry.path( ).string( );
+		model_path = model_path.substr( 0, model_path.size( ) - 2 );
+		std::replace( model_path.begin( ), model_path.end( ), '\\', '/' );
+
+		const auto pos = model_path.find( "characters/models/" );
+		if ( pos == std::string::npos )
+		{
+			continue;
+		}
+
+		Model_t model{};
+		model.strModelName = entry.path( ).stem( ).string( );
+		model.strModelPath = model_path.substr( pos );
+		result.push_back( std::move( model ) );
+	}
+
+	logging::console::print( xs( "[ModelChanger] Found {} custom agent models" ), result.size( ) );
+	vecCustomAgentModels = std::move( result );
 }
 
 bool CModelChanger::SetPlayerModel( )

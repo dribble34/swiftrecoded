@@ -6,6 +6,41 @@
 
 namespace features::changer {
 
+	bool model_changer::ensure_initialized( )
+	{
+		if ( m_initialized )
+		{
+			return true;
+		}
+
+		logging::console::print( xs( "[model_changer] Initializing signatures..." ) );
+
+		// Get ResourceSystem interface properly via CreateInterface
+		m_resource_system = memory::get_module_interface( "resourcesystem.dll:ResourceSystem013" );
+		if ( !m_resource_system )
+		{
+			logging::console::print( xs( "[model_changer] Failed to get ResourceSystem013 interface" ) );
+			return false;
+		}
+
+		m_precache_fn = reinterpret_cast< void* >( memory::resolve_pattern( "resourcesystem.dll:405355574881EC80000000488B01498BE8488BFA" ) );
+		m_set_model_fn = reinterpret_cast< void* >( memory::resolve_pattern( "client.dll:40534883EC?488BD94C8BC2488B0D????????488D5424" ) );
+		m_cbuffer_insert_fn = reinterpret_cast< void* >( memory::get_module_export( "tier0.dll:?Insert@CBufferString@@QEAAPEBDHPEBDH_N@Z" ) );
+
+		if ( m_resource_system && m_precache_fn && m_set_model_fn && m_cbuffer_insert_fn )
+		{
+			m_initialized = true;
+			logging::console::print( xs( "[model_changer] Initialization succeeded" ) );
+		}
+		else
+		{
+			logging::console::print( xs( "[model_changer] Initialization FAILED | resource_system={:p} precache_fn={:p} set_model_fn={:p} cbuffer_insert_fn={:p}" ),
+				m_resource_system, m_precache_fn, m_set_model_fn, m_cbuffer_insert_fn );
+		}
+
+		return m_initialized;
+	}
+
 	void model_changer::on_frame_stage_notify( )
 	{
 		const auto local = systems::g_local.get( );
@@ -14,35 +49,7 @@ namespace features::changer {
 			return;
 		}
 
-		if ( !m_initialized )
-		{
-			logging::console::print( xs( "[model_changer] Initializing signatures..." ) );
-
-			// Get ResourceSystem interface properly via CreateInterface
-			m_resource_system = memory::get_module_interface( "resourcesystem.dll:ResourceSystem013" );
-			if ( !m_resource_system )
-			{
-				logging::console::print( xs( "[model_changer] Failed to get ResourceSystem013 interface" ) );
-				return;
-			}
-
-			m_precache_fn = reinterpret_cast< void* >( memory::resolve_pattern( "resourcesystem.dll:405355574881EC80000000" ) );
-			m_set_model_fn = reinterpret_cast< void* >( memory::resolve_pattern( "client.dll:40534883EC20488BD94C8BC2488B0D9D28A801488D5424" ) );
-			m_cbuffer_insert_fn = reinterpret_cast< void* >( memory::resolve_pattern( "tier0.dll:?Insert@CBufferString@@QEAAPEBDHPEBDH_N@Z" ) );
-
-			if ( m_resource_system && m_precache_fn && m_set_model_fn && m_cbuffer_insert_fn )
-			{
-				m_initialized = true;
-				logging::console::print( xs( "[model_changer] Initialization succeeded" ) );
-			}
-			else
-			{
-				logging::console::print( xs( "[model_changer] Initialization FAILED | resource_system={:p} precache_fn={:p} set_model_fn={:p} cbuffer_insert_fn={:p}" ),
-					m_resource_system, m_precache_fn, m_set_model_fn, m_cbuffer_insert_fn );
-			}
-		}
-
-		if ( !m_initialized )
+		if ( !ensure_initialized( ) )
 		{
 			return;
 		}
@@ -74,9 +81,14 @@ namespace features::changer {
 		}
 	}
 
+	bool model_changer::precache( const std::string& path )
+	{
+		return precache_model( path );
+	}
+
 	bool model_changer::precache_model( const std::string& path )
 	{
-		if ( !m_resource_system || !m_precache_fn || !m_cbuffer_insert_fn )
+		if ( !ensure_initialized( ) || !m_resource_system || !m_precache_fn || !m_cbuffer_insert_fn )
 		{
 			logging::console::print( xs( "[model_changer] Precache failed - not initialized" ) );
 			return false;
@@ -84,8 +96,8 @@ namespace features::changer {
 
 		struct CBufferString
 		{
-			int m_nLength{};
-			int m_nAllocatedSize{};
+			int m_nLength{ 0 };
+			int m_nAllocatedSize{ static_cast< int >( 0x80000000 | 0x40000000 | 8 ) };
 			union
 			{
 				char* m_pString;
@@ -106,8 +118,7 @@ namespace features::changer {
 		CBufferString names{};
 		names.fnInsert = reinterpret_cast< decltype( CBufferString::fnInsert ) >( m_cbuffer_insert_fn );
 
-		const auto count = static_cast< int >( path.length( ) );
-		names.Insert( 0, path.c_str( ), count, true );
+		names.Insert( 0, path.c_str( ), -1, false );
 
 		precache( m_resource_system, &names, "" );
 

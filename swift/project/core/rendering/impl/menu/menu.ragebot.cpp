@@ -11,6 +11,8 @@ namespace rendering {
 		constexpr const char* prefer_items[ ]{ "head", "damage", "reliable" };
 		constexpr const char* pitch_items[ ]{ "none", "down", "up", "custom" };
 		constexpr const char* yaw_items[ ]{ "backwards", "forward", "custom" };
+		constexpr const char* autostop_items[ ]{ "early", "in air" };
+		//constexpr const char* delay_shot_items[ ]{ "none", "always", "on peak", "on unduck" };
 		constexpr const char* cham_materials[ ]{ "liquid", "metallic", "matte", "flat", "bloom", "outlines", "glow", "electric", "distortion", "hologram", "pearl",
 			"liquid ignorez", "matte ignorez", "flat ignorez", "bloom ignorez", "outlines ignorez", "glow ignorez", "distortion ignorez", "hologram ignorez" };
 		constexpr auto k_cham_material_count{ static_cast< int >( std::size( cham_materials ) ) };
@@ -45,19 +47,29 @@ namespace rendering {
 			xui::checkbox( "enabled", rb.enabled );
 			xui::checkbox( "silent", wg.silent );
 			xui::checkbox( "nospread", wg.no_spread );
-			//xui::checkbox( "air forceshot", wg.force_shot_air );
-			//xui::checkbox( "on ground forceshot", wg.force_shot );
-			xui::checkbox( "extrapolation", lg.extrapolation);
-			xui::checkbox( "autostop", wg.autostop );
-			if ( this->m_subtab == 4 )
+
+			xui::checkbox("forceshot", wg.forceshot);
+			if (xui::begin_popup("##forceshot_popup", 220.0f))
 			{
-				xui::checkbox( "autoscope", autos.scope );
+				xui::slider_int("in-air hitchance", wg.forceshot_inair_hitchance, 0, 100, "%d%%");
+				xui::slider_int("grounded hitchance", wg.forceshot_grounded_hitchance, 0, 100, "%d%%");
+				xui::end_popup();
 			}
+
+			xui::checkbox("autostop", wg.autostop);
+			if (xui::begin_popup("##autostop_popup", 220.0f))
+			{
+				xui::multicombo("mode", wg.autostop_mode.values, detail::autostop_items, 2);
+				xui::checkbox("crouch to stop", wg.crouch_to_stop);
+				xui::end_popup();
+			}
+
 			xui::slider_float( "fov", wg.max_fov, 1.0f, 180.0f, "%.0f°" );
 			xui::slider_int( "hitchance", wg.hitchance, 0, 100, "%d%%" );
+			xui::slider_int( "in-air hit chance", wg.inair_hitchance, 0, 100, "%d%%" );
 			xui::checkbox( "ignore hitchance if accurate", wg.ignore_hitchance_if_accurate );
-			xui::slider_int( "mindamage", wg.min_damage, 5, 125, "%d" );
-			/*xui::slider_int( "max backtrack", s.m_lagcomp.max_backtrack_ticks, 1, 16, "%d tick(s)" );*/
+			xui::slider_int( "mindamage", wg.min_damage, 1, 101, wg.min_damage.value >= 101 ? "hp+1" : "%d" );
+			//xui::slider_int( "max backtrack", s.m_lagcomp.max_backtrack_ticks, 1, 10, "%d tick(s)" );
 
 			xui::checkbox( "hitchance override", wg.hitchance_override );
 			if ( xui::begin_popup( "##hitchance_popup", 220.0f ) )
@@ -69,24 +81,30 @@ namespace rendering {
 			xui::checkbox( "mindamage override", wg.min_damage_override );
 			if ( xui::begin_popup( "##mindamage_popup", 220.0f ) )
 			{
-				xui::slider_int( "value##md", wg.min_damage_override_value, 0, 130, "%d" );
+				xui::slider_int( "value##md", wg.min_damage_override_value, 1, 101, wg.min_damage_override_value.value >= 101 ? "hp+1" : "%d" );
 				xui::end_popup( );
 			}
 
 			xui::checkbox( "refine shot", wg.refine_shot );
 
+			//xui::combo( "delay shot", wg.delay_shot.value, detail::delay_shot_items, 4 );
+			//if ( wg.delay_shot.value != settings::combat::ragebot::delay_shot_mode::none )
+			//{
+			//	xui::slider_int( "delay ticks", wg.delay_ticks, 1, 20, "%d tick(s)" );
+			//}
+
 			xui::end_child( );
 		}
 
 		const auto extras_h = std::max( 150.0f, xui::layout::avail( ).second - xui::ctx( ).style.item_spacing_y - tokens::gap );
-		if ( xui::begin_child( "##ragebot_extras", col_w, extras_h, true ) )
+if ( xui::begin_child( "##ragebot_extras", col_w, extras_h, true ) )
 		{
-			xui::checkbox( "force bodyaim", wg.body_aim );
-		xui::checkbox( "dynamic point scale", wg.dynamic_pointscale );
-		xui::checkbox( "debug multipoints", wg.debug_multipoints );
-		xui::slider_float( "pointscale", wg.pointscale, 0.0f, 100.0f, "%.0f%%" );
-		xui::multicombo( "hitboxes", wg.hitboxes, detail::hitbox_names, 6 );
-		xui::combo( "prefer", wg.prefer.value, detail::prefer_items, 3 );
+			xui::checkbox( "bodyaim", wg.body_aim );
+			xui::checkbox( "dynamic point scale", wg.dynamic_pointscale );
+			xui::checkbox( "debug multipoints", wg.debug_multipoints );
+			xui::slider_float( "pointscale", wg.pointscale, 0.0f, 100.0f, "%.0f%%" );
+			xui::multicombo( "hitboxes", wg.hitboxes, detail::hitbox_names, 6 );
+			xui::combo( "prefer", wg.prefer.value, detail::prefer_items, 3 );
 
 			xui::end_child( );
 		}

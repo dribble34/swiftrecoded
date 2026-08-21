@@ -524,9 +524,14 @@ namespace patterns {
 		"engine2.dll:40554157488D6C24??4881EC????????4533FF");
 
 	const ::protection::addresses::address_t& set_player_model = ADDRESS_IMPL(
-		::protection::addresses::hash("client.dll:488D15????????488BCB>E8????????488BD7488BCB"),
+		::protection::addresses::hash("client.dll:40534883EC?488BD94C8BC2488B0D????????488D5424"),
 		::protection::addresses::address_type::pattern,
-		"client.dll:488D15????????488BCB>E8????????488BD7488BCB");
+		"client.dll:40534883EC?488BD94C8BC2488B0D????????488D5424");
+
+	const ::protection::addresses::address_t& anim_graph_rebuild = ADDRESS_IMPL(
+		::protection::addresses::hash("client.dll:4055574883EC?4C897424?488BF980FAFF75?0FB6511833ED"),
+		::protection::addresses::address_type::pattern,
+		"client.dll:4055574883EC?4C897424?488BF980FAFF75?0FB6511833ED");
 
 	const ::protection::addresses::address_t& set_postprocess_vec = ADDRESS_IMPL(
 		::protection::addresses::hash("engine2.dll:>E8????????440F289424"),
@@ -642,6 +647,11 @@ namespace patterns {
 		::protection::addresses::hash("client.dll:488D0D*????????48C1E006"),
 		::protection::addresses::address_type::pattern,
 		"client.dll:488D0D*????????48C1E006");
+
+	const ::protection::addresses::address_t& viewmodel_calc = ADDRESS_IMPL(
+		::protection::addresses::hash("client.dll:4055535641564157488BEC"),
+		::protection::addresses::address_type::pattern,
+		"client.dll:4055535641564157488BEC");
 
 	const ::protection::addresses::address_t& viewmodel_update_mesh = ADDRESS_IMPL(
 		::protection::addresses::hash("client.dll:>E8????????498D8D??????????????488D5424"),

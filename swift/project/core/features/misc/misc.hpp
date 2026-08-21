@@ -353,17 +353,12 @@ namespace features::misc {
 		void do_player_alpha_changing( );
 		void do_reveal_radar( ) const;
 		void do_name_changing( );
-		void do_viewmodel_adjust( );
 		bool m_is_alpha_changed{};
 		bool m_name_changer_active{};
 		std::uintptr_t m_name_changer_controller{};
 		std::string m_original_name{};
 		std::string m_last_sent_name{};
 		float m_last_spawntime{};
-		float m_cached_vm_x{ std::numeric_limits<float>::quiet_NaN( ) };
-		float m_cached_vm_y{ std::numeric_limits<float>::quiet_NaN( ) };
-		float m_cached_vm_z{ std::numeric_limits<float>::quiet_NaN( ) };
-		float m_cached_vm_fov{ std::numeric_limits<float>::quiet_NaN( ) };
 	};
 
 	// this is so ghetto but fuck it for now it works

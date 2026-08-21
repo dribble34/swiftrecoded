@@ -57,6 +57,7 @@ namespace hooks {
 			{ &m_process_input_event, &process_input_event, xs ("process_input_event"), PATTERN (patterns::process_input_event) },
 			{ &m_render_decals, &render_decals, xs ("render_decals"), PATTERN (patterns::render_decals) },
 			{ &m_render_smoke, &render_smoke, xs ("render_smoke"), PATTERN (patterns::render_smoke) },
+			{ &m_calc_viewmodel, &calc_viewmodel, xs ("calc_viewmodel"), PATTERN (patterns::viewmodel_calc) },
 			{ &m_draw_flash_effect, &draw_flash_effect, xs ("draw_flash_effect"), PATTERN (patterns::draw_flash_effect) },
 			{ &m_set_info, &set_info, xs ("set_info"), PATTERN (patterns::set_info) }
 		};
@@ -119,6 +120,7 @@ namespace hooks {
 		m_process_input_event.reset( );
 		m_render_decals.reset( );
 		m_render_smoke.reset( );
+		m_calc_viewmodel.reset( );
 		m_render_smoke_map.reset( );
 		m_render_smoke_unmap.reset( );
 		m_draw_flash_effect.reset( );
@@ -946,6 +948,44 @@ namespace hooks {
 		}
 
 		m_render_smoke.call<void>( a1, a2, a3, a4, a5, a6 );
+	}
+
+	void* __fastcall cheat::calc_viewmodel( float* unk, float* offsets, float* fov )
+	{
+		static const auto original = m_calc_viewmodel.original< void* ( __fastcall* )( float*, float*, float* ) >( );
+
+		auto* _return = original( unk, offsets, fov );
+
+		const auto& cfg = settings::g_misc.m_viewmodel_adjust;
+		if ( !cfg.enabled.value )
+			return _return;
+
+		static float smooth_x = 0.0f, smooth_y = 0.0f, smooth_z = 0.0f, smooth_fov = 68.0f;
+		static auto last_time = std::chrono::steady_clock::now();
+
+		const float target_x = cfg.offset_x.value;
+		const float target_y = cfg.offset_y.value;
+		const float target_z = cfg.offset_z.value;
+		const float target_fov = cfg.fov.value;
+
+		const auto now = std::chrono::steady_clock::now( );
+		const float delta = std::chrono::duration<float>( now - last_time ).count( );
+		last_time = now;
+
+		const float t = 8.0f * std::min( delta, 0.033f );
+
+		smooth_x += ( target_x - smooth_x ) * t;
+		smooth_y += ( target_y - smooth_y ) * t;
+		smooth_z += ( target_z - smooth_z ) * t;
+		smooth_fov += ( target_fov - smooth_fov ) * t;
+
+		offsets[ 0 ] += smooth_x;
+		offsets[ 1 ] += smooth_y;
+		offsets[ 2 ] += smooth_z;
+
+		*fov = smooth_fov;
+
+		return _return;
 	}
 
 	std::uintptr_t __fastcall cheat::render_smoke_map( std::uintptr_t thisptr, std::size_t size, std::uintptr_t* out_ptr )

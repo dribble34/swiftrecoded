@@ -56,7 +56,6 @@ namespace features::misc {
 		this->do_player_alpha_changing( );
 		this->do_reveal_radar( );
 		this->do_name_changing( );
-		this->do_viewmodel_adjust( );
 	}
 
 	void other::do_reveal_radar( ) const
@@ -330,48 +329,6 @@ namespace features::misc {
 			}
 
 			m_last_spawntime = spawntime;
-		}
-	}
-
-	void other::do_viewmodel_adjust( )
-	{
-		const auto& cfg = settings::g_misc.m_viewmodel_adjust;
-		if ( !cfg.enabled.value )
-		{
-			this->m_cached_vm_x = std::numeric_limits<float>::quiet_NaN( );
-			this->m_cached_vm_y = std::numeric_limits<float>::quiet_NaN( );
-			this->m_cached_vm_z = std::numeric_limits<float>::quiet_NaN( );
-			this->m_cached_vm_fov = std::numeric_limits<float>::quiet_NaN( );
-			return;
-		}
-
-		const auto set_float_cvar = [ ]( std::uint32_t hash, float value )
-			{
-			addresses::globals::cvar->find(hash)->m_value.fl = value;
-			};
-
-		if ( cfg.offset_x.value != this->m_cached_vm_x )
-		{
-			set_float_cvar( "viewmodel_offset_x"_hash, cfg.offset_x.value );
-			this->m_cached_vm_x = cfg.offset_x.value;
-		}
-
-		if ( cfg.offset_y.value != this->m_cached_vm_y )
-		{
-			set_float_cvar( "viewmodel_offset_y"_hash, cfg.offset_y.value );
-			this->m_cached_vm_y = cfg.offset_y.value;
-		}
-
-		if ( cfg.offset_z.value != this->m_cached_vm_z )
-		{
-			set_float_cvar( "viewmodel_offset_z"_hash, cfg.offset_z.value );
-			this->m_cached_vm_z = cfg.offset_z.value;
-		}
-
-		if ( cfg.fov.value != this->m_cached_vm_fov )
-		{
-			set_float_cvar( "viewmodel_fov"_hash, cfg.fov.value );
-			this->m_cached_vm_fov = cfg.fov.value;
 		}
 	}
 

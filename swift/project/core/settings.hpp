@@ -20,15 +20,33 @@ namespace settings {
 				reliable
 			};
 
-			struct weapon_group
+			enum class delay_shot_mode : std::uint8_t
+			{
+				none,
+				always,
+				on_peak,
+				on_unduck
+			};
+
+struct weapon_group
 			{
 				xui::setting silent{ true, {}, "silent", "ragebot" };
 				xui::setting no_spread{ false, {}, "no spread", "ragebot" };
 				xui::setting body_aim{ false, {}, "force b-aim", "ragebot" };
 				xui::setting force_shot_air{ false, {}, "force shot in air", "ragebot" };
-				xui::setting force_shot{ false, {}, "force shot on ground", "ragebot" };
+				xui::setting force_shot_ground{ false, {}, "force shot on ground", "ragebot" };
+				xui::setting forceshot{ false, {}, "forceshot", "ragebot" };
+				config::val<int> forceshot_inair_hitchance{ 0, "ragebot", "forceshot in-air hitchance" };
+				config::val<int> forceshot_grounded_hitchance{ 0, "ragebot", "forceshot grounded hitchance" };
 				xui::setting autostop{ true, {}, "autostop", "ragebot" };
+				config::bools<2> autostop_mode{ { true, false } };
+				xui::setting crouch_to_stop{ false, {}, "crouch to stop", "ragebot" };
 				xui::setting refine_shot{ false, {}, "refine shot", "ragebot" };
+
+				config::enm<delay_shot_mode> delay_shot{ delay_shot_mode::none };
+				config::val<int> delay_ticks{ 2 };
+
+				config::val<int> inair_hitchance{ 0 };
 
 				config::val<float> max_fov{ 180.0f };
 
@@ -55,12 +73,12 @@ namespace settings {
 			{
 				const auto s = std::string( cat );
 
-				this->silent.category = s;
+this->silent.category = s;
 				this->no_spread.category = s;
 				this->body_aim.category = s;
+				this->forceshot.category = s;
 				this->force_shot_air.category = s;
-				this->force_shot.category = s;
-				this->autostop.category = s;
+				this->force_shot_ground.category = s;
 				this->refine_shot.category = s;
 				this->min_damage_override.category = s;
 				this->hitchance_override.category = s;
@@ -71,11 +89,18 @@ namespace settings {
 				this->max_fov.reg( s, "max fov" );
 				this->hitchance.reg( s, "hit chance" );
 				this->min_damage.reg( s, "min damage" );
+				this->inair_hitchance.reg( s, "in-air hit chance" );
+				this->delay_shot.reg( s, "delay shot" );
+				this->delay_ticks.reg( s, "delay shot ticks" );
 				this->min_damage_override_value.reg( s, "min damage override value" );
 				this->hitchance_override_value.reg( s, "hit chance override value" );
 				this->pointscale.reg( s, "point scale" );
 				this->hitboxes.reg( s, "hitboxes" );
 				this->prefer.reg( s, "target preference" );
+				this->forceshot_inair_hitchance.reg( s, "forceshot in-air hitchance" );
+				this->forceshot_grounded_hitchance.reg( s, "forceshot grounded hitchance" );
+				this->autostop_mode.reg( s, "autostop mode" );
+				this->autostop.category = s;
 			}
 
 				void set_default_binds( )
@@ -261,9 +286,9 @@ namespace settings {
 
 		struct lagcomp_settings
 		{
-			config::val<int> max_backtrack_ticks{ 12, "ragebot", "max backtrack ticks" };
+			config::val<int> max_backtrack_ticks{ 14, "ragebot", "max backtrack ticks" };
 			xui::setting extrapolation{ true, {}, "extrapolation", "ragebot" };
-			config::val<int> max_extrapolate_ticks{ 16, "ragebot", "max extrapolate ticks" };
+			config::val<int> max_extrapolate_ticks{ 32, "ragebot", "max extrapolate ticks" };
 		} m_lagcomp{};
 
 		struct zeusbot
@@ -708,6 +733,14 @@ namespace settings {
 			config::val<float> opacity{ 0.5f, "chams local", "opacity" };
 			xui::setting only_scoped{ true, {}, "only when scoped", "chams local" };
 		} m_local_alpha{};
+
+		struct local_spread
+		{
+			xui::setting enabled{ false, {}, "spread circle", "local" };
+			config::col color{ { 173, 192, 255, 160 }, "local", "spread circle color" };
+			config::col color_outer{ { 173, 192, 255, 10 }, "local", "spread circle outer color" };
+			xui::setting only_scoped{ false, {}, "only when scoped", "local" };
+		} m_local_spread{};
 
 		struct item
 		{
@@ -1203,15 +1236,49 @@ namespace settings {
 			}
 		};
 
+		struct custom_agent_field : config::custom_field
+		{
+			std::string ct_path{};
+			std::string t_path{};
+			bool ct_enabled{ false };
+			bool t_enabled{ false };
+
+			nlohmann::json serialize( ) const override
+			{
+				return nlohmann::json
+				{
+					{ "ct_path", ct_path },
+					{ "t_path", t_path },
+					{ "ct_enabled", ct_enabled },
+					{ "t_enabled", t_enabled }
+				};
+			}
+
+			void deserialize( const nlohmann::json& j ) override
+			{
+				if ( !j.is_object( ) )
+				{
+					return;
+				}
+
+				ct_path = j.value( "ct_path", std::string{} );
+				t_path = j.value( "t_path", std::string{} );
+				ct_enabled = j.value( "ct_enabled", false );
+				t_enabled = j.value( "t_enabled", false );
+			}
+		};
+
 		skin_map_field skins{};
 		agent_selection_field agents{};
 		model_changer_field models{};
+		custom_agent_field custom_agents{};
 
 		changer( )
 		{
 			config::detail::register_field( { .key = config::detail::make_key( "changer", "applied skins" ), .type = config::field_type::custom, .ptr = &skins, .count = 1 } );
 			config::detail::register_field( { .key = config::detail::make_key( "changer", "agents" ), .type = config::field_type::custom, .ptr = &agents, .count = 1 } );
 			config::detail::register_field( { .key = config::detail::make_key( "changer", "models" ), .type = config::field_type::custom, .ptr = &models, .count = 1 } );
+			config::detail::register_field( { .key = config::detail::make_key( "changer", "custom agents" ), .type = config::field_type::custom, .ptr = &custom_agents, .count = 1 } );
 		}
 	};
 
@@ -1246,7 +1313,7 @@ namespace settings {
 
 		struct impacts
 		{
-			enum class sound_type : int { shop_click, home_click, bell, killcard, bullet_casing, coin_pickup, item_drop, popcan, key_press, custom };
+			enum class sound_type : int { shop_click, home_click, bell, killcard, bullet_casing, coin_pickup, item_drop, popcan, key_press, custom, hit, bubble, metal, neverlose, rust_headshot, agpa2 };
 			enum class marker_type : int { classic, damage, both };
 			enum class bullet_impact_type : int { overlay, sparks, both };
 
@@ -1358,6 +1425,7 @@ namespace settings {
 				config::col color{ { 173, 192, 255, 255 }, "scope overlay", "color" };
 				xui::setting fade_in{ true, {}, "fade in", "scope overlay" };
 				xui::setting dynamic_spread{ true, {}, "dynamic spread", "scope overlay" };
+				xui::setting spread_circle{ false, {}, "spread circle", "scope overlay" };
 				xui::setting glow{ true, {}, "glow", "scope overlay" };
 				config::val<float> glow_strength{ 1.0f, "scope overlay", "glow strength" };
 			} m_scope{};

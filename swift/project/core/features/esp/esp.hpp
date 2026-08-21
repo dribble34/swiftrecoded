@@ -141,6 +141,7 @@ namespace features::esp {
 			void add_weapon( xdraw::draw_list& draw_list, const systems::bounds::data& bounds, const info& info, const settings::esp::player::overlay::weapon& cfg, draw_offsets& offsets );
 			void add_flags( xdraw::draw_list& draw_list, const systems::bounds::data& bounds, const info& info, const settings::esp::player::overlay::info_flags& cfg, draw_offsets& offsets );
 			void add_oof_arrow( xdraw::draw_list& draw_list, const info& info, const settings::esp::player::overlay::oof_arrow& cfg );
+			void add_local_spread( xdraw::draw_list& draw_list, const systems::local::snapshot& local );
 			[[nodiscard]] info get_info( const systems::entities::cached& player, const systems::local::snapshot& local );
 
 			struct animation_data
@@ -151,6 +152,7 @@ namespace features::esp {
 			};
 
 			std::unordered_map<std::uintptr_t, animation_data> m_animations{};
+			float m_local_spread_radius{ 0.0f };
 
 			// Cached per-controller data that is expensive to fetch every frame.
 			// Engine raycasts on the render thread (is_visible) and strlen-like

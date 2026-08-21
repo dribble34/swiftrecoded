@@ -11,6 +11,13 @@
 #include <core/features/features.hpp>
 #include <protection/game_addresses.hpp>
 
+#include <core/resources/sounds/embedded_hit_sound.hpp>
+#include <core/resources/sounds/embedded_bubble_sound.hpp>
+#include <core/resources/sounds/embedded_metal_sound.hpp>
+#include <core/resources/sounds/embedded_neverlose_sound.hpp>
+#include <core/resources/sounds/embedded_rust_headshot_sound.hpp>
+#include <core/resources/sounds/embedded_agpa2_sound.hpp>
+
 namespace features::misc {
 
 	namespace detail {
@@ -1853,6 +1860,39 @@ void play_engine_path( const char* sound_path, float volume )
 			play_fn( path.c_str( ), nullptr, 0x00020003u );
 		}
 
+		void play_embedded_wav( const unsigned char* data, std::uint64_t size, float volume )
+		{
+			using PlaySoundA_t = BOOL( WINAPI* )( LPCSTR, HMODULE, DWORD );
+			using waveOutSetVolume_t = UINT( WINAPI* )( UINT_PTR, DWORD );
+
+			static const auto winmm = []() -> HMODULE {
+				HMODULE mod = GetModuleHandleW( L"winmm.dll" );
+				return mod ? mod : LoadLibraryW( L"winmm.dll" );
+			}();
+
+			if ( !winmm || !data || size == 0 )
+			{
+				return;
+			}
+
+			static const auto play_fn = reinterpret_cast<PlaySoundA_t>( GetProcAddress( winmm, "PlaySoundA" ) );
+			if ( !play_fn )
+			{
+				return;
+			}
+
+			static const auto set_vol_fn = reinterpret_cast<waveOutSetVolume_t>( GetProcAddress( winmm, "waveOutSetVolume" ) );
+			if ( set_vol_fn )
+			{
+				const auto level = static_cast<WORD>( std::clamp( volume / 100.0f, 0.0f, 1.0f ) * 0xFFFFu );
+				const DWORD vol = static_cast<DWORD>( level ) | ( static_cast<DWORD>( level ) << 16 );
+				set_vol_fn( static_cast<UINT_PTR>( static_cast<UINT>( -1 ) ), vol ); // WAVE_MAPPER
+			}
+
+			// SND_MEMORY(0x4) | SND_ASYNC(0x1) | SND_NODEFAULT(0x2)
+			play_fn( reinterpret_cast<LPCSTR>( data ), nullptr, 0x00020007u );
+		}
+
 		[[nodiscard]] std::wstring resolve_sound_path( std::string_view filename )
 		{
 			const auto sanitized = sanitize_filename( filename );
@@ -1986,6 +2026,24 @@ void play_engine_path( const char* sound_path, float volume )
 		case settings::misc::impacts::sound_type::key_press:
 			sound_path = "sounds/weapons/c4/key_press7";
 			break;
+		case settings::misc::impacts::sound_type::hit:
+			custom_sound_detail::play_embedded_wav( hitsound::g_hit_wav_data, hitsound::g_hit_wav_size, volume );
+			return;
+		case settings::misc::impacts::sound_type::bubble:
+			custom_sound_detail::play_embedded_wav( hitsound::g_bubble_wav_data, hitsound::g_bubble_wav_size, volume );
+			return;
+		case settings::misc::impacts::sound_type::metal:
+			custom_sound_detail::play_embedded_wav( hitsound::g_metal_wav_data, hitsound::g_metal_wav_size, volume );
+			return;
+		case settings::misc::impacts::sound_type::neverlose:
+			custom_sound_detail::play_embedded_wav( hitsound::g_neverlose_wav_data, hitsound::g_neverlose_wav_size, volume );
+			return;
+		case settings::misc::impacts::sound_type::rust_headshot:
+			custom_sound_detail::play_embedded_wav( hitsound::g_rust_headshot_wav_data, hitsound::g_rust_headshot_wav_size, volume );
+			return;
+		case settings::misc::impacts::sound_type::agpa2:
+			custom_sound_detail::play_embedded_wav( hitsound::g_agpa2_wav_data, hitsound::g_agpa2_wav_size, volume );
+			return;
 		default:
 			return;
 		}

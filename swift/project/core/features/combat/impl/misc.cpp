@@ -448,7 +448,7 @@ namespace features::combat {
 		}
 
 		if (settings::g_combat.m_antiaim.auto_yaw_adjust.value)
-			yaw += 33.0f; // thx saphy
+			yaw += 33.0f;
 
 		return yaw;
 	}
@@ -517,7 +517,10 @@ namespace features::combat {
 
 	bool misc::antiaim::is_near_ladder( std::uintptr_t local_pawn ) const
 	{
-		return false; // ill do this lader.
+		// Ladders are already handled in on_create_move via m_nActualMoveType.
+		// Reading m_vecLadderNormal here can return garbage and falsely disable
+		// anti-aim, so keep this a no-op to match the proven-working behavior.
+		return false;
 	}
 
 	namespace {

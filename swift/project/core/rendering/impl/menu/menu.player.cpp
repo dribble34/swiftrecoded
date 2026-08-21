@@ -243,6 +243,16 @@ namespace rendering {
 					xui::end_popup( );
 				}
 
+				xui::layout::separator( );
+
+				xui::checkbox( "spread circle", esp.m_local_spread.enabled );
+				if ( xui::begin_popup( "##local_spread_popup", 220.0f ) )
+				{
+					xui::color_picker( "color##local_spread", esp.m_local_spread.color );
+					xui::checkbox( "only when scoped##local_spread", esp.m_local_spread.only_scoped );
+					xui::end_popup( );
+				}
+
 				xui::end_child( );
 			}
 		}

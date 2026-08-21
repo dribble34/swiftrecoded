@@ -97,7 +97,7 @@ namespace rendering {
 			xui::checkbox( "autowall", wg.autowall );
 			if ( xui::begin_popup( "##aw_popup", 220.0f ) )
 			{
-				xui::slider_int( "min damage##aw", wg.min_damage, 1, 125, "%d" );
+				xui::slider_int( "min damage##aw", wg.min_damage, 1, 100, "%d" );
 				xui::end_popup( );
 			}
 

@@ -47,11 +47,13 @@ namespace features::combat {
 			{
 				math::vector3 origin{};
 				math::vector3 velocity{};
+				math::vector3 acceleration{};
 				math::vector3 obb_mins{};
 				math::vector3 obb_maxs{};
 				std::uint32_t flags{};
 				float sim_time{};
-				float direction{};
+				float max_speed{};
+				float turn_rate{ 0.0f };
 			};
 
 			void run( );
@@ -222,6 +224,9 @@ namespace features::combat {
 		[[nodiscard]] float get_inaccuracy( bool update_accuracy_penalty ) const;
 		[[nodiscard]] float get_inaccuracy_at_velocity( std::uintptr_t local_pawn, const math::vector3& velocity ) const;
 		[[nodiscard]] float get_air_inaccuracy( float vertical_speed, float jump_initial, float jump_apex ) const;
+		[[nodiscard]] float get_inaccuracy_for_rate( float base_inaccuracy, float velocity_2d, bool on_ground, bool ducking, bool scoped ) const;
+		[[nodiscard]] float get_spread_for_rate( float base_spread, int recoil_idx ) const;
+		[[nodiscard]] int get_rate_tick_compensation( int tick_base, int next_tick ) const;
 		[[nodiscard]] bool can_shoot( systems::input::usercmd* cmd, std::uintptr_t local_controller, bool check_next_attack = true ) const;
 		[[nodiscard]] bool is_max_accuracy( float inaccuracy ) const;
 		[[nodiscard]] math::vector3 simulate_aim_punch( int recoil_index ) const;
@@ -336,10 +341,8 @@ namespace features::combat {
 		[[nodiscard]] bool duckpeek_wants_reduck( ) const noexcept { return this->m_duckpeek_reduck; }
 		void clear_duckpeek_reduck( ) noexcept { this->m_duckpeek_reduck = false; }
 
-		static constexpr auto k_max_lagcomp_records{ 16 };
-		// Scanning the newest and oldest valid records covers the useful lag-comp
-		// extremes without multiplying every penetration and hitchance test.
-		static constexpr auto k_max_scan_records{ 2 };
+		static constexpr auto k_max_lagcomp_records{ 32 };
+		static constexpr auto k_max_scan_records{ 12 };
 
 	private:
 		struct aim_context
@@ -460,6 +463,7 @@ namespace features::combat {
 		bool m_firing_this_tick{};
 		bool m_release_duck_for_shot{};
 		bool m_duckpeek_reduck{};
+		int m_delay_shot_ticks{};
 
 		std::uint8_t m_knife_attack{};
 		bool m_zeus_fired{};

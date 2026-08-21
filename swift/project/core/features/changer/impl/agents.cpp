@@ -17,6 +17,11 @@ namespace features::changer {
 		}
 
 		const auto team = memory::read<int>( local.pawn + SCHEMA( "C_BaseEntity", "m_iTeamNum"_hash ) );
+
+		const auto& custom = settings::g_changer.custom_agents;
+		const auto custom_path = ( team == 3 ) ? custom.ct_path : ( team == 2 ) ? custom.t_path : std::string{};
+		const auto custom_enabled = ( team == 3 ) ? custom.ct_enabled : ( team == 2 ) ? custom.t_enabled : false;
+
 		const auto selected_def_index = ( team == 3 ) ? settings::g_changer.agents.ct_def : ( team == 2 ) ? settings::g_changer.agents.t_def : static_cast< std::int16_t >( 0 );
 
 		const econ_item_system::item_def* selected{ nullptr };
@@ -25,12 +30,24 @@ namespace features::changer {
 			selected = g_econ_item_system.find_def( selected_def_index );
 		}
 
+		std::string target_path;
+		bool is_custom = false;
+		if ( custom_enabled && !custom_path.empty( ) )
+		{
+			target_path = custom_path;
+			is_custom = true;
+		}
+		else if ( selected && !selected->model_player.empty( ) )
+		{
+			target_path = selected->model_player;
+		}
+
 		if ( this->m_tracked_pawn != local.pawn )
 		{
 			this->m_original_model.clear( );
 			this->m_overridden = false;
 			this->m_applied_handle = 0;
-			this->m_applied_def = 0;
+			this->m_applied_path.clear( );
 			this->m_tracked_team = 0;
 			this->m_tracked_pawn = local.pawn;
 		}
@@ -43,23 +60,16 @@ namespace features::changer {
 
 		const auto model_state = game_scene_node + SCHEMA( "CSkeletonInstance", "m_modelState"_hash );
 
-		if ( !selected || selected->model_player.empty( ) )
+		if ( target_path.empty( ) )
 		{
 			if ( this->m_overridden && !this->m_original_model.empty( ) )
 			{
 				memory::call<void>(PATTERN (patterns::set_player_model), local.pawn, this->m_original_model.c_str( ) );
 
-				//const auto controller = memory::read<std::uintptr_t>( local.pawn + 0x3268 );
-				//if ( controller )
-				//{
-				//    memory::call<void>( addresses::functions::pawn_graph_unbind_all, controller );
-				//    memory::call<void>( addresses::functions::pawn_graph_rebind_all, controller );
-				//}
-
 				this->cycle_weapon_owners( local.pawn );
 
 				this->m_applied_handle = 0;
-				this->m_applied_def = 0;
+				this->m_applied_path.clear( );
 				this->m_tracked_team = 0;
 				this->m_overridden = false;
 			}
@@ -76,7 +86,7 @@ namespace features::changer {
 		}
 
 		const auto current_handle = memory::read<std::uintptr_t>( model_state + SCHEMA( "CModelState", "m_hModel"_hash ) );
-		const auto selection_matches = ( this->m_applied_def == selected->def_index );
+		const auto selection_matches = ( this->m_applied_path == target_path );
 		const auto team_matches = ( this->m_tracked_team == team );
 		const auto handle_matches = ( this->m_applied_handle != 0 && current_handle == this->m_applied_handle );
 
@@ -97,14 +107,12 @@ namespace features::changer {
 			}
 		}
 
-		memory::call<void>(PATTERN (patterns::set_player_model), local.pawn, selected->model_player.c_str( ) );
+		if ( is_custom )
+		{
+			g_model_changer.precache( target_path );
+		}
 
-		//const auto controller = memory::read<std::uintptr_t>( local_pawn + 0x3268 );
-		//if ( controller )
-		//{
-		//    memory::call<void>( addresses::functions::pawn_graph_unbind_all, controller );
-		//    memory::call<void>( addresses::functions::pawn_graph_rebind_all, controller );
-		//}
+		memory::call<void>(PATTERN (patterns::set_player_model), local.pawn, target_path.c_str( ) );
 
 		const auto collision = local.pawn + SCHEMA( "C_BaseModelEntity", "m_Collision"_hash );
 		memory::write<math::vector3>( collision + SCHEMA( "CCollisionProperty", "m_vecMins"_hash ), math::vector3( -16.0f, -16.0f, 0.0f ) );
@@ -113,7 +121,7 @@ namespace features::changer {
 		this->cycle_weapon_owners( local.pawn );
 
 		this->m_applied_handle = memory::read<std::uintptr_t>( model_state + SCHEMA( "CModelState", "m_hModel"_hash ) );
-		this->m_applied_def = selected->def_index;
+		this->m_applied_path = target_path;
 		this->m_tracked_team = team;
 		this->m_overridden = true;
 	}

@@ -169,7 +169,7 @@ static constexpr subtab_info k_subtab_defs[ static_cast< int >( tab::count ) ]
 			{ { "pistol", "smg", "rifle", "shotgun", "sniper", "lmg" }, 6 },
 			{ { "enemies", "allies", "local" },                         3 },
 			{ { "esp", "scene", "weather" },                            3 },
-			{ { "guns", "knives", "gloves", "agents", "models" },       5 },
+{ { "guns", "knives", "gloves", "agents" },           4 },
 			{ { "main", "removals", "camera", "hud" },                 4 },
 			{ { "general" },                                            1 }
 		};

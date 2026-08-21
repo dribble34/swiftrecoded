@@ -110,6 +110,7 @@ namespace patterns {
 	extern const ::protection::addresses::address_t& service_read;
 	extern const ::protection::addresses::address_t& set_info;
 	extern const ::protection::addresses::address_t& set_player_model;
+	extern const ::protection::addresses::address_t& anim_graph_rebuild;
 	extern const ::protection::addresses::address_t& set_postprocess_vec;
 	extern const ::protection::addresses::address_t& set_shader_param;
 	extern const ::protection::addresses::address_t& set_shader_param_i;
@@ -133,6 +134,7 @@ namespace patterns {
 	extern const ::protection::addresses::address_t& update_fov_sensitivity;
 	extern const ::protection::addresses::address_t& utl_vector_push;
 	extern const ::protection::addresses::address_t& view_matrix;
+	extern const ::protection::addresses::address_t& viewmodel_calc;
 	extern const ::protection::addresses::address_t& viewmodel_update_mesh;
 	extern const ::protection::addresses::address_t& weapon_calculate_spread;
 	extern const ::protection::addresses::address_t& weapon_get_entity_index;

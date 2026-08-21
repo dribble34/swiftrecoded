@@ -39,7 +39,7 @@ namespace rendering {
 
 		[[nodiscard]] static std::pair<int, int> map_category_to_tab( const std::string& category_lower )
 		{
-			if ( category_lower.find( "ragebot" ) != std::string::npos || category_lower.find( "zeusbot" ) != std::string::npos || category_lower.find( "knifebot" ) != std::string::npos || category_lower.find( "autos" ) != std::string::npos )
+			if ( category_lower.find( "ragebot" ) != std::string::npos || category_lower.find( "zeusbot" ) != std::string::npos || category_lower.find( "knifebot" ) != std::string::npos || category_lower.find( "autos" ) != std::string::npos || category_lower.find( "other 'bots'" ) != std::string::npos || category_lower.find( "pen crosshair" ) != std::string::npos )
 			{
 				return { 0, parse_weapon_subtab( category_lower ) };
 			}
@@ -51,62 +51,75 @@ namespace rendering {
 
 			if ( category_lower.find( "legitbot" ) != std::string::npos )
 			{
-				return { 1, parse_weapon_subtab( category_lower ) };
+				return { 2, parse_weapon_subtab( category_lower ) };
 			}
 
 			if ( category_lower.find( "enemy" ) != std::string::npos || category_lower.find( "player enemies" ) != std::string::npos )
 			{
-				return { 2, 0 };
+				return { 3, 0 };
 			}
 			if ( category_lower.find( "allies" ) != std::string::npos || category_lower.find( "teammate" ) != std::string::npos || category_lower.find( "friendly" ) != std::string::npos )
 			{
-				return { 2, 1 };
-			}
-			if ( category_lower.find( "local" ) != std::string::npos )
-			{
-				return { 2, 2 };
-			}
-
-			if ( category_lower.find( "scene" ) != std::string::npos )
-			{
 				return { 3, 1 };
 			}
-			if ( category_lower.find( "weather" ) != std::string::npos )
+			if ( category_lower.find( "local" ) != std::string::npos || category_lower.find( "chams local" ) != std::string::npos )
 			{
 				return { 3, 2 };
 			}
-			if ( category_lower.find( "world" ) != std::string::npos || category_lower.find( "projectile" ) != std::string::npos || category_lower.find( "item" ) != std::string::npos || category_lower.find( "bomb" ) != std::string::npos || category_lower.find( "spectator" ) != std::string::npos )
+			if ( category_lower == "chams" || category_lower == "glow" )
 			{
 				return { 3, 0 };
 			}
 
-			if ( category_lower.find( "knife" ) != std::string::npos )
+			if ( category_lower.find( "scene" ) != std::string::npos )
 			{
 				return { 4, 1 };
 			}
-			if ( category_lower.find( "glove" ) != std::string::npos )
+			if ( category_lower.find( "weather" ) != std::string::npos )
 			{
 				return { 4, 2 };
 			}
-			if ( category_lower.find( "agent" ) != std::string::npos )
-			{
-				return { 4, 3 };
-			}
-			if ( category_lower.find( "model" ) != std::string::npos )
-			{
-				return { 4, 4 };
-			}
-			if ( category_lower.find( "skin" ) != std::string::npos || category_lower.find( "paint" ) != std::string::npos || category_lower.find( "sticker" ) != std::string::npos || category_lower.find( "wear" ) != std::string::npos )
+			if ( category_lower.find( "esp" ) != std::string::npos || category_lower.find( "chams items" ) != std::string::npos || category_lower.find( "glow items" ) != std::string::npos || category_lower.find( "projectile" ) != std::string::npos || category_lower.find( "inferno" ) != std::string::npos || category_lower.find( "other esp" ) != std::string::npos || category_lower.find( "world" ) != std::string::npos || category_lower.find( "item" ) != std::string::npos || category_lower.find( "bomb" ) != std::string::npos || category_lower.find( "spectator" ) != std::string::npos )
 			{
 				return { 4, 0 };
 			}
 
-			if ( category_lower.find( "config" ) != std::string::npos )
+			if ( category_lower.find( "knife" ) != std::string::npos )
 			{
-				return { 6, 0 };
+				return { 5, 1 };
+			}
+			if ( category_lower.find( "glove" ) != std::string::npos )
+			{
+				return { 5, 2 };
+			}
+			if ( category_lower.find( "agent" ) != std::string::npos )
+			{
+				return { 5, 3 };
+			}
+			if ( category_lower.find( "skin" ) != std::string::npos || category_lower.find( "paint" ) != std::string::npos || category_lower.find( "sticker" ) != std::string::npos || category_lower.find( "wear" ) != std::string::npos || category_lower.find( "model" ) != std::string::npos )
+			{
+				return { 5, 0 };
 			}
 
-			return { 5, 0 };
+			if ( category_lower.find( "removals" ) != std::string::npos )
+			{
+				return { 6, 1 };
+			}
+			if ( category_lower.find( "camera" ) != std::string::npos )
+			{
+				return { 6, 2 };
+			}
+			if ( category_lower.find( "hud" ) != std::string::npos )
+			{
+				return { 6, 3 };
+			}
+
+			if ( category_lower.find( "config" ) != std::string::npos )
+			{
+				return { 7, 0 };
+			}
+
+			return { 6, 0 };
 		}
 
 	} // namespace detail
@@ -1304,34 +1317,10 @@ this->m_textures.user.resource = xdraw::load_texture(
 			this->m_w = 850.0f;
 			this->m_h = 700.0f;
 
-			const float scale = static_cast< float >( this->m_menu_scale ) / 100.0f;
 			auto& input = xui::ctx( ).input;
-			const float old_mx = input.mouse_x;
-			const float old_my = input.mouse_y;
-			const float old_pmx = input.prev_mouse_x;
-			const float old_pmy = input.prev_mouse_y;
-
-			if ( scale != 1.0f )
-			{
-				input.mouse_x = this->m_x + ( input.mouse_x - this->m_x ) / scale;
-				input.mouse_y = this->m_y + ( input.mouse_y - this->m_y ) / scale;
-				input.prev_mouse_x = this->m_x + ( input.prev_mouse_x - this->m_x ) / scale;
-				input.prev_mouse_y = this->m_y + ( input.prev_mouse_y - this->m_y ) / scale;
-			}
-
-			auto& dl_scale = xdraw::get( xdraw::layer::middle );
-			const auto start_vtx_count = dl_scale.vertices.size( );
-			const auto start_cmd_count = dl_scale.commands.size( );
 
 			if ( !xui::begin_window( "##menu", this->m_x, this->m_y, this->m_w, this->m_h, false, 200.0f, 200.0f, menu_reveal ) )
 			{
-				if ( scale != 1.0f )
-				{
-					input.mouse_x = old_mx;
-					input.mouse_y = old_my;
-					input.prev_mouse_x = old_pmx;
-					input.prev_mouse_y = old_pmy;
-				}
 				return;
 			}
 
@@ -1454,30 +1443,6 @@ this->m_textures.user.resource = xdraw::load_texture(
 			// Outer glow
 			dl.rect( wx + 2.0f, wy + 2.0f, ww - 4.0f, wh - 4.0f, tokens::col_accent_glow, xdraw::corner_radius{ 0.0f }, 1.5f );
 			dl.rect( wx + 4.0f, wy + 4.0f, ww - 8.0f, wh - 8.0f, tokens::col_border, xdraw::corner_radius{ 0.0f }, 1.0f );
-			
-			if ( scale != 1.0f )
-			{
-				input.mouse_x = old_mx;
-				input.mouse_y = old_my;
-				input.prev_mouse_x = old_pmx;
-				input.prev_mouse_y = old_pmy;
-
-				for ( auto i = start_vtx_count; i < dl_scale.vertices.size( ); ++i )
-				{
-					auto& v = dl_scale.vertices[ i ];
-					v.pos[ 0 ] = wx + ( v.pos[ 0 ] - wx ) * scale;
-					v.pos[ 1 ] = wy + ( v.pos[ 1 ] - wy ) * scale;
-				}
-
-				for ( auto i = start_cmd_count; i < dl_scale.commands.size( ); ++i )
-				{
-					auto& cmd = dl_scale.commands[ i ];
-					cmd.scissor.left = static_cast<LONG>(wx + ( cmd.scissor.left - wx ) * scale);
-					cmd.scissor.right = static_cast<LONG>(wx + ( cmd.scissor.right - wx ) * scale);
-					cmd.scissor.top = static_cast<LONG>(wy + ( cmd.scissor.top - wy ) * scale);
-					cmd.scissor.bottom = static_cast<LONG>(wy + ( cmd.scissor.bottom - wy ) * scale);
-				}
-			}
 		}
 
 		if ( this->m_profile_settings_open )

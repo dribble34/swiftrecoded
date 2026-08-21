@@ -16,6 +16,7 @@ class CModelChanger
 public:
 	std::vector<Model_t> vecPlayerModels;
 	std::vector<Model_t> vecWeaponModels;
+	std::vector<Model_t> vecCustomAgentModels;
 	unsigned long long nSelectedPlayerModel = ~1U;
 	uint32_t uLastPlayerModelHash;
 
@@ -23,6 +24,7 @@ public:
 
 	void UpdateWeaponModels();
 	void UpdatePlayerModels();
+	void UpdateCustomAgentModels();
 	bool SetPlayerModel();
 };
 
@@ -194,11 +196,15 @@ namespace features::changer {
 
 	private:
 		void cycle_weapon_owners( std::uintptr_t pawn );
+		void rebuild_animation_graph( std::uintptr_t pawn );
+		void set_custom_hands( std::uintptr_t pawn, const std::string& path );
+		void restore_custom_hands( std::uintptr_t pawn );
 
 		std::string m_original_model{};
+		std::string m_original_arms_model{};
 		std::uintptr_t m_tracked_pawn{};
 		std::uintptr_t m_applied_handle{};
-		std::int16_t m_applied_def{};
+		std::string m_applied_path{};
 		bool m_overridden{};
 		int m_tracked_team{};
 	};
@@ -309,6 +315,8 @@ namespace features::changer {
 		void on_frame_stage_notify( );
 		void reset_cache( );
 
+		[[nodiscard]] bool precache( const std::string& path );
+
 	private:
 		struct model_entry
 		{
@@ -316,6 +324,7 @@ namespace features::changer {
 			bool precached{};
 		};
 
+		[[nodiscard]] bool ensure_initialized( );
 		[[nodiscard]] bool precache_model( const std::string& path );
 		[[nodiscard]] bool set_model( std::uintptr_t pawn, const std::string& path );
 		void apply_model( std::uintptr_t pawn, int team );

@@ -211,6 +211,15 @@ namespace features::misc {
 		draw_line( cx, cy + gap, cx, cy + gap + length );
 		draw_line( cx - gap, cy, cx - gap - length, cy );
 		draw_line( cx + gap, cy, cx + gap + length, cy );
+
+		if ( cfg.spread_circle )
+		{
+			const auto spread_radius = std::lerp( this->m_spread_smooth, this->m_cached_spread_pixels, std::min( xdraw::delta_time( ) * 50.0f, 1.0f ) );
+
+			const auto col = xdraw::color{ cfg.color.value.r, cfg.color.value.g, cfg.color.value.b, static_cast< std::uint8_t >( cfg.color.value.a * 0.5f ) };
+
+			draw_list.circle_filled( cx, cy, spread_radius, col, 200 );
+		}
 	}
 
 	void hud::do_hat( xdraw::draw_list& draw_list, std::uintptr_t local_pawn ) const

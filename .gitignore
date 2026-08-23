@@ -1,0 +1,22 @@
+# build outputs
+bin/
+swift/vcpkg_installed/
+swift/build.log
+*.pch
+*.obj
+*.ilk
+*.pdb
+*.exp
+*.lib
+*.log
+*.tlog
+
+# vs / build system junk
+.vs/
+*.vcxproj.user
+*.suo
+*.user
+
+# stray backup files
+*.bak
+*.bak.*

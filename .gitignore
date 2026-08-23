@@ -1,0 +1,20 @@
+# build output / intermediates (OutDir/IntDir both point here)
+/bin/
+
+# vcpkg-restored dependencies (regenerated from vcpkg.json)
+swift/vcpkg_installed/
+
+# Visual Studio user/cache state
+swift/.vs/
+*.vcxproj.user
+*.suo
+*.user
+
+# misc build artifacts
+*.obj
+*.pdb
+*.ilk
+*.log
+*.exp
+*.lib
+*.idb

@@ -7,12 +7,15 @@
 #include "ui/ui.h"
 #include "app/app.h"
 
+#include "app/discord_rpc.h"
+
 using core::Vec2;
 
 static const int kMargin = 28;
 static const int kMaxPanelW = 520;
 static const int kMaxPanelH = 320;
 static const float kBarHeight = app::kTitleBarHeight;
+
 
 struct AppState {
     gfx::Device device;
@@ -112,6 +115,15 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR cmdline, int) {
     gs = &state;
 
     const std::wstring cl = cmdline ? cmdline : L"";
+    if (cl.find(L"-rpc-daemon") != std::wstring::npos) {
+        app::run_discord_rpc_daemon();
+        CoUninitialize();
+        return 0;
+    }
+
+    // Ensure Discord RPC daemon process is running in the background
+    app::ensure_discord_rpc_daemon();
+
     bool headless = false;
     bool autoInject = false;
 

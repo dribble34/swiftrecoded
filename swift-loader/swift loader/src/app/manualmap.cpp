@@ -11,6 +11,7 @@ namespace app {
 
 // ── Logging helper ────────────────────────────────────────────────────────────
 static void log_diagnostic(const std::string& msg) {
+#ifdef _DEBUG
     FILE* f = nullptr;
     if (fopen_s(&f, "swift_loader.log", "a") == 0 && f) {
         SYSTEMTIME st;
@@ -19,6 +20,9 @@ static void log_diagnostic(const std::string& msg) {
             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, msg.c_str());
         fclose(f);
     }
+#else
+    (void)msg;
+#endif
 }
 
 // ── Check if a module is loaded in remote process ─────────────────────────────

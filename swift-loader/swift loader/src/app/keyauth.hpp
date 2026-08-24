@@ -1,15 +1,15 @@
 // ── keyauth.hpp ───────────────────────────────────────────────────────────────
+// License verification via Swift server-side API proxy.
+// KeyAuth credentials are NEVER present in the client — all KeyAuth
+// communication happens server-side via verify.php.
+// ──────────────────────────────────────────────────────────────────────────────
 #pragma once
 #include <windows.h>
 #include <winhttp.h>
+#include <wincrypt.h>
 #include <string>
 #include <functional>
 #pragma comment(lib, "winhttp.lib")
-
-#define KA_APP_NAME  "swiftauth"
-#define KA_OWNERID   "755TbEbXn6"
-#define KA_VERSION   "1.0"
-#define KA_HOST      L"keyauth.win"
 
 namespace keyauth {
 
@@ -53,13 +53,14 @@ static std::string json_val(const std::string& j, const std::string& key) {
     }
 }
 
-static std::string http_post(const std::string& body) {
+// ── HTTP POST to our own API ──────────────────────────────────────────────────
+static std::string api_post(const wchar_t* host, const wchar_t* path, const std::string& body) {
     HINTERNET hS = WinHttpOpen(L"Mozilla/5.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hS) return {};
-    HINTERNET hC = WinHttpConnect(hS, KA_HOST, INTERNET_DEFAULT_HTTPS_PORT, 0);
+    HINTERNET hC = WinHttpConnect(hS, host, INTERNET_DEFAULT_HTTPS_PORT, 0);
     if (!hC) { WinHttpCloseHandle(hS); return {}; }
-    HINTERNET hR = WinHttpOpenRequest(hC, L"POST", L"/api/1.3/", nullptr,
+    HINTERNET hR = WinHttpOpenRequest(hC, L"POST", path, nullptr,
         WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
     if (!hR) { WinHttpCloseHandle(hC); WinHttpCloseHandle(hS); return {}; }
     const wchar_t* hd = L"Content-Type: application/x-www-form-urlencoded\r\n";
@@ -82,17 +83,6 @@ static std::string http_post(const std::string& body) {
     return resp;
 }
 
-static bool can_reach_server() {
-    HINTERNET hS = WinHttpOpen(L"Mozilla/5.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hS) return false;
-    HINTERNET hC = WinHttpConnect(hS, KA_HOST, INTERNET_DEFAULT_HTTPS_PORT, 0);
-    bool ok = (hC != nullptr);
-    if (hC) WinHttpCloseHandle(hC);
-    WinHttpCloseHandle(hS);
-    return ok;
-}
-
 // HWID: combine volume serial + machine GUID (always >=20 chars)
 static std::string get_hwid() {
     // Volume serial of C drive
@@ -113,7 +103,6 @@ static std::string get_hwid() {
     }
 
     std::string hwid = std::string(vol) + "_" + guid;
-    // Ensure at least 20 chars
     while (hwid.size() < 20) hwid += "0";
     return hwid;
 }
@@ -125,68 +114,40 @@ struct VerifyCallbacks {
 };
 
 // Main blocking verify — run on a background thread.
+// Calls OUR server which proxies KeyAuth. No KeyAuth credentials in client.
 static Result verify(const std::string& key, const VerifyCallbacks& cb) {
     Result res;
 
-    // ── Server reachability ───────────────────────────────────────────────
-    res.server_ok = can_reach_server();
-    if (!res.server_ok) {
-        res.message = "Cannot reach server.";
-        if (cb.on_hwid_done)   cb.on_hwid_done();
-        if (cb.on_sub_done)    cb.on_sub_done();
-        if (cb.on_server_done) cb.on_server_done();
-        return res;
-    }
-
-    // ── Session init ──────────────────────────────────────────────────────
-    char sessid[32];
-    snprintf(sessid, sizeof sessid, "%08X%08X",
-        (DWORD)GetTickCount(), (DWORD)GetCurrentProcessId());
-
-    std::string init_body =
-        std::string("type=init")
-        + "&ver="      + url_encode(KA_VERSION)
-        + "&name="     + url_encode(KA_APP_NAME)
-        + "&ownerid="  + url_encode(KA_OWNERID)
-        + "&sessionid="+ url_encode(sessid);
-
-    std::string init_resp = http_post(init_body);
-    bool init_ok = (json_val(init_resp, "success") == "true");
-    std::string sid = json_val(init_resp, "sessionid");
-
-    if (!init_ok || sid.empty()) {
-        res.message = "Init failed: " + json_val(init_resp, "message");
-        if (cb.on_hwid_done)   cb.on_hwid_done();
-        if (cb.on_sub_done)    cb.on_sub_done();
-        if (cb.on_server_done) cb.on_server_done();
-        return res;
-    }
-
-    // ── HWID callback (shown while license call runs) ─────────────────────
+    // ── HWID collection ──────────────────────────────────────────────────
+    std::string hwid = get_hwid();
     if (cb.on_hwid_done) cb.on_hwid_done();
 
-    // ── License check ─────────────────────────────────────────────────────
-    std::string hwid = get_hwid();
-    std::string lic_body =
-        std::string("type=license")
-        + "&key="       + url_encode(key)
-        + "&hwid="      + url_encode(hwid)
-        + "&sessionid=" + url_encode(sid)
-        + "&name="      + url_encode(KA_APP_NAME)
-        + "&ownerid="   + url_encode(KA_OWNERID);
+    // ── Call our API endpoint ────────────────────────────────────────────
+    std::string body =
+        std::string("key=") + url_encode(key)
+        + "&hwid=" + url_encode(hwid);
 
-    std::string lic_resp = http_post(lic_body);
-    bool lic_ok  = (json_val(lic_resp, "success") == "true");
-    std::string msg    = json_val(lic_resp, "message");
-    std::string expiry = json_val(lic_resp, "expiry");
+    std::string resp = api_post(L"api.swiftfly.xyz", L"/verify.php", body);
 
     if (cb.on_sub_done) cb.on_sub_done();
 
-    res.hwid_ok  = lic_ok;
-    res.sub_ok   = lic_ok;
-    res.expiry   = expiry;
-    res.success  = lic_ok;
-    res.message  = msg.empty() ? (lic_ok ? "OK" : "Invalid key.") : msg;
+    if (resp.empty()) {
+        res.message = "Cannot reach server.";
+        if (cb.on_server_done) cb.on_server_done();
+        return res;
+    }
+
+    // ── Parse minimal response ───────────────────────────────────────────
+    bool ok = (json_val(resp, "success") == "true");
+    std::string error  = json_val(resp, "error");
+    std::string expiry = json_val(resp, "expiry");
+
+    res.server_ok = true;
+    res.hwid_ok   = ok;
+    res.sub_ok    = ok;
+    res.expiry    = expiry;
+    res.success   = ok;
+    res.message   = ok ? "OK" : (error.empty() ? "Invalid key." : error);
 
     if (cb.on_server_done) cb.on_server_done();
     return res;

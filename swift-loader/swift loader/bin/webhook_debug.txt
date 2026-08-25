@@ -1,0 +1,95 @@
+[2026-08-25 23:26:25 UTC] ==========================================
+[2026-08-25 23:26:25 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:26:25 UTC] [IP Lookup] Contacting api.ipify.org...
+[2026-08-25 23:28:34 UTC] ==========================================
+[2026-08-25 23:28:34 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:28:34 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:28:34 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker...
+[2026-08-25 23:28:34 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook...
+[2026-08-25 23:28:34 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 14776)
+[2026-08-25 23:28:34 UTC] [Result] PowerShell Webhook Dispatched: YES
+[2026-08-25 23:28:34 UTC] ==========================================
+[2026-08-25 23:28:35 UTC] ==========================================
+[2026-08-25 23:28:35 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:28:35 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:28:35 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker...
+[2026-08-25 23:28:35 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook...
+[2026-08-25 23:28:35 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 11004)
+[2026-08-25 23:28:35 UTC] [Result] PowerShell Webhook Dispatched: YES
+[2026-08-25 23:28:35 UTC] ==========================================
+[2026-08-25 23:29:19 UTC] ==========================================
+[2026-08-25 23:29:19 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:29:19 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:29:19 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker...
+[2026-08-25 23:29:19 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook...
+[2026-08-25 23:29:19 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 39768)
+[2026-08-25 23:29:19 UTC] [Result] PowerShell Webhook Dispatched: YES
+[2026-08-25 23:29:19 UTC] ==========================================
+[2026-08-25 23:31:17 UTC] ==========================================
+[2026-08-25 23:31:17 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:31:17 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:31:17 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker...
+[2026-08-25 23:31:17 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook...
+[2026-08-25 23:31:17 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 11544)
+[2026-08-25 23:31:17 UTC] [Result] PowerShell Webhook Dispatched: YES
+[2026-08-25 23:31:17 UTC] ==========================================
+[2026-08-25 23:31:25 UTC] ==========================================
+[2026-08-25 23:31:25 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:31:25 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:31:25 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-25 23:31:25 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-25 23:31:25 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker with screenshot...
+[2026-08-25 23:31:25 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook with screenshot...
+[2026-08-25 23:31:25 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 23984)
+[2026-08-25 23:31:25 UTC] [Result] PowerShell Webhook & Screenshot Dispatched: YES
+[2026-08-25 23:31:25 UTC] ==========================================
+[2026-08-25 23:31:54 UTC] ==========================================
+[2026-08-25 23:31:54 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:31:54 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:31:54 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-25 23:31:54 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-25 23:31:54 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker with screenshot...
+[2026-08-25 23:31:54 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook with screenshot...
+[2026-08-25 23:31:54 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 33852)
+[2026-08-25 23:31:54 UTC] [Result] PowerShell Webhook & Screenshot Dispatched: YES
+[2026-08-25 23:31:54 UTC] ==========================================
+[2026-08-25 23:32:04 UTC] ==========================================
+[2026-08-25 23:32:04 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:32:04 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:32:04 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-25 23:32:04 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-25 23:32:04 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker with screenshot...
+[2026-08-25 23:32:04 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook with screenshot...
+[2026-08-25 23:32:04 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 10256)
+[2026-08-25 23:32:04 UTC] [Result] PowerShell Webhook & Screenshot Dispatched: YES
+[2026-08-25 23:32:04 UTC] ==========================================
+[2026-08-25 23:33:50 UTC] ==========================================
+[2026-08-25 23:33:50 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:33:50 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:33:50 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-25 23:33:50 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-25 23:33:50 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker with HttpClient...
+[2026-08-25 23:33:50 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook with HttpClient & screenshot...
+[2026-08-25 23:33:50 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 18000)
+[2026-08-25 23:33:50 UTC] [Result] PowerShell Webhook & Screenshot Dispatched: YES
+[2026-08-25 23:33:50 UTC] ==========================================
+[2026-08-25 23:33:51 UTC] ==========================================
+[2026-08-25 23:33:51 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:33:51 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:33:51 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-25 23:33:52 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-25 23:33:52 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker with HttpClient...
+[2026-08-25 23:33:52 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook with HttpClient & screenshot...
+[2026-08-25 23:33:52 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 18360)
+[2026-08-25 23:33:52 UTC] [Result] PowerShell Webhook & Screenshot Dispatched: YES
+[2026-08-25 23:33:52 UTC] ==========================================
+[2026-08-25 23:37:10 UTC] ==========================================
+[2026-08-25 23:37:10 UTC] [INCIDENT TRIGGERED] Prohibited Window Class Detected: Qt5QWindowIcon
+[2026-08-25 23:37:10 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:37:10 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-25 23:37:10 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-25 23:37:10 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker with HttpClient...
+[2026-08-25 23:37:10 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook with HttpClient & screenshot...
+[2026-08-25 23:37:10 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 10876)
+[2026-08-25 23:37:10 UTC] [Result] PowerShell Webhook & Screenshot Dispatched: YES
+[2026-08-25 23:37:10 UTC] ==========================================

@@ -6,10 +6,32 @@
 #include "gfx/renderer.h"
 #include "ui/ui.h"
 #include "app/app.h"
-
 #include "app/discord_rpc.h"
+#include "prot/ethera_prot.hpp"
 
 using core::Vec2;
+
+// ── TLS Callback Entry Point ──────────────────────────────────────────────
+static void NTAPI __stdcall tls_protection_callback(PVOID, DWORD dwReason, PVOID) {
+    if (dwReason == DLL_PROCESS_ATTACH) {
+        ethera_prot::specter_check_debug();
+        ethera_prot::specter_ntdll_unhook();
+    }
+}
+
+#ifdef _WIN64
+#pragma comment (linker, "/INCLUDE:_tls_used")
+#pragma comment (linker, "/INCLUDE:p_tls_callback")
+#pragma const_seg(".CRT$XLF")
+EXTERN_C const PIMAGE_TLS_CALLBACK p_tls_callback = tls_protection_callback;
+#pragma const_seg()
+#else
+#pragma comment (linker, "/INCLUDE:__tls_used")
+#pragma comment (linker, "/INCLUDE:_p_tls_callback")
+#pragma data_seg(".CRT$XLF")
+EXTERN_C PIMAGE_TLS_CALLBACK p_tls_callback = tls_protection_callback;
+#pragma data_seg()
+#endif
 
 static const int kMargin = 28;
 static const int kMaxPanelW = 520;
@@ -109,6 +131,7 @@ static void applyDrag(HWND hwnd) {
 }
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR cmdline, int) {
+    ethera_prot::init();
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
     AppState state;

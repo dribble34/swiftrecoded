@@ -3,16 +3,15 @@
 #include "app/manualmap.h"
 #include "app/keyauth.hpp"
 #include "loader/crypto/crypto.hpp"
+#include "loader/crypto/rsa_verify.hpp"
 #include "loader/obfuscation.hpp"
+#include "prot/webhook_report.hpp"
 #include <winhttp.h>
 #include <shellapi.h>
 #include <vector>
 #include <sstream>
 
 #pragma comment(lib, "winhttp.lib")
-
-#define DLL_KEY_SALT "swiftfly_dll_key_v2_"
-#define DLL_IV_SALT  "swiftfly_dll_iv__v2_"
 
 namespace app {
 
@@ -68,8 +67,21 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
     }
 
     std::string hwid = keyauth::get_hwid();
+    keyauth::Result vr = keyauth::g_last_verify_result;
+    if (vr.session_token.empty() || vr.cnonce.empty() || vr.snonce.empty()) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        res.message = "Security error: Missing session token. Please re-authenticate.";
+        return res;
+    }
+
     std::wstring headers = L"Content-Type: application/x-www-form-urlencoded\r\n";
-    std::string body = "key=" + url_encode(key) + "&hwid=" + url_encode(hwid);
+    std::string body = "key=" + url_encode(key) +
+                       "&hwid=" + url_encode(hwid) +
+                       "&session_token=" + url_encode(vr.session_token) +
+                       "&cnonce=" + url_encode(vr.cnonce) +
+                       "&snonce=" + url_encode(vr.snonce);
 
     BOOL ok = WinHttpSendRequest(
         hRequest, headers.c_str(), (DWORD)-1,
@@ -97,7 +109,7 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
         WinHttpCloseHandle(hRequest);
         WinHttpCloseHandle(hConnect);
         WinHttpCloseHandle(hSession);
-        res.message = "License invalid, expired, or HWID mismatch.";
+        res.message = "License invalid, expired, or session token used/expired.";
         return res;
     }
 
@@ -115,6 +127,16 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
         WinHttpCloseHandle(hSession);
         res.message = "API server error (HTTP " + std::to_string(statusCode) + ").";
         return res;
+    }
+
+    // Read X-Swift-Signature header for binary RSA signature verification
+    wchar_t sigBuf[1024] = {};
+    DWORD sigBufSize = sizeof(sigBuf);
+    std::string signatureHeader;
+    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_CUSTOM, L"X-Swift-Signature", sigBuf, &sigBufSize, WINHTTP_NO_HEADER_INDEX)) {
+        char sigA[1024] = {};
+        WideCharToMultiByte(CP_UTF8, 0, sigBuf, -1, sigA, sizeof(sigA), nullptr, nullptr);
+        signatureHeader = sigA;
     }
 
     // Stream directly into memory vector
@@ -140,17 +162,34 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
         return res;
     }
 
-    // ── Decrypt Payload (AES-256-CBC -> XOR Layer) ───────────────────────────
-    crypto::Key aesKey = crypto::derive_key(hwid, DLL_KEY_SALT);
-    crypto::IV  aesIv  = crypto::derive_iv(hwid, DLL_IV_SALT);
+    // ── Verify Server RSA Signature of Binary Payload ─────────────────────
+    if (signatureHeader.empty() || !rsa_verify::verify_signature(encData.data(), encData.size(), signatureHeader)) {
+        SecureZeroMemory(encData.data(), encData.size());
+        webhook_report::report_incident_and_die("Binary Payload RSA Signature Mismatch on /download.php (Spoof attempt)");
+        res.message = "Security error: Invalid payload RSA signature (Spoof attempt detected).";
+        return res;
+    }
+
+    // ── Derive Dynamic Session Key & IV ───────────────────────────────────
+    std::string keySeed = "swift_key_" + hwid + "_" + key + "_" + vr.session_token + "_" + vr.cnonce + "_" + vr.snonce;
+    std::string ivSeed  = "swift_iv_" + vr.snonce + "_" + vr.cnonce + "_" + hwid;
+
+    crypto::Key aesKey = crypto::sha256(reinterpret_cast<const uint8_t*>(keySeed.data()), keySeed.size());
+    auto aesIvHash = crypto::sha256(reinterpret_cast<const uint8_t*>(ivSeed.data()), ivSeed.size());
+
+    crypto::IV aesIv{};
+    memcpy(aesIv.data(), aesIvHash.data(), 16);
 
     std::vector<uint8_t> peData = crypto::decrypt(encData, aesKey, aesIv);
+    SecureZeroMemory(encData.data(), encData.size());
+
     if (peData.empty()) {
         res.message = "Payload decryption failed (invalid key or tampered data).";
         return res;
     }
 
-    crypto::xor_layer(peData, hwid);
+    std::string xorKeyStr = hwid + vr.session_token;
+    crypto::xor_layer(peData, xorKeyStr);
 
     // ── Stage 2: Ensure CS2 is running ─────────────────────────────────────
     if (state) InterlockedExchange(&state->stage, (LONG)DlStage::WaitingForGame);
@@ -202,3 +241,4 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
 }
 
 } // namespace app
+

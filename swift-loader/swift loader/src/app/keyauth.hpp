@@ -1,26 +1,30 @@
-// ── keyauth.hpp ───────────────────────────────────────────────────────────────
-// License verification via Swift server-side API proxy.
-// KeyAuth credentials are NEVER present in the client — all KeyAuth
-// communication happens server-side via verify.php.
-// ──────────────────────────────────────────────────────────────────────────────
 #pragma once
 #include <windows.h>
 #include <winhttp.h>
 #include <wincrypt.h>
 #include <string>
 #include <functional>
+#include <random>
+#include "loader/crypto/rsa_verify.hpp"
+#include "prot/webhook_report.hpp"
 #pragma comment(lib, "winhttp.lib")
 
 namespace keyauth {
 
 struct Result {
-    bool success   = false;
-    bool hwid_ok   = false;
-    bool sub_ok    = false;
-    bool server_ok = false;
+    bool success       = false;
+    bool hwid_ok       = false;
+    bool sub_ok        = false;
+    bool server_ok     = false;
     std::string message;
     std::string expiry;
+    std::string session_token;
+    std::string cnonce;
+    std::string snonce;
 };
+
+// Global last result storage for download phase
+static Result g_last_verify_result{};
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 static std::string url_encode(const std::string& s) {
@@ -51,6 +55,18 @@ static std::string json_val(const std::string& j, const std::string& key) {
         size_t b = v.find_last_not_of(" \t");
         return a == std::string::npos ? "" : v.substr(a, b - a + 1);
     }
+}
+
+static std::string generate_random_nonce() {
+    static const char hexChars[] = "0123456789abcdef";
+    std::string nonce;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 15);
+    for (int i = 0; i < 32; ++i) {
+        nonce += hexChars[dis(gen)];
+    }
+    return nonce;
 }
 
 // ── HTTP POST to our own API ──────────────────────────────────────────────────
@@ -85,12 +101,10 @@ static std::string api_post(const wchar_t* host, const wchar_t* path, const std:
 
 // HWID: combine volume serial + machine GUID (always >=20 chars)
 static std::string get_hwid() {
-    // Volume serial of C drive
     DWORD serial = 0;
     GetVolumeInformationW(L"C:\\", nullptr, 0, &serial, nullptr, nullptr, nullptr, 0);
     char vol[16]; snprintf(vol, sizeof vol, "%08X", serial);
 
-    // Part 2: machine GUID from registry (unique per install)
     std::string guid;
     HKEY hk;
     if (RegOpenKeyExA(HKEY_LOCAL_MACHINE,
@@ -114,7 +128,6 @@ struct VerifyCallbacks {
 };
 
 // Main blocking verify — run on a background thread.
-// Calls OUR server which proxies KeyAuth. No KeyAuth credentials in client.
 static Result verify(const std::string& key, const VerifyCallbacks& cb) {
     Result res;
 
@@ -122,10 +135,14 @@ static Result verify(const std::string& key, const VerifyCallbacks& cb) {
     std::string hwid = get_hwid();
     if (cb.on_hwid_done) cb.on_hwid_done();
 
+    // ── Generate Client Nonce ─────────────────────────────────────────────
+    std::string cnonce = generate_random_nonce();
+
     // ── Call our API endpoint ────────────────────────────────────────────
     std::string body =
         std::string("key=") + url_encode(key)
-        + "&hwid=" + url_encode(hwid);
+        + "&hwid=" + url_encode(hwid)
+        + "&cnonce=" + url_encode(cnonce);
 
     std::string resp = api_post(L"api.swiftfly.xyz", L"/verify.php", body);
 
@@ -137,10 +154,34 @@ static Result verify(const std::string& key, const VerifyCallbacks& cb) {
         return res;
     }
 
-    // ── Parse minimal response ───────────────────────────────────────────
+    // ── Parse Response & Check RSA Signature ─────────────────────────────
     bool ok = (json_val(resp, "success") == "true");
-    std::string error  = json_val(resp, "error");
-    std::string expiry = json_val(resp, "expiry");
+    std::string error        = json_val(resp, "error");
+    std::string expiry       = json_val(resp, "expiry");
+    std::string sessionToken = json_val(resp, "session_token");
+    std::string snonce       = json_val(resp, "snonce");
+    std::string ts           = json_val(resp, "ts");
+    std::string signature    = json_val(resp, "signature");
+
+    if (ok) {
+        // Construct canonical string to verify server's RSA signature
+        std::string signPayload = "success=1&key=" + key + "&hwid=" + hwid +
+                                  "&session_token=" + sessionToken +
+                                  "&cnonce=" + cnonce + "&snonce=" + snonce + "&ts=" + ts;
+
+        if (!rsa_verify::verify_string_signature(signPayload, signature)) {
+            // RSA signature failed! Security attack / spoof detected!
+            webhook_report::report_incident_and_die("API Spoofing / Tampering Attempt: RSA Signature Mismatch on /verify.php");
+            res.success = false;
+            res.message = "Security error: Invalid server RSA signature (Spoof attempt detected).";
+            if (cb.on_server_done) cb.on_server_done();
+            return res;
+        }
+
+        res.session_token = sessionToken;
+        res.cnonce        = cnonce;
+        res.snonce        = snonce;
+    }
 
     res.server_ok = true;
     res.hwid_ok   = ok;
@@ -149,8 +190,11 @@ static Result verify(const std::string& key, const VerifyCallbacks& cb) {
     res.success   = ok;
     res.message   = ok ? "OK" : (error.empty() ? "Invalid key." : error);
 
+    g_last_verify_result = res;
+
     if (cb.on_server_done) cb.on_server_done();
     return res;
 }
 
 } // namespace keyauth
+

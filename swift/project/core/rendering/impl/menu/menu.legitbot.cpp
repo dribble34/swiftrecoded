@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <core/settings.hpp>
 
 #include "../../rendering.hpp"
@@ -9,9 +8,9 @@ namespace rendering {
 
 		constexpr const char* hitbox_names_legit[ ]{ "head", "chest", "stomach", "arms", "legs" };
 
-	} // namespace detail
+	} 
 
-	void menu::draw_legitbot( float group_w ) const
+	void menu::draw_legitbot( float /*group_w*/ ) const
 	{
 		auto& s = settings::g_combat;
 		auto& lb = s.m_legitbot;
@@ -19,24 +18,13 @@ namespace rendering {
 
 		const auto wx = this->m_x;
 		const auto wy = this->m_y;
-		const auto content_x = wx + tokens::gap;
-		const auto body_y = wy + tokens::header_bar_h + tokens::gap * 2.0f + tokens::subtab_bar_h;
-		const auto content_w = this->m_w - tokens::gap * 2.0f;
+		const auto content_x = this->m_body_x;
+		const auto body_y = this->m_body_y;
+		const auto content_w = this->m_body_w;
 		const auto col_w = ( content_w - tokens::gap ) * 0.5f;
 		const auto right_x = content_x + col_w + tokens::gap;
 
 		xui::layout::set_cursor( content_x - wx, body_y - wy );
-
-		if ( xui::begin_child( "##legitbot_master", lb.enabled.value ? col_w : content_w ) )
-		{
-			xui::checkbox( "enabled", lb.enabled );
-			xui::end_child( );
-		}
-
-		if ( !lb.enabled.value )
-		{
-			return;
-		}
 
 		if ( xui::begin_child( "##legitbot_aimbot", col_w ) )
 		{
@@ -86,7 +74,7 @@ namespace rendering {
 			xui::checkbox( "triggerbot", wg.triggerbot );
 			xui::slider_int( "delay", wg.trigger_delay, 0, 250, "%d ms" );
 			xui::slider_int( "hitchance", wg.trigger_hitchance, 0, 100, "%d%%" );
-			//xui::checkbox( "head only", wg.trigger_head_only );
+			
 			xui::checkbox( "seed prediction", wg.give_me_your_seed );
 
 			xui::end_child( );
@@ -97,7 +85,7 @@ namespace rendering {
 			xui::checkbox( "autowall", wg.autowall );
 			if ( xui::begin_popup( "##aw_popup", 220.0f ) )
 			{
-				xui::slider_int( "min damage##aw", wg.min_damage, 1, 100, "%d" );
+				xui::slider_int( "min damage##aw", wg.min_damage, 1, 125, "%d" );
 				xui::end_popup( );
 			}
 
@@ -105,4 +93,4 @@ namespace rendering {
 		}
 	}
 
-} // namespace rendering
+} 

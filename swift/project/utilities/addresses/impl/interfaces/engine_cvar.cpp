@@ -1,5 +1,5 @@
-#include <pch/pch.hpp>
 #include <utilities/diag.hpp>
+#include <utilities/fnv1a.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 
@@ -36,7 +36,7 @@ namespace interfaces {
 			return try_hash_name_impl( name, hash );
 		}
 
-	} // namespace
+	} 
 
 	c_convar* c_engine_cvar::find(std::uint32_t name_hash)
 	{
@@ -114,4 +114,4 @@ namespace interfaces {
 		return current == invalid_index;
 	}
 
-} // namespace interfaces
+} 

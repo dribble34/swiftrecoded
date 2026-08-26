@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <core/features/features.hpp>
 #include <core/settings.hpp>
 
@@ -13,8 +12,7 @@ namespace rendering {
 		enum class skins_page : int
 		{
 			grid,
-			browser,
-			custom_agents
+			browser
 		};
 
 		struct skins_state
@@ -25,7 +23,6 @@ namespace rendering {
 
 			std::int16_t browsing_def{};
 			int browsing_agent_team{};
-			int custom_agent_team{ 0 };
 			std::string search_buf{};
 		};
 
@@ -700,109 +697,6 @@ namespace rendering {
 			}
 		}
 
-		static inline void draw_custom_agent_card( const xui::rect& card, float fade_alpha )
-		{
-			auto& dl = xui::draw::current( );
-			const auto& input = xui::ctx( ).input;
-
-			const auto image_h = std::floor( card.h * k_image_h_ratio );
-
-			const auto hovered = !xui::ctx( ).overlay_blocking( ) && input.in_rect( card );
-			const auto hover_anim = xui::anim::lerp( xui::fnv1a( "acustom_card" ), hovered ? 1.0f : 0.0f, 14.0f );
-
-			auto card_bg = tokens::col_card;
-			card_bg = xui::lerp( card_bg, xui::lighten( card_bg, 1.4f ), hover_anim * 0.5f );
-			card_bg.a = static_cast< std::uint8_t >( card_bg.a * fade_alpha );
-			dl.rect_filled( card.x, card.y, card.w, card.h, card_bg, xdraw::corner_radius{ tokens::btn_rounding } );
-
-			auto ph_col = xui::darken( tokens::col_card, 0.7f );
-			ph_col.a = static_cast< std::uint8_t >( 120.0f * fade_alpha );
-			dl.rect_filled( card.x + 6.0f, card.y + 6.0f, card.w - 12.0f, image_h - 12.0f, ph_col, xdraw::corner_radius{ 6.0f } );
-
-			auto ncol = xui::lerp( tokens::col_text_dim, tokens::col_text, hover_anim );
-			ncol.a = static_cast< std::uint8_t >( ncol.a * fade_alpha );
-
-			const auto label = "custom models";
-			const auto ntrunc = xui::truncate( label, card.w - 12.0f );
-			const auto [nw, nh] = xdraw::measure_text( ntrunc );
-			dl.text( std::floor( card.x + ( card.w - nw ) * 0.5f ), std::floor( card.y + image_h + k_rarity_bar_h + 4.0f ), ntrunc, ncol );
-
-			if ( hovered && input.mouse_clicked )
-			{
-				request_page( skins_page::custom_agents );
-			}
-		}
-
-		static inline void draw_custom_agent_tile( const xui::rect& card, const Model_t& model, bool is_equipped, float fade_alpha )
-		{
-			auto& dl = xui::draw::current( );
-			const auto& input = xui::ctx( ).input;
-
-			const auto image_h = std::floor( card.h * k_image_h_ratio );
-
-			const auto hovered = !xui::ctx( ).overlay_blocking( ) && input.in_rect( card );
-			const auto hover_anim = xui::anim::lerp( xui::fnv1a( "ctile" ) + xui::fnv1a( model.strModelPath.c_str( ) ), hovered ? 1.0f : 0.0f, 14.0f );
-
-			auto card_bg = tokens::col_card;
-			card_bg = xui::lerp( card_bg, xui::lighten( card_bg, 1.4f ), hover_anim * 0.5f );
-			card_bg.a = static_cast< std::uint8_t >( card_bg.a * fade_alpha );
-			dl.rect_filled( card.x, card.y, card.w, card.h, card_bg, xdraw::corner_radius{ tokens::btn_rounding } );
-
-			if ( is_equipped )
-			{
-				auto bcol = tokens::col_accent;
-				bcol.a = static_cast< std::uint8_t >( bcol.a * fade_alpha );
-				dl.rect( card.x, card.y, card.w, card.h, bcol, xdraw::corner_radius{ tokens::btn_rounding }, 1.5f );
-			}
-
-			auto ph_col = xui::darken( tokens::col_card, 0.7f );
-			ph_col.a = static_cast< std::uint8_t >( 120.0f * fade_alpha );
-			dl.rect_filled( card.x + 6.0f, card.y + 6.0f, card.w - 12.0f, image_h - 12.0f, ph_col, xdraw::corner_radius{ 6.0f } );
-
-			auto ncol = xui::lerp( tokens::col_text_dim, tokens::col_text, hover_anim );
-			ncol.a = static_cast< std::uint8_t >( ncol.a * fade_alpha );
-
-			const auto ntrunc = xui::truncate( model.strModelName.c_str( ), card.w - 12.0f );
-			const auto [nw, nh] = xdraw::measure_text( ntrunc );
-			dl.text( std::floor( card.x + ( card.w - nw ) * 0.5f ), std::floor( card.y + image_h + k_rarity_bar_h + 4.0f ), ntrunc, ncol );
-
-			if ( is_equipped )
-			{
-				constexpr auto badge{ 14.0f };
-				const auto bx = card.right( ) - badge - 4.0f;
-				const auto by = card.y + 4.0f;
-
-				auto badge_bg = tokens::col_accent;
-				badge_bg.a = static_cast< std::uint8_t >( badge_bg.a * fade_alpha );
-				dl.rect_filled( bx, by, badge, badge, badge_bg, xdraw::corner_radius{ badge * 0.5f } );
-			}
-
-			if ( hovered && input.mouse_clicked )
-			{
-				auto& cfg = settings::g_changer.custom_agents;
-				const auto enable = !is_equipped;
-				if ( skins_ui.custom_agent_team == 0 )
-				{
-					cfg.ct_path = model.strModelPath;
-					cfg.ct_enabled = enable;
-					cfg.t_path = model.strModelPath;
-					cfg.t_enabled = enable;
-				}
-				else if ( skins_ui.custom_agent_team == 3 )
-				{
-					cfg.ct_path = model.strModelPath;
-					cfg.ct_enabled = enable;
-				}
-				else
-				{
-					cfg.t_path = model.strModelPath;
-					cfg.t_enabled = enable;
-				}
-
-				request_page( skins_page::grid );
-			}
-		}
-
 		static inline void draw_weapon_card( const xui::rect& card, const features::changer::econ_item_system::item_def* def, float fade_alpha )
 		{
 			auto& econ = features::changer::g_econ_item_system;
@@ -1228,9 +1122,9 @@ namespace rendering {
 			}
 		}
 
-	} // namespace detail
+	} 
 
-	void menu::draw_skins( float group_w ) const
+	void menu::draw_skins( float /*group_w*/ ) const
 	{
 		static auto last_subtab{ -1 };
 		if ( this->m_subtab != last_subtab )
@@ -1250,10 +1144,10 @@ namespace rendering {
 
 		const auto wx = this->m_x;
 		const auto wy = this->m_y;
-		const auto content_x = wx + tokens::gap;
-		const auto body_y = wy + tokens::header_bar_h + tokens::gap * 2.0f + tokens::subtab_bar_h;
-		const auto content_w = this->m_w - tokens::gap * 2.0f;
-		const auto body_h = this->m_h - tokens::header_bar_h - tokens::subtab_bar_h - tokens::tab_bar_h - tokens::gap * 6.0f;
+		const auto content_x = this->m_body_x;
+		const auto body_y = this->m_body_y;
+		const auto content_w = this->m_body_w;
+		const auto body_h = this->m_body_h;
 
 		const auto dt = xdraw::delta_time( );
 		const auto fade_target = ( detail::skins_ui.current == detail::skins_ui.target ) ? 1.0f : 0.0f;
@@ -1293,11 +1187,9 @@ namespace rendering {
 
 				const auto ct_card = xui::rect{ base_x, base_y, card_w, card_h };
 				const auto t_card = xui::rect{ base_x + card_w + detail::k_card_gap, base_y, card_w, card_h };
-				const auto custom_card = xui::rect{ base_x + ( card_w + detail::k_card_gap ) * 2.0f, base_y, card_w, card_h };
 
 				detail::draw_agent_team_card( ct_card, 3, fade_alpha );
 				detail::draw_agent_team_card( t_card, 2, fade_alpha );
-				detail::draw_custom_agent_card( custom_card, fade_alpha );
 
 				xui::layout::item( inner_w, card_h );
 				xui::end_child( );
@@ -1357,124 +1249,6 @@ namespace rendering {
 		}
 		else
 		{
-			if ( detail::skins_ui.current == detail::skins_page::custom_agents )
-			{
-				if ( !xui::begin_child( "##skins_custom", content_w, body_h, true ) )
-				{
-					return;
-				}
-
-				const auto win = xui::layout::current_window( );
-				const auto inner_w = win->bounds.w - s.window_pad_x * 2.0f;
-
-				const auto total_gap = ( detail::k_columns - 1 ) * detail::k_card_gap;
-				const auto card_w = std::floor( ( inner_w - total_gap ) / static_cast< float >( detail::k_columns ) );
-				const auto card_h = std::floor( card_w * ( detail::k_card_h_ref / detail::k_card_w_ref ) );
-
-				const auto grid_w = card_w * detail::k_columns + total_gap;
-				const auto offset_x = std::max( 0.0f, ( inner_w - grid_w ) * 0.5f );
-
-				constexpr auto bar_h{ 26.0f };
-				const auto bar_x = win->bounds.x + s.window_pad_x;
-				const auto bar_y = win->bounds.y + s.window_pad_y - win->scroll_y;
-
-				const auto back_w{ 60.0f };
-				const auto back_rect = xui::rect{ bar_x, bar_y, back_w, bar_h };
-				const auto back_hovered = !xui::ctx( ).overlay_blocking( ) && input.in_rect( back_rect );
-				const auto back_hover = xui::anim::lerp( xui::fnv1a( "custom_back" ), back_hovered ? 1.0f : 0.0f, 14.0f );
-
-				if ( back_hovered && input.mouse_clicked )
-				{
-					detail::request_page( detail::skins_page::grid );
-				}
-
-				auto back_bg = xui::lerp( s.button_bg, s.button_hovered, back_hover );
-				back_bg.a = static_cast< std::uint8_t >( back_bg.a * fade_alpha );
-				dl.rect_filled( back_rect.x, back_rect.y, back_rect.w, back_rect.h, back_bg, xdraw::corner_radius{ s.button_rounding } );
-
-				const auto [bw, bh] = xdraw::measure_text( "back" );
-				auto back_text = xui::lerp( s.text_dim, s.text, back_hover );
-				back_text.a = static_cast< std::uint8_t >( back_text.a * fade_alpha );
-				dl.text( back_rect.x + ( back_rect.w - bw ) * 0.5f, back_rect.y + ( back_rect.h - bh ) * 0.5f, "back", back_text );
-
-				xui::layout::set_cursor( back_rect.right( ) + 6.0f - win->bounds.x, bar_y - win->bounds.y );
-
-				static const char* team_names[ 3 ] = { "Both", "CT", "T" };
-				const auto cur_team = detail::skins_ui.custom_agent_team;
-				const auto seg_w{ 54.0f };
-				for ( auto k = 0; k < 3; ++k )
-				{
-					const auto val = ( k == 1 ) ? 3 : ( k == 2 ) ? 2 : 0;
-					const auto active = ( cur_team == val );
-					const auto rect = xui::rect{ back_rect.right( ) + 6.0f + k * ( seg_w + 4.0f ), bar_y, seg_w, bar_h };
-					const auto hovered = !xui::ctx( ).overlay_blocking( ) && input.in_rect( rect );
-					const auto anim = xui::anim::lerp( xui::fnv1a( "cteam" ) + k, active ? 1.0f : 0.0f, 14.0f );
-					auto bg = active ? tokens::col_accent : xui::lerp( s.button_bg, s.button_hovered, hovered ? 1.0f : 0.0f );
-					bg.a = static_cast< std::uint8_t >( bg.a * fade_alpha );
-					dl.rect_filled( rect.x, rect.y, rect.w, rect.h, bg, xdraw::corner_radius{ s.button_rounding } );
-					const auto tc = active ? tokens::col_card : ( hovered ? s.text : s.text_dim );
-					const auto tcol = xui::lerp( tc, tc, anim );
-					auto tt = tcol;
-					tt.a = static_cast< std::uint8_t >( tt.a * fade_alpha );
-					const auto [tw, th] = xdraw::measure_text( team_names[ k ] );
-					dl.text( std::floor( rect.x + ( rect.w - tw ) * 0.5f ), std::floor( rect.y + ( rect.h - th ) * 0.5f ), team_names[ k ], tt );
-					if ( hovered && input.mouse_clicked )
-					{
-						detail::skins_ui.custom_agent_team = val;
-					}
-				}
-
-				xui::layout::set_cursor( back_rect.right( ) + 6.0f + 3 * ( seg_w + 4.0f ) - win->bounds.x, bar_y - win->bounds.y );
-				xui::layout::same_line( );
-
-				if ( xui::button( "refresh", 70.0f, bar_h ) )
-				{
-					ModelChanger->UpdateCustomAgentModels( );
-				}
-
-				const auto grid_top_y = bar_y + bar_h + 12.0f;
-				const auto base_x = win->bounds.x + s.window_pad_x + offset_x;
-
-				const auto& custom_models = ModelChanger->vecCustomAgentModels;
-
-				const auto& cfg = settings::g_changer.custom_agents;
-				const auto sel_team = detail::skins_ui.custom_agent_team;
-				const auto current_path = ( sel_team == 3 ) ? cfg.ct_path : ( sel_team == 2 ) ? cfg.t_path : ( cfg.ct_enabled ? cfg.ct_path : cfg.t_path );
-				const auto current_enabled = ( sel_team == 3 ) ? cfg.ct_enabled : ( sel_team == 2 ) ? cfg.t_enabled : ( cfg.ct_enabled && cfg.t_enabled );
-
-				const auto rows = ( static_cast< int >( custom_models.size( ) ) + detail::k_columns - 1 ) / detail::k_columns;
-				const auto grid_h = rows * card_h + ( rows > 0 ? ( rows - 1 ) * detail::k_card_gap : 0.0f );
-
-				xui::layout::set_cursor( s.window_pad_x, s.window_pad_y );
-				xui::layout::item( inner_w, ( bar_h + 12.0f ) + grid_h );
-
-				if ( custom_models.empty( ) )
-				{
-					dl.text( base_x, grid_top_y, "no custom agent models found (place .vmdl_c under game/csgo/characters/models)", tokens::col_text_dim );
-				}
-
-				for ( auto i = 0; i < static_cast< int >( custom_models.size( ) ); ++i )
-				{
-					const auto col = i % detail::k_columns;
-					const auto row = i / detail::k_columns;
-
-					const auto cx = std::floor( base_x + col * ( card_w + detail::k_card_gap ) );
-					const auto cy = std::floor( grid_top_y + row * ( card_h + detail::k_card_gap ) );
-
-					if ( cy + card_h < win->bounds.y || cy > win->bounds.bottom( ) )
-					{
-						continue;
-					}
-
-					const auto card = xui::rect{ cx, cy, card_w, card_h };
-					detail::draw_custom_agent_tile( card, custom_models[ i ], current_enabled && custom_models[ i ].strModelPath == current_path, fade_alpha );
-				}
-
-				win->content_h = ( s.window_pad_y + bar_h + 12.0f + grid_h ) - win->scroll_y;
-				xui::end_child( );
-				return;
-			}
-
 			if ( !xui::begin_child( "##skins_browser", content_w, body_h, true ) )
 			{
 				return;
@@ -1663,4 +1437,4 @@ namespace rendering {
 		}
 	}
 
-} // namespace rendering
+} 

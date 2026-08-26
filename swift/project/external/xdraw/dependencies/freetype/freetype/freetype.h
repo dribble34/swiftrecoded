@@ -167,7 +167,7 @@ inline const char* glyph_rows( char32_t cp )
     }
 }
 
-} // namespace ft_local
+} 
 
 inline FT_Pos FT_MulFix(FT_Pos a, FT_Pos b)
 {

@@ -1,6 +1,15 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <filesystem>
+#include <mutex>
+#include <shared_mutex>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include <utilities/fnv1a.hpp>
 #include <utilities/proto/proto.hpp>
 #include <core/settings.hpp>
 
@@ -147,15 +156,15 @@ namespace systems {
 	class legit_input
 	{
 	public:
-		//void press( std::uintptr_t button_bit, float when = -1.0f );
-		//void release( std::uintptr_t button_bit, float when = -1.0f );
+		
+		
 		void add_mouse_delta( float pitch_degrees, float yaw_degrees );
 
-		//void on_create_move( input::usercmd* cmd );
+		
 		void on_process_input_event( std::uintptr_t csgo_input, int slot );
 
 	private:
-		//[[nodiscard]] float resolve_when( ) const;
+		
 
 		bool m_pending_press{};
 		bool m_pending_release{};
@@ -240,7 +249,7 @@ namespace systems {
 		[[nodiscard]] bool is_in_time_freeze( ) const { return this->m_is_in_time_freeze.load( ); }
 		[[nodiscard]] bool is_in_deathmatch( ) const { return this->m_is_deathmatch.load( ); }
 
-		// made this public, to be called by level_shutdown
+		
 		void reset( );
 
 	private:
@@ -292,15 +301,12 @@ namespace systems {
 
 		[[nodiscard]] math::vector2 project( const math::vector3& world_pos );
 		[[nodiscard]] projection project_full( const math::vector3& world_pos ) const;
-		[[nodiscard]] bool projection_valid( const math::vector2& screen_pos ) { return screen_pos.x != this->k_invalid && screen_pos.y != this->k_invalid; }
-
-		[[nodiscard]] bool has_camera( ) const { return this->m_matrix_valid.load( std::memory_order_acquire ); }
+		[[nodiscard]] bool projection_valid( const math::vector2& screen_pos ) { return screen_pos.x != this->k_invalid && screen_pos.y != this->k_invalid; }		[[nodiscard]] bool has_camera( ) const { return this->m_matrix_valid.load( std::memory_order_acquire ); }
 		[[nodiscard]] math::vector3 origin( ) const { return this->m_origin; }
-		[[nodiscard]] math::vector3 angles( ) const { return this->m_angles; }
 		[[nodiscard]] float fov( ) const { return this->m_fov; }
 		[[nodiscard]] math::matrix4x4 matrix( ) const;
 
-	private:
+		private:
 		static constexpr auto k_invalid{ 0xdead };
 
 		math::matrix4x4 m_matrix{};
@@ -339,7 +345,6 @@ namespace systems {
 
 			[[nodiscard]] float width( ) const { return this->max.x - this->min.x; }
 			[[nodiscard]] float height( ) const { return this->max.y - this->min.y; }
-			[[nodiscard]] math::vector2 center( ) const { return { this->min.x + this->width( ) * 0.5f, this->min.y + this->height( ) * 0.5f }; }
 		};
 
 		[[nodiscard]] data get( std::uintptr_t entity );
@@ -371,24 +376,6 @@ namespace systems {
 		[[nodiscard]] set query( std::uintptr_t game_scene_node, bool seh = false );
 		[[nodiscard]] int hitgroup_from_hitbox( int hitbox );
 		[[nodiscard]] const char* hitgroup_to_name( int hitgroup );
-
-		void invalidate_cache( );
-
-	private:
-		struct cache_entry
-		{
-			std::atomic<std::uintptr_t> model{};
-			set data{};
-		};
-
-		static constexpr std::size_t k_cache_capacity{ 8 };
-
-		[[nodiscard]] bool cache_lookup( std::uintptr_t model, set& out );
-		void cache_store( std::uintptr_t model, const set& data );
-
-		std::array<cache_entry, k_cache_capacity> m_cache{};
-		std::atomic<std::size_t> m_cache_count{};
-		std::mutex m_cache_write_mtx{};
 	};
 
 	class tracing
@@ -568,85 +555,94 @@ namespace systems {
 			float max_z;
 
 			render_viewport_t( ) : version( 1 ) {}
-
-			void Init( ) {
-				memset( this, 0, sizeof( render_viewport_t ) );
-				version = 1;
-			}
-
-			void Init( int x, int y, int nWidth, int nHeight, float flMinZ = 0.0f, float flMaxZ = 1.0f ) {
-				version = 1;
-				top_left_x = x; top_left_y = y; width = nWidth; height = nHeight;
-				min_z = flMinZ;
-				max_z = flMaxZ;
-			}
 		};
 
 		class c_texture_dx11 {
 		public:
-			char pad_0000[ 8 ]; //0x0000
-			int32_t m_unk; //0x0008
-			char pad_000C[ 4 ]; //0x000C
-			ID3D11ShaderResourceView* m_texture_SRV0; //0x0010
-			ID3D11ShaderResourceView* m_texture_SRV1; //0x0018
-		}; //Size: 0x0020
+			char pad_0000[ 8 ]; 
+			int32_t m_unk; 
+			char pad_000C[ 4 ]; 
+			ID3D11ShaderResourceView* m_texture_SRV0; 
+			ID3D11ShaderResourceView* m_texture_SRV1; 
+		}; 
 
 		struct texture_dx11_handle_t {
-			c_texture_dx11* m_texture; //0x0000
-			void* m_scratch_renderer; //0x0008
-			char pad_0010[ 24 ]; //0x0010
-			void* m_material_list; //0x0028
-		}; //Size: 0x0030
+			c_texture_dx11* m_texture; 
+			void* m_scratch_renderer; 
+			char pad_0010[ 24 ]; 
+			void* m_material_list; 
+		}; 
 
 		class c_scene_layer {
 		public:
-			void* vtable; //0x0000
-			char pad_0008[ 8 ]; //0x0008
+			void* vtable; 
+			char pad_0008[ 8 ]; 
 			render_viewport_t m_viewport;
-			int32_t m_layer_type; //0x002C
-			int32_t m_shader_mode; //0x0030
-			int32_t m_shading_mode; //0x0034
-			uint32_t m_object_flags_required_mask; //0x0038
-			uint32_t m_object_flags_excluded_mask; //0x003C
-			uint32_t m_layer_flags; //0x0040
-			xdraw::color m_clear_color; //0x0044
-			int32_t m_clear_flags; //0x0054
-			int32_t m_layer_index; //0x0058
-			int32_t m_render_target_binding_handle; //0x005C
-			char pad_0060[ 160 ]; //0x0060
-			float m_width; //0x0100
-			float m_height; //0x0104
-			char pad_0108[ 760 ]; //0x0108
-			void* m_vertex_buffer; //0x0400
-			void* m_vertex_buffer2; //0x0408
-			void* m_vertex_buffer3; //0x0410
-			char pad_0418[ 136 ]; //0x0418
-			char m_layer_name[ 64 ]; //0x04A0
-			char pad_04E0[ 760 ]; //0x04E0
-			texture_dx11_handle_t* m_texture_handle; //0x07D8
-			char pad_07E0[ 56 ]; //0x07E0
-			texture_dx11_handle_t* m_texture_handle2; //0x0818
-			char pad_0820[ 5760 ]; //0x0820
-		}; //Size: 0x1EA0
+			int32_t m_layer_type; 
+			int32_t m_shader_mode; 
+			int32_t m_shading_mode; 
+			uint32_t m_object_flags_required_mask; 
+			uint32_t m_object_flags_excluded_mask; 
+			uint32_t m_layer_flags; 
+			xdraw::color m_clear_color; 
+			int32_t m_clear_flags; 
+			int32_t m_layer_index; 
+			int32_t m_render_target_binding_handle; 
+			char pad_0060[ 160 ]; 
+			float m_width; 
+			float m_height; 
+			char pad_0108[ 760 ]; 
+			void* m_vertex_buffer; 
+			void* m_vertex_buffer2; 
+			void* m_vertex_buffer3; 
+			char pad_0418[ 136 ]; 
+			char m_layer_name[ 64 ]; 
+			char pad_04E0[ 760 ]; 
+			texture_dx11_handle_t* m_texture_handle; 
+			char pad_07E0[ 56 ]; 
+			texture_dx11_handle_t* m_texture_handle2; 
+			char pad_0820[ 5760 ]; 
+		}; 
 
 		class c_generate_primitives_data {
 		public:
-			void* m_scene_view; //0x0000
-			void* m_scene_view_2; //0x0008
-			c_scene_layer* m_scene_layer; //0x0010
-			char pad_0018[ 88 ]; //0x0018
-			void* m_scene_view_3; //0x0070
-			char pad_0078[ 16 ]; //0x0078
-			void* m_view_drawlist_data; //0x0088
-			void* m_view_drawlist; //0x0090
-			c_scene_layer* m_scene_layer_2; //0x0098
-			char pad_00A0[ 24 ]; //0x00A0
-		}; //Size: 0x00B8
+			void* m_scene_view; 
+			void* m_scene_view_2; 
+			c_scene_layer* m_scene_layer; 
+			char pad_0018[ 88 ]; 
+			void* m_scene_view_3; 
+			char pad_0078[ 16 ]; 
+			void* m_view_drawlist_data; 
+			void* m_view_drawlist; 
+			c_scene_layer* m_scene_layer_2; 
+			char pad_00A0[ 24 ]; 
+		}; 
 
 		bool m_initialized = false;
 		void* m_current_texture = nullptr;
+
+		std::uintptr_t m_preview_pawn = 0;
+		std::uintptr_t m_panel = 0;
+		float m_world_to_clip[ 16 ]{};
+
+		bool m_script_injected = false;
+		std::uintptr_t m_ui_engine = 0;
+		std::uintptr_t m_script_panel = 0;
+		int m_init_throttle = 0;
+		int m_panel_walk_throttle = 0;
+		int m_state_assert_throttle = 0;
+		bool m_menu_was_open = true;
+
+		[[nodiscard]] std::uintptr_t find_script_panel( ) const;
+		bool create_panel( );
+		void find_preview_panel( );
+		void set_ready_for_display( bool ready, bool kick );
 	public:
 		bool initialize( );
+		void update( );
+		void shutdown( );
+		void clear_texture( );
+		void reset( );
 
 		bool on_generate_primitives(
 			std::uintptr_t owner_entity,
@@ -658,10 +654,13 @@ namespace systems {
 			std::uintptr_t scene_view
 		);
 
-		void* get_current_texture( ) const { return m_current_texture; }
-		bool has_texture( ) const { return m_current_texture != nullptr; }
+		void set_preview_texture( void* srv );
 
-		void reset( ) { m_current_texture = nullptr; }
+		[[nodiscard]] void* texture( ) const { return this->m_current_texture; }
+		[[nodiscard]] std::uintptr_t preview_pawn( ) const { return this->m_preview_pawn; }
+		[[nodiscard]] const float* world_to_clip( ) const { return this->m_world_to_clip; }
+		[[nodiscard]] bool ready( ) const { return this->m_current_texture != nullptr; }
+
 	};
 
 	inline input g_input{};
@@ -678,7 +677,7 @@ namespace systems {
 	inline icons g_icons{};
 	inline model_preview g_model_preview{};
 
-} // namespace systems
+} 
 
 #define SCHEMA( class_name, field_hash ) \
 	[]( ) -> int { \

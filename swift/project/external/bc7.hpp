@@ -161,7 +161,7 @@ namespace bc7 {
 			return static_cast< std::uint8_t >( val );
 		}
 
-	} // namespace detail
+	} 
 
 	inline void decode_block( const std::uint8_t* block, std::uint8_t* out_rgba )
 	{
@@ -358,4 +358,4 @@ namespace bc7 {
 		}
 	}
 
-} // namespace bc7
+} 

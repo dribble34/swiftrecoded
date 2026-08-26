@@ -1,8 +1,6 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/random/random.hpp>
-#include <utilities/logging/logging.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
 #include <protection/game_addresses.hpp>
@@ -11,11 +9,6 @@ namespace features::combat {
 
 	void legit::on_create_move( systems::input::usercmd* cmd )
 	{
-		if ( !settings::g_combat.m_legitbot.enabled.value )
-		{
-			return;
-		}
-
 		auto& ctx = g_shared.ctx( );
 		if ( !ctx.valid )
 		{
@@ -72,7 +65,7 @@ namespace features::combat {
 			this->m_target = this->find_target( shoot_position, detection_angles, config, local );
 			if ( this->m_target.has_target( ) )
 			{
-				this->apply_aimbot( cmd, this->m_target, view_angles, aim_punch, config, local );
+				this->apply_aimbot( this->m_target, view_angles, aim_punch, config, local );
 			}
 		}
 
@@ -89,11 +82,6 @@ namespace features::combat {
 
 	void legit::on_render( xdraw::draw_list& draw_list )
 	{
-		if ( !settings::g_combat.m_legitbot.enabled.value )
-		{
-			return;
-		}
-
 		const auto& ctx = g_shared.ctx( );
 		if ( !ctx.valid )
 		{
@@ -309,7 +297,7 @@ namespace features::combat {
 		return best;
 	}
 
-	void legit::apply_aimbot( systems::input::usercmd* cmd, const target_result& tgt, const math::vector3& view_angles, const math::vector3& aim_punch, const settings::combat::legitbot::weapon_group& config, const systems::local::snapshot& local )
+	void legit::apply_aimbot( const target_result& tgt, const math::vector3& view_angles, const math::vector3& aim_punch, const settings::combat::legitbot::weapon_group& config, const systems::local::snapshot& local )
 	{
 		auto aim_angle = tgt.aim_angle;
 
@@ -518,7 +506,7 @@ namespace features::combat {
 				{
 					for ( const auto& hb : hitbox_set )
 					{
-						if ( hb.bone < 0 || hb.bone >= 28 )
+						if ( hb.bone < 0 || hb.bone >= 28 || hb.bone >= rec->bone_count )
 						{
 							continue;
 						}
@@ -723,36 +711,7 @@ namespace features::combat {
 				continue;
 			}
 
-			if ( const auto angles = entry->mutable_view_angles( ) )
-			{
-				angles->set_x( history_angles.x );
-				angles->set_y( history_angles.y );
-			}
-
-			entry->set_render_tick_count( record_time.tick + 1 );
-			entry->set_render_tick_fraction( 0.0f );
-
-			if ( entry->has_sv_interp0( ) )
-			{
-				const auto interp = entry->mutable_sv_interp0( );
-				interp->set_src_tick( -1 );
-				interp->set_dst_tick( -1 );
-				interp->set_frac( 0.0f );
-			}
-
-			if ( entry->has_sv_interp1( ) )
-			{
-				const auto interp = entry->mutable_sv_interp1( );
-				interp->set_src_tick( -1 );
-				interp->set_dst_tick( -1 );
-				interp->set_frac( 0.0f );
-			}
-
-			if ( entry->has_cl_interp( ) )
-			{
-				const auto interp = entry->mutable_cl_interp( );
-				interp->set_frac( 0.0f );
-			}
+			shared::write_history_entry( entry, history_angles, false, record_time.tick + 1, nullptr );
 		}
 
 		cmd->buttons.value |= cstypes::command_buttons::in_attack;
@@ -888,4 +847,4 @@ namespace features::combat {
 		return table[ hitgroup ];
 	}
 
-} // namespace features::combat
+} 

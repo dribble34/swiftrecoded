@@ -1,5 +1,10 @@
 #pragma once
 
+#include <cmath>
+#include <cstdint>
+
+#include <external/xdraw/xdraw.hpp>
+
 namespace animation {
 
 	enum class easing : std::uint8_t
@@ -84,36 +89,6 @@ namespace animation {
 		bool m_finished{ true };
 	};
 
-	class tween2d
-	{
-	public:
-		void start( float from_x, float from_y, float to_x, float to_y, float duration, easing ease = easing::ease_out )
-		{
-			this->m_x.start( from_x, to_x, duration, ease );
-			this->m_y.start( from_y, to_y, duration, ease );
-		}
-
-		void update( )
-		{
-			this->m_x.update( );
-			this->m_y.update( );
-		}
-
-		[[nodiscard]] float x( ) const { return this->m_x.value( ); }
-		[[nodiscard]] float y( ) const { return this->m_y.value( ); }
-		[[nodiscard]] bool finished( ) const { return this->m_x.finished( ) && this->m_y.finished( ); }
-
-		void reset( )
-		{
-			this->m_x.reset( );
-			this->m_y.reset( );
-		}
-
-	private:
-		tween m_x{};
-		tween m_y{};
-	};
-
 	class spring
 	{
 	public:
@@ -156,48 +131,6 @@ namespace animation {
 		float m_target{ 0.0f };
 		float m_stiffness{ 200.0f };
 		float m_damping{ 20.0f };
-	};
-
-	class spring2d
-	{
-	public:
-		void set_target( float x, float y )
-		{
-			this->m_x.set_target( x );
-			this->m_y.set_target( y );
-		}
-
-		void update( )
-		{
-			this->m_x.update( );
-			this->m_y.update( );
-		}
-
-		[[nodiscard]] float x( ) const { return this->m_x.value( ); }
-		[[nodiscard]] float y( ) const { return this->m_y.value( ); }
-		[[nodiscard]] bool settled( ) const { return this->m_x.settled( ) && this->m_y.settled( ); }
-
-		void set_stiffness( float stiffness )
-		{
-			this->m_x.set_stiffness( stiffness );
-			this->m_y.set_stiffness( stiffness );
-		}
-
-		void set_damping( float damping )
-		{
-			this->m_x.set_damping( damping );
-			this->m_y.set_damping( damping );
-		}
-
-		void snap( float x, float y )
-		{
-			this->m_x.snap( x );
-			this->m_y.snap( y );
-		}
-
-	private:
-		spring m_x{};
-		spring m_y{};
 	};
 
 	class progress
@@ -252,4 +185,4 @@ namespace animation {
 		float m_alpha_target{ 0.0f };
 	};
 
-} // namespace animation
+} 

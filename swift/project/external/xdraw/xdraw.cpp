@@ -1,5 +1,6 @@
+#ifndef NOMINMAX
 #define NOMINMAX
-#include <pch/pch.hpp>
+#endif
 
 #include "xdraw.hpp"
 
@@ -13,9 +14,7 @@
 #include "dependencies/freetype/include.hpp"
 #include "dependencies/nanosvg/include.hpp"
 
-#include "dependencies/fonts.hpp"
 #include "dependencies/shaders.hpp"
-#include "../../core/resources/fonts/inter.hpp"
 
 namespace xdraw {
 
@@ -51,7 +50,6 @@ namespace xdraw {
 			std::vector<font*> font_stack{};
 
 			font* primary_font{};
-			font* math_font{};
 
 			LARGE_INTEGER perf_freq{};
 			LARGE_INTEGER last_time{};
@@ -70,8 +68,6 @@ namespace xdraw {
 			};
 
 			blur_level blur_chain[ k_blur_iterations ]{};
-			ComPtr<ID3D11Texture2D> blur_scene_tex{};
-			ComPtr<ID3D11ShaderResourceView> blur_scene_srv{};
 			ComPtr<ID3D11VertexShader> blur_vs{};
 			ComPtr<ID3D11PixelShader> blur_downsample_ps{};
 			ComPtr<ID3D11PixelShader> blur_upsample_ps{};
@@ -87,6 +83,18 @@ namespace xdraw {
 			ComPtr<ID3D11BlendState> glow_additive_blend{};
 
 			draw_list glow_lists[ 3 ]{};
+
+			struct backdrop_request
+			{
+				float x{}, y{}, w{}, h{};
+				corner_radius rounding{};
+				color tint{ 255, 255, 255, 255 };
+			};
+
+			std::vector< backdrop_request > backdrop_requests{};
+			ComPtr<ID3D11Texture2D> backdrop_tex{};
+			ComPtr<ID3D11ShaderResourceView> backdrop_srv{};
+			DXGI_FORMAT backdrop_format{ DXGI_FORMAT_UNKNOWN };
 		};
 
 		static state g{};
@@ -288,30 +296,42 @@ namespace xdraw {
 			return true;
 		}
 
-		static void create_blur_textures( int w, int h )
+		static bool create_backdrop_texture( int w, int h, DXGI_FORMAT format )
 		{
-			g.blur_scene_tex.Reset( );
-			g.blur_scene_srv.Reset( );
+			if ( w <= 0 || h <= 0 )
+			{
+				return false;
+			}
 
-			D3D11_TEXTURE2D_DESC td{};
-			td.Width = static_cast< UINT >( w );
-			td.Height = static_cast< UINT >( h );
-			td.MipLevels = 1;
-			td.ArraySize = 1;
-			td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-			td.SampleDesc.Count = 1;
-			td.Usage = D3D11_USAGE_DEFAULT;
-			td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			g.backdrop_tex.Reset( );
+			g.backdrop_srv.Reset( );
 
-			g.device->CreateTexture2D( &td, nullptr, &g.blur_scene_tex );
+			D3D11_TEXTURE2D_DESC desc{};
+			desc.Width = static_cast< UINT >( w );
+			desc.Height = static_cast< UINT >( h );
+			desc.MipLevels = 1;
+			desc.ArraySize = 1;
+			desc.Format = format;
+			desc.SampleDesc.Count = 1;
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
-			D3D11_SHADER_RESOURCE_VIEW_DESC sv{};
-			sv.Format = td.Format;
-			sv.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-			sv.Texture2D.MipLevels = 1;
+		if ( FAILED( g.device->CreateTexture2D( &desc, nullptr, &g.backdrop_tex ) ) )
+		{
+			return false;
+		}
 
-			g.device->CreateShaderResourceView( g.blur_scene_tex.Get( ), &sv, &g.blur_scene_srv );
+		if ( SUCCEEDED( g.device->CreateShaderResourceView( g.backdrop_tex.Get( ), nullptr, &g.backdrop_srv ) ) )
+		{
+			g.backdrop_format = format;
+			return true;
+		}
 
+		return false;
+		}
+
+		static void create_blur_textures( int w, int h, DXGI_FORMAT backdrop_format )
+		{
 			auto mw = w;
 			auto mh = h;
 
@@ -349,6 +369,8 @@ namespace xdraw {
 			g.glow_rtv.Reset( );
 			g.glow_srv.Reset( );
 
+			create_backdrop_texture( w, h, backdrop_format );
+
 			D3D11_TEXTURE2D_DESC gtd{};
 			gtd.Width = static_cast< UINT >( w );
 			gtd.Height = static_cast< UINT >( h );
@@ -378,92 +400,7 @@ namespace xdraw {
 			}
 		}
 
-		static void run_blur_pass( )
-		{
-			auto* ctx = g.context.Get( );
-
-			ComPtr<ID3D11RenderTargetView> orig_rtv{};
-			ComPtr<ID3D11DepthStencilView> orig_dsv{};
-			ctx->OMGetRenderTargets( 1, &orig_rtv, &orig_dsv );
-
-			D3D11_VIEWPORT orig_vp{};
-			UINT num_vp{ 1 };
-			ctx->RSGetViewports( &num_vp, &orig_vp );
-
-			ComPtr<ID3D11Resource> bb_resource{};
-			if ( orig_rtv )
-			{
-				orig_rtv->GetResource( &bb_resource );
-			}
-
-			if ( !bb_resource )
-			{
-				return;
-			}
-
-			ctx->CopyResource( g.blur_scene_tex.Get( ), bb_resource.Get( ) );
-
-			ctx->IASetInputLayout( nullptr );
-			ctx->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
-			ctx->VSSetShader( g.blur_vs.Get( ), nullptr, 0 );
-			ctx->PSSetSamplers( 0, 1, g.sampler.GetAddressOf( ) );
-
-			constexpr float bf[ 4 ]{ 0, 0, 0, 0 };
-			ctx->OMSetBlendState( g.blur_blend.Get( ), bf, 0xFFFFFFFF );
-			ctx->RSSetState( g.blur_rasterizer.Get( ) );
-
-			ID3D11ShaderResourceView* null_srv{ nullptr };
-			D3D11_VIEWPORT vp{};
-			vp.MaxDepth = 1.0f;
-
-			ctx->PSSetShader( g.blur_downsample_ps.Get( ), nullptr, 0 );
-
-			for ( auto i = 0; i < state::k_blur_iterations; ++i )
-			{
-				auto& dst = g.blur_chain[ i ];
-				auto* src_srv = i == 0 ? g.blur_scene_srv.Get( ) : g.blur_chain[ i - 1 ].srv.Get( );
-				const auto src_w = static_cast< float >( i == 0 ? g.blur_cached_w : g.blur_chain[ i - 1 ].w );
-				const auto src_h = static_cast< float >( i == 0 ? g.blur_cached_h : g.blur_chain[ i - 1 ].h );
-
-				ctx->PSSetShaderResources( 0, 1, &null_srv );
-				ctx->OMSetRenderTargets( 1, dst.rtv.GetAddressOf( ), nullptr );
-
-				vp.Width = static_cast< float >( dst.w );
-				vp.Height = static_cast< float >( dst.h );
-				ctx->RSSetViewports( 1, &vp );
-
-				update_blur_cb( src_w, src_h );
-				ctx->PSSetConstantBuffers( 0, 1, g.blur_cb.GetAddressOf( ) );
-				ctx->PSSetShaderResources( 0, 1, &src_srv );
-				ctx->Draw( 3, 0 );
-			}
-
-			ctx->PSSetShader( g.blur_upsample_ps.Get( ), nullptr, 0 );
-
-			for ( int i = state::k_blur_iterations - 1; i > 0; --i )
-			{
-				auto& src = g.blur_chain[ i ];
-				auto& dst = g.blur_chain[ i - 1 ];
-
-				ctx->PSSetShaderResources( 0, 1, &null_srv );
-				ctx->OMSetRenderTargets( 1, dst.rtv.GetAddressOf( ), nullptr );
-
-				vp.Width = static_cast< float >( dst.w );
-				vp.Height = static_cast< float >( dst.h );
-				ctx->RSSetViewports( 1, &vp );
-
-				update_blur_cb( static_cast< float >( src.w ), static_cast< float >( src.h ) );
-				ctx->PSSetConstantBuffers( 0, 1, g.blur_cb.GetAddressOf( ) );
-				ctx->PSSetShaderResources( 0, 1, src.srv.GetAddressOf( ) );
-				ctx->Draw( 3, 0 );
-			}
-
-			ctx->PSSetShaderResources( 0, 1, &null_srv );
-			ctx->OMSetRenderTargets( 1, orig_rtv.GetAddressOf( ), orig_dsv.Get( ) );
-			ctx->RSSetViewports( 1, &orig_vp );
-		}
-
-		static void run_glow_blur( int passes )
+		static void run_glow_blur( int passes, ID3D11ShaderResourceView* source_srv = nullptr )
 		{
 			auto* ctx = g.context.Get( );
 			passes = std::clamp( passes, 1, state::k_blur_iterations );
@@ -494,7 +431,7 @@ namespace xdraw {
 			for ( auto i = 0; i < passes; ++i )
 			{
 				auto& dst = g.blur_chain[ i ];
-				auto* src_srv = i == 0 ? g.glow_srv.Get( ) : g.blur_chain[ i - 1 ].srv.Get( );
+				auto* src_srv = i == 0 ? ( source_srv ? source_srv : g.glow_srv.Get( ) ) : g.blur_chain[ i - 1 ].srv.Get( );
 				const auto src_w = static_cast< float >( i == 0 ? g.blur_cached_w : g.blur_chain[ i - 1 ].w );
 				const auto src_h = static_cast< float >( i == 0 ? g.blur_cached_h : g.blur_chain[ i - 1 ].h );
 
@@ -674,7 +611,7 @@ namespace xdraw {
 			return cp;
 		}
 
-	} // namespace detail
+	} 
 
 	font::~font( )
 	{
@@ -729,11 +666,6 @@ namespace xdraw {
 			{
 				return { this, &this->glyph_cache[ cp ] };
 			}
-		}
-
-		if ( this->fallback )
-		{
-			return this->fallback->resolve( cp );
 		}
 
 		return { this, &this->missing_glyph };
@@ -1117,204 +1049,6 @@ namespace xdraw {
 			const auto ni = base + static_cast< std::uint32_t >( j * 2 );
 
 			this->emit_quad( ci, ni, ni + 1, ci + 1 );
-		}
-	}
-
-	void draw_list::rect_filled_blurred( float x, float y, float w, float h, color tint )
-	{
-		if ( w <= 0.0f || h <= 0.0f || tint.a == 0 )
-		{
-			return;
-		}
-
-		auto* blur_srv = detail::g.blur_chain[ 0 ].srv.Get( );
-		if ( !blur_srv )
-		{
-			return;
-		}
-
-		const auto vp_w = static_cast< float >( detail::g.blur_cached_w );
-		const auto vp_h = static_cast< float >( detail::g.blur_cached_h );
-
-		if ( vp_w <= 0.0f || vp_h <= 0.0f )
-		{
-			return;
-		}
-
-		const auto u0 = x / vp_w;
-		const auto v0 = y / vp_h;
-		const auto u1 = ( x + w ) / vp_w;
-		const auto v1 = ( y + h ) / vp_h;
-
-		this->ensure_cmd( blur_srv );
-
-		auto a = this->emit_vtx( x, y, u0, v0, tint );
-		auto b = this->emit_vtx( x + w, y, u1, v0, tint );
-		auto c = this->emit_vtx( x + w, y + h, u1, v1, tint );
-		auto d = this->emit_vtx( x, y + h, u0, v1, tint );
-		this->emit_quad( a, b, c, d );
-	}
-
-	void draw_list::rect_filled_blurred( float x, float y, float w, float h, corner_radius rounding, color tint, bool aa )
-	{
-		if ( w <= 0.0f || h <= 0.0f || tint.a == 0 )
-		{
-			return;
-		}
-
-		if ( rounding.tl <= 0.5f && rounding.tr <= 0.5f && rounding.br <= 0.5f && rounding.bl <= 0.5f )
-		{
-			this->rect_filled_blurred( x, y, w, h, tint );
-			return;
-		}
-
-		auto blur_srv = detail::g.blur_chain[ 0 ].srv.Get( );
-		if ( !blur_srv )
-		{
-			return;
-		}
-
-		const auto vp_w = static_cast< float >( detail::g.blur_cached_w );
-		const auto vp_h = static_cast< float >( detail::g.blur_cached_h );
-
-		if ( vp_w <= 0.0f || vp_h <= 0.0f )
-		{
-			return;
-		}
-
-		std::vector<float> path{};
-		this->build_rounded_rect_path( x, y, w, h, rounding, path );
-
-		const auto count = static_cast< int >( path.size( ) ) / 2;
-		if ( count < 3 )
-		{
-			return;
-		}
-
-		this->ensure_cmd( blur_srv );
-
-		if ( !aa )
-		{
-			std::uint32_t first{};
-
-			for ( auto i = 0; i < count; ++i )
-			{
-				const auto px = path[ static_cast< std::size_t >( i ) * 2 ];
-				const auto py = path[ static_cast< std::size_t >( i ) * 2 + 1 ];
-				const auto vtx = this->emit_vtx( px, py, px / vp_w, py / vp_h, tint );
-
-				if ( i == 0 )
-				{
-					first = vtx;
-				}
-			}
-
-			for ( auto i = 0; i < count - 2; ++i )
-			{
-				this->emit_idx( first, first + static_cast< std::uint32_t >( i + 1 ), first + static_cast< std::uint32_t >( i + 2 ) );
-			}
-
-			return;
-		}
-
-		constexpr auto aa_fringe{ 1.0f };
-		constexpr auto aa_half = aa_fringe * 0.5f;
-
-		const auto transparent = tint.alpha( 0 );
-
-		auto centroid_x{ 0.0f };
-		auto centroid_y{ 0.0f };
-
-		for ( auto i = 0; i < count; ++i )
-		{
-			centroid_x += path[ static_cast< std::size_t >( i ) * 2 ];
-			centroid_y += path[ static_cast< std::size_t >( i ) * 2 + 1 ];
-		}
-
-		centroid_x /= static_cast< float >( count );
-		centroid_y /= static_cast< float >( count );
-
-		const auto base = static_cast< std::uint32_t >( this->vertices.size( ) );
-		this->emit_vtx( centroid_x, centroid_y, centroid_x / vp_w, centroid_y / vp_h, tint );
-
-		std::vector<float> normals( count * 2 );
-
-		for ( auto i = 0; i < count; ++i )
-		{
-			const auto j = ( i + 1 ) % count;
-			const auto dx = path[ static_cast< std::size_t >( j ) * 2 ] - path[ static_cast< std::size_t >( i ) * 2 ];
-			const auto dy = path[ static_cast< std::size_t >( j ) * 2 + 1 ] - path[ static_cast< std::size_t >( i ) * 2 + 1 ];
-			const auto len = std::sqrt( dx * dx + dy * dy );
-
-			if ( len > 0.0001f )
-			{
-				normals[ static_cast< std::size_t >( i ) * 2 ] = -dy / len;
-				normals[ static_cast< std::size_t >( i ) * 2 + 1 ] = dx / len;
-			}
-		}
-
-		{
-			const auto mid_x = ( path[ 0 ] + path[ 2 ] ) * 0.5f;
-			const auto mid_y = ( path[ 1 ] + path[ 3 ] ) * 0.5f;
-			const auto dot = normals[ 0 ] * ( mid_x - centroid_x ) + normals[ 1 ] * ( mid_y - centroid_y );
-
-			if ( dot < 0.0f )
-			{
-				for ( auto i = 0; i < count * 2; ++i )
-				{
-					normals[ i ] = -normals[ i ];
-				}
-			}
-		}
-
-		for ( auto i = 0; i < count; ++i )
-		{
-			const auto prev = ( i + count - 1 ) % count;
-
-			auto nx = ( normals[ static_cast< std::size_t >( prev ) * 2 ] + normals[ static_cast< std::size_t >( i ) * 2 ] ) * 0.5f;
-			auto ny = ( normals[ static_cast< std::size_t >( prev ) * 2 + 1 ] + normals[ static_cast< std::size_t >( i ) * 2 + 1 ] ) * 0.5f;
-			auto miter{ 1.0f };
-
-			const auto dm = std::sqrt( nx * nx + ny * ny );
-			if ( dm > 0.0001f )
-			{
-				miter = std::min( 1.0f / dm, 4.0f );
-				nx /= dm;
-				ny /= dm;
-			}
-
-			const auto px = path[ static_cast< std::size_t >( i ) * 2 ];
-			const auto py = path[ static_cast< std::size_t >( i ) * 2 + 1 ];
-			const auto offset = aa_half * miter;
-
-			const auto inner_x = px - nx * offset;
-			const auto inner_y = py - ny * offset;
-			const auto outer_x = px + nx * offset;
-			const auto outer_y = py + ny * offset;
-
-			this->emit_vtx( inner_x, inner_y, inner_x / vp_w, inner_y / vp_h, tint );
-			this->emit_vtx( outer_x, outer_y, outer_x / vp_w, outer_y / vp_h, transparent );
-		}
-
-		const auto center = base;
-		for ( auto i = 0; i < count; ++i )
-		{
-			const auto next = ( i + 1 ) % count;
-			const auto curr_inner = base + 1 + static_cast< std::uint32_t >( i * 2 );
-			const auto next_inner = base + 1 + static_cast< std::uint32_t >( next * 2 );
-
-			this->emit_idx( center, curr_inner, next_inner );
-		}
-
-		for ( auto i = 0; i < count; ++i )
-		{
-			const auto next = ( i + 1 ) % count;
-			const auto ci = base + 1 + static_cast< std::uint32_t >( i * 2 );
-			const auto co = ci + 1;
-			const auto ni = base + 1 + static_cast< std::uint32_t >( next * 2 );
-			const auto no_ = ni + 1;
-
-			this->emit_quad( ci, ni, no_, co );
 		}
 	}
 
@@ -1922,7 +1656,7 @@ namespace xdraw {
 
 				this->ensure_cmd( owner->atlas_srv.Get( ) );
 
-				const auto gx = cx + gl->bearing_x;
+				const auto gx = std::floor( cx + gl->bearing_x + 0.5f );
 				const auto gy = cy - gl->bearing_y;
 				const auto gw = gl->width;
 				const auto gh = gl->height;
@@ -2155,6 +1889,135 @@ namespace xdraw {
 		this->emit_quad( a, b, c, d );
 	}
 
+	void draw_list::image_uv( float x, float y, float w, float h, ID3D11ShaderResourceView* tex, float u0, float v0, float u1, float v1, corner_radius rounding, color tint, bool aa )
+	{
+		if ( !tex || w <= 0.0f || h <= 0.0f || tint.a == 0 )
+		{
+			return;
+		}
+
+		if ( rounding.tl <= 0.5f && rounding.tr <= 0.5f && rounding.br <= 0.5f && rounding.bl <= 0.5f )
+		{
+			this->image_uv( x, y, w, h, tex, u0, v0, u1, v1, tint );
+			return;
+		}
+
+		std::vector<float> path{};
+		this->build_rounded_rect_path( x, y, w, h, rounding, path );
+
+		const auto count = static_cast< int >( path.size() ) / 2;
+		if ( count < 3 )
+		{
+			return;
+		}
+
+		this->ensure_cmd( tex );
+
+		const auto inv_w = 1.0f / w;
+		const auto inv_h = 1.0f / h;
+
+		if ( !aa )
+		{
+			std::uint32_t first{};
+			for ( auto i = 0; i < count; ++i )
+			{
+				const auto px = path[ static_cast< std::size_t >( i ) * 2 ];
+				const auto py = path[ static_cast< std::size_t >( i ) * 2 + 1 ];
+				const auto local_u = std::clamp( ( px - x ) * inv_w, 0.0f, 1.0f );
+				const auto local_v = std::clamp( ( py - y ) * inv_h, 0.0f, 1.0f );
+				const auto u = u0 + ( u1 - u0 ) * local_u;
+				const auto v = v0 + ( v1 - v0 ) * local_v;
+				const auto vtx = this->emit_vtx( px, py, u, v, tint );
+				if ( i == 0 ) first = vtx;
+			}
+
+			for ( auto i = 0; i < count - 2; ++i )
+			{
+				this->emit_idx( first, first + static_cast< std::uint32_t >( i + 1 ), first + static_cast< std::uint32_t >( i + 2 ) );
+			}
+			return;
+		}
+
+		constexpr auto aa_fringe{ 1.0f };
+		constexpr auto aa_half = aa_fringe * 0.5f;
+		const auto transparent = tint.alpha( 0 );
+
+		auto centroid_x{ 0.0f };
+		auto centroid_y{ 0.0f };
+		for ( auto i = 0; i < count; ++i )
+		{
+			centroid_x += path[ static_cast< std::size_t >( i ) * 2 ];
+			centroid_y += path[ static_cast< std::size_t >( i ) * 2 + 1 ];
+		}
+		centroid_x /= static_cast< float >( count );
+		centroid_y /= static_cast< float >( count );
+
+		std::vector<float> normals( count * 2 );
+		for ( auto i = 0; i < count; ++i )
+		{
+			const auto j = ( i + 1 ) % count;
+			const auto dx = path[ static_cast< std::size_t >( j ) * 2 ] - path[ static_cast< std::size_t >( i ) * 2 ];
+			const auto dy = path[ static_cast< std::size_t >( j ) * 2 + 1 ] - path[ static_cast< std::size_t >( i ) * 2 + 1 ];
+			const auto len = std::sqrt( dx * dx + dy * dy );
+			if ( len > 0.0001f )
+			{
+				normals[ static_cast< std::size_t >( i ) * 2 ] = dy / len;
+				normals[ static_cast< std::size_t >( i ) * 2 + 1 ] = -dx / len;
+			}
+		}
+
+		{
+			const auto mid_x = ( path[ 0 ] + path[ 2 ] ) * 0.5f;
+			const auto mid_y = ( path[ 1 ] + path[ 3 ] ) * 0.5f;
+			const auto dot = normals[ 0 ] * ( mid_x - centroid_x ) + normals[ 1 ] * ( mid_y - centroid_y );
+			if ( dot < 0.0f )
+			{
+				for ( auto i = 0; i < count * 2; ++i ) normals[ i ] = -normals[ i ];
+			}
+		}
+
+		const auto base = static_cast< std::uint32_t >( this->vertices.size( ) );
+		for ( auto i = 0; i < count; ++i )
+		{
+			const auto prev = ( i + count - 1 ) % count;
+			auto nx = ( normals[ static_cast< std::size_t >( prev ) * 2 ] + normals[ static_cast< std::size_t >( i ) * 2 ] ) * 0.5f;
+			auto ny = ( normals[ static_cast< std::size_t >( prev ) * 2 + 1 ] + normals[ static_cast< std::size_t >( i ) * 2 + 1 ] ) * 0.5f;
+			const auto dm = std::sqrt( nx * nx + ny * ny );
+			auto miter{ 1.0f };
+			if ( dm > 0.0001f )
+			{
+				miter = std::min( 1.0f / dm, 4.0f );
+				nx /= dm;
+				ny /= dm;
+			}
+
+			const auto px = path[ static_cast< std::size_t >( i ) * 2 ];
+			const auto py = path[ static_cast< std::size_t >( i ) * 2 + 1 ];
+			const auto inset = aa_half * miter;
+			const auto outset = aa_half * miter;
+			const auto local_u = std::clamp( ( px - x ) * inv_w, 0.0f, 1.0f );
+			const auto local_v = std::clamp( ( py - y ) * inv_h, 0.0f, 1.0f );
+			const auto u = u0 + ( u1 - u0 ) * local_u;
+			const auto v = v0 + ( v1 - v0 ) * local_v;
+
+			this->emit_vtx( px - nx * inset, py - ny * inset, u, v, tint );
+			this->emit_vtx( px + nx * outset, py + ny * outset, u, v, transparent );
+		}
+
+		const auto inner0 = base;
+		for ( auto i = 0; i < count - 2; ++i )
+		{
+			this->emit_idx( inner0, base + static_cast< std::uint32_t >( ( i + 1 ) * 2 ), base + static_cast< std::uint32_t >( ( i + 2 ) * 2 ) );
+		}
+		for ( auto i = 0; i < count; ++i )
+		{
+			const auto j = ( i + 1 ) % count;
+			const auto ci = base + static_cast< std::uint32_t >( i * 2 );
+			const auto ni = base + static_cast< std::uint32_t >( j * 2 );
+			this->emit_quad( ci, ni, ni + 1, ci + 1 );
+		}
+	}
+
 	void draw_list::ensure_cmd( ID3D11ShaderResourceView* texture )
 	{
 		auto tex = texture ? texture : detail::g.white_srv.Get( );
@@ -2351,19 +2214,6 @@ namespace xdraw {
 			return false;
 		}
 
-		const auto inter = load_font( std::span<const std::byte>( reinterpret_cast< const std::byte* >( resources::fonts::inter::regular ), sizeof( resources::fonts::inter::regular ) ), 15.0f );
-		if ( !inter )
-		{
-			return false;
-		}
-
-		const auto math = load_font( std::span<const std::byte>( reinterpret_cast< const std::byte* >( fonts::noto_math ), sizeof( fonts::noto_math ) ), 15.0f );
-		if ( math )
-		{
-			inter->fallback = math;
-			detail::g.math_font = math;
-		}
-
 		QueryPerformanceFrequency( &detail::g.perf_freq );
 		QueryPerformanceCounter( &detail::g.last_time );
 
@@ -2394,6 +2244,8 @@ namespace xdraw {
 			detail::g.lists[ i ].clear( );
 			detail::g.glow_lists[ i ].clear( );
 		}
+
+		detail::g.backdrop_requests.clear( );
 	}
 
 	void end_frame( )
@@ -2410,6 +2262,7 @@ namespace xdraw {
 
 		auto bb_w{ 0 };
 		auto bb_h{ 0 };
+		auto bb_format{ DXGI_FORMAT_UNKNOWN };
 
 		{
 			ComPtr<ID3D11RenderTargetView> rtv{};
@@ -2427,13 +2280,15 @@ namespace xdraw {
 					bb_tex->GetDesc( &desc );
 					bb_w = static_cast< int >( desc.Width );
 					bb_h = static_cast< int >( desc.Height );
+					bb_format = desc.Format;
 				}
 			}
 		}
 
-		if ( bb_w > 0 && bb_h > 0 && ( bb_w != d.blur_cached_w || bb_h != d.blur_cached_h ) )
+		if ( bb_w > 0 && bb_h > 0 && bb_format != DXGI_FORMAT_UNKNOWN &&
+			( bb_w != d.blur_cached_w || bb_h != d.blur_cached_h || bb_format != d.backdrop_format ) )
 		{
-			detail::create_blur_textures( bb_w, bb_h );
+			detail::create_blur_textures( bb_w, bb_h, bb_format );
 		}
 
 		{
@@ -2479,6 +2334,42 @@ namespace xdraw {
 			};
 
 		auto blur_srv = d.blur_chain[ 0 ].srv.Get( );
+		draw_list backdrop_list{};
+
+		// Glass backdrop: copy the current game backbuffer, blur it, and build a
+		// rounded textured list that is rendered before the normal overlay layers.
+		if ( !d.backdrop_requests.empty( ) && d.backdrop_tex && d.backdrop_srv && bb_w > 0 && bb_h > 0 )
+		{
+			ComPtr<ID3D11RenderTargetView> current_rtv{};
+			d.context->OMGetRenderTargets( 1, &current_rtv, nullptr );
+			ComPtr<ID3D11Resource> src_res{};
+			ComPtr<ID3D11Texture2D> src_tex{};
+			if ( current_rtv ) current_rtv->GetResource( &src_res );
+			if ( src_res ) src_res.As( &src_tex );
+			if ( src_tex )
+			{
+				D3D11_TEXTURE2D_DESC src_desc{};
+				D3D11_TEXTURE2D_DESC dst_desc{};
+				src_tex->GetDesc( &src_desc );
+				d.backdrop_tex->GetDesc( &dst_desc );
+				if ( src_desc.Width == dst_desc.Width && src_desc.Height == dst_desc.Height && src_desc.Format == dst_desc.Format )
+				{
+					d.context->CopyResource( d.backdrop_tex.Get( ), src_tex.Get( ) );
+					detail::run_glow_blur( 4, d.backdrop_srv.Get( ) );
+					blur_srv = d.blur_chain[ 0 ].srv.Get( );
+					const auto inv_bb_w = 1.0f / static_cast< float >( bb_w );
+					const auto inv_bb_h = 1.0f / static_cast< float >( bb_h );
+					for ( const auto& request : d.backdrop_requests )
+					{
+						const auto u0 = std::clamp( request.x * inv_bb_w, 0.0f, 1.0f );
+						const auto v0 = std::clamp( request.y * inv_bb_h, 0.0f, 1.0f );
+						const auto u1 = std::clamp( ( request.x + request.w ) * inv_bb_w, 0.0f, 1.0f );
+						const auto v1 = std::clamp( ( request.y + request.h ) * inv_bb_h, 0.0f, 1.0f );
+						backdrop_list.image_uv( request.x, request.y, request.w, request.h, blur_srv, u0, v0, u1, v1, request.rounding, request.tint );
+					}
+				}
+			}
+		}
 
 		auto render_layer = [ & ]( draw_list& dl )
 			{
@@ -2513,7 +2404,6 @@ namespace xdraw {
 				d.context->Unmap( d.ib.Get( ), 0 );
 
 				auto pipeline_dirty{ true };
-				auto blur_stale{ true };
 				ID3D11ShaderResourceView* bound_tex{ nullptr };
 				auto bound_scissor = full_scissor;
 
@@ -2524,15 +2414,6 @@ namespace xdraw {
 					if ( cmd.idx_count == 0 )
 					{
 						continue;
-					}
-
-					const auto is_blur = blur_srv && cmd.texture == blur_srv;
-
-					if ( is_blur && blur_stale && d.blur_scene_tex )
-					{
-						detail::run_blur_pass( );
-						pipeline_dirty = true;
-						blur_stale = false;
 					}
 
 					if ( pipeline_dirty )
@@ -2571,13 +2452,11 @@ namespace xdraw {
 					}
 
 					d.context->DrawIndexed( cmd.idx_count, cmd.idx_offset, 0 );
-
-					if ( !is_blur )
-					{
-						blur_stale = true;
-					}
 				}
 			};
+
+		if ( !backdrop_list.vertices.empty( ) && !backdrop_list.commands.empty( ) )
+			render_layer( backdrop_list );
 
 		auto has_any_glow{ false };
 
@@ -2676,6 +2555,11 @@ namespace xdraw {
 		render_layer( d.lists[ 0 ] );
 		render_layer( d.lists[ 1 ] );
 		render_layer( d.lists[ 2 ] );
+	}
+
+	void backdrop( float x, float y, float w, float h, corner_radius rounding, color tint )
+	{
+		detail::g.backdrop_requests.push_back( detail::state::backdrop_request{ x, y, w, h, rounding, tint } );
 	}
 
 	draw_list& get( layer l )
@@ -3373,4 +3257,4 @@ namespace xdraw {
 		return detail::g.device.Get( );
 	}
 
-} // namespace xdraw
+} 

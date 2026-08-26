@@ -1,37 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Development|x64">
-      <Configuration>Development</Configuration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="Ship|x64">
-      <Configuration>Ship</Configuration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{d30ae6e8-620d-42e0-b3f4-804cafe20f44}</ProjectGuid>
-    <RootNamespace>swiftcs2</RootNamespace>
+    <RootNamespace>swift</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="Configuration">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>ClangCL</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>false</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
-    <EnableUnitySupport>true</EnableUnitySupport>
+    <EnableUnitySupport>false</EnableUnitySupport>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'" Label="Configuration">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>ClangCL</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
-    <EnableUnitySupport>true</EnableUnitySupport>
+    <EnableUnitySupport>false</EnableUnitySupport>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -39,49 +39,34 @@
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'" Label="PropertySheets">
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
-    <OutDir>../bin/</OutDir>
-    <IntDir>../bin/intermediates/</IntDir>
-    <IncludePath>project/external/phnt;project/;$(IncludePath)</IncludePath>
-    <TargetName>swift-cs2-dev</TargetName>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(ProjectDir)..\bin\</OutDir>
+    <IntDir>$(ProjectDir)..\bin\intermediates\</IntDir>
+    <IncludePath>project/external/xdraw/dependencies/freetype;project/;$(IncludePath)</IncludePath>
+    <TargetName>swift-debug</TargetName>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">
-    <OutDir>../bin/</OutDir>
-    <IntDir>../bin/intermediates/</IntDir>
-    <IncludePath>project/external/phnt;project/;$(IncludePath)</IncludePath>
-    <TargetName>cs2</TargetName>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(ProjectDir)..\bin\</OutDir>
+    <IntDir>$(ProjectDir)..\bin\intermediates\</IntDir>
+    <IncludePath>project/external/xdraw/dependencies/freetype;project/;$(IncludePath)</IncludePath>
+    <TargetName>swift</TargetName>
   </PropertyGroup>
-  <PropertyGroup Label="Vcpkg">
-    <VcpkgEnabled>true</VcpkgEnabled>
-    <VcpkgEnableManifest>true</VcpkgEnableManifest>
-    <VcpkgRoot Condition="'$(VcpkgRoot)'=='' and Exists('$(VCInstallDir)vcpkg\vcpkg.exe')">$(VCInstallDir)vcpkg\</VcpkgRoot>
-    <VelocityImportVcpkg Condition="'$(VcpkgPropsImported)'!='true' and Exists('$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.props')">true</VelocityImportVcpkg>
-  </PropertyGroup>
-  <Import Project="$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.props" Condition="'$(VelocityImportVcpkg)'=='true'" />
-  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
-    <VcpkgUseStatic>true</VcpkgUseStatic>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'" Label="Vcpkg">
-    <VcpkgUseStatic>true</VcpkgUseStatic>
-  </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level1</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>false</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>VELOCITYCS2_EXPORTS;_WINDOWS;_USRDLL;DEV;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;SWIFT_EXPORTS;_WINDOWS;_USRDLL;DEV;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <PrecompiledHeaderFile>
-      </PrecompiledHeaderFile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
@@ -94,45 +79,58 @@
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <Optimization>Disabled</Optimization>
       <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
+      <MinimalRebuild>false</MinimalRebuild>
+      <SmallerTypeCheck>false</SmallerTypeCheck>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <UseFullPaths>false</UseFullPaths>
+      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+      <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <EntryPointSymbol>entry</EntryPointSymbol>
-      <AdditionalDependencies>freetype.lib;Synchronization.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Synchronization.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
     </Link>
   </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>Level1</WarningLevel>
+      <WarningLevel>Level2</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;VELOCITYCS2_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;NOMINMAX;SWIFT_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch/pch.hpp</PrecompiledHeaderFile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <IncludeInUnityFile>false</IncludeInUnityFile>
-      <ExceptionHandling>false</ExceptionHandling>
+      <ExceptionHandling>Sync</ExceptionHandling>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <MinimalRebuild>false</MinimalRebuild>
+      <SmallerTypeCheck>false</SmallerTypeCheck>
+      <DebugInformationFormat>None</DebugInformationFormat>
+      <UseFullPaths>false</UseFullPaths>
+      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+      <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <EntryPointSymbol>entry</EntryPointSymbol>
-      <AdditionalDependencies>freetype.lib;Synchronization.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Synchronization.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -141,15 +139,15 @@
     <ClCompile Include="project\core\features\changer\impl\guns.cpp" />
     <ClCompile Include="project\core\features\changer\impl\econ_item_system.cpp" />
     <ClCompile Include="project\core\features\changer\impl\knives.cpp" />
-    <ClCompile Include="project\core\features\changer\impl\model_changer.cpp" />
-    <ClCompile Include="project\core\features\changer\changer.cpp" />
-    <ClCompile Include="project\core\features\combat\impl\aimbot\shared.cpp" />
-    <ClCompile Include="project\core\features\combat\impl\autowall\autowall.cpp" />
-    <ClCompile Include="project\core\features\combat\impl\engineprediction\enginepredict.cpp" />
-    <ClCompile Include="project\core\features\combat\impl\engineprediction\extrapolation.cpp" />
     <ClCompile Include="project\core\features\combat\impl\legit.cpp" />
     <ClCompile Include="project\core\features\combat\impl\misc.cpp" />
-    <ClCompile Include="project\core\features\combat\impl\rage\rage.cpp" />
+    <ClCompile Include="project\core\features\combat\impl\rage.cpp" />
+    <ClCompile Include="project\core\features\combat\shared\aimbot.cpp" />
+    <ClCompile Include="project\core\features\combat\shared\autowall.cpp" />
+    <ClCompile Include="project\core\features\combat\shared\lagcompensation.cpp" />
+    <ClCompile Include="project\core\features\combat\shared\prediction.cpp">
+      <ObjectFileName>$(IntDir)combat_shared_prediction.obj</ObjectFileName>
+    </ClCompile>
     <ClCompile Include="project\core\features\esp\item\item.chams.cpp" />
     <ClCompile Include="project\core\features\esp\item\item.glow.cpp" />
     <ClCompile Include="project\core\features\esp\item\item.overlay.cpp" />
@@ -157,7 +155,6 @@
     <ClCompile Include="project\core\features\esp\player\player.chams.cpp" />
     <ClCompile Include="project\core\features\esp\player\player.glow.cpp" />
     <ClCompile Include="project\core\features\esp\player\player.overlay.cpp" />
-    <ClCompile Include="project\core\features\esp\projectile\projectile.tracers.cpp" />
     <ClCompile Include="project\core\features\esp\projectile\projectile.overlay.cpp" />
     <ClCompile Include="project\core\features\misc\impl\camera.cpp" />
     <ClCompile Include="project\core\features\misc\impl\dlight.cpp" />
@@ -167,16 +164,12 @@
     <ClCompile Include="project\core\features\misc\impl\projectile.trajectory.cpp" />
     <ClCompile Include="project\core\features\misc\impl\removals.cpp" />
     <ClCompile Include="project\core\features\misc\impl\scoreboard_weapons.cpp" />
-    <ClCompile Include="project\core\features\misc\impl\velocity_graph.cpp" />
     <ClCompile Include="project\core\features\movement\impl\airstrafe.cpp" />
     <ClCompile Include="project\core\features\movement\impl\test_strafer.cpp" />
     <ClCompile Include="project\core\features\movement\impl\bunnyhop.cpp" />
-    <ClCompile Include="project\core\features\movement\impl\edgebug.cpp" />
     <ClCompile Include="project\core\features\movement\impl\edgejump.cpp" />
-    <ClCompile Include="project\core\features\movement\impl\edgestop.cpp" />
     <ClCompile Include="project\core\features\movement\impl\fastladder.cpp" />
     <ClCompile Include="project\core\features\movement\impl\jumpbug.cpp" />
-    <ClCompile Include="project\core\features\movement\impl\pixelsurf.cpp" />
     <ClCompile Include="project\core\features\movement\impl\slowwalk.cpp" />
     <ClCompile Include="project\core\features\world\impl\scene.cpp" />
     <ClCompile Include="project\core\features\world\impl\smoke.cpp" />
@@ -212,23 +205,17 @@
     <ClCompile Include="project\core\systems\impl\view.cpp" />
     <ClCompile Include="project\entry.cpp" />
     <ClCompile Include="project\external\lz4\lz4.c">
-      <IncludeInUnityFile Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</IncludeInUnityFile>
-      <IncludeInUnityFile Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">false</IncludeInUnityFile>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Development|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">NotUsing</PrecompiledHeader>
+      <IncludeInUnityFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</IncludeInUnityFile>
+      <IncludeInUnityFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</IncludeInUnityFile>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="project\external\stackwalker\stackwalker.cpp" />
     <ClCompile Include="project\external\xdraw\xdraw.cpp" />
     <ClCompile Include="project\external\xdraw\xui\xui.cpp" />
     <ClCompile Include="project\external\zydis\zydis.c">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Development|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="project\pch\pch.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Create</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Ship|x64'">Create</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="project\protection\patterns.cpp" />
     <ClCompile Include="project\utilities\addresses\impl\functions.cpp" />
     <ClCompile Include="project\utilities\addresses\impl\globals.cpp" />
     <ClCompile Include="project\utilities\addresses\impl\interfaces\engine_cvar.cpp" />
@@ -243,9 +230,6 @@
     <ClCompile Include="project\utilities\overrides.cpp" />
     <ClCompile Include="project\utilities\proto\proto.cpp" />
     <ClCompile Include="project\utilities\random\random.cpp" />
-    <ClCompile Include="project\utilities\security\impl\integrity.cpp" />
-    <ClCompile Include="project\utilities\security\impl\prologues.cpp" />
-    <ClCompile Include="project\utilities\security\impl\regions.cpp" />
     <ClCompile Include="project\utilities\steam\impl\friends.cpp" />
     <ClCompile Include="project\utilities\steam\impl\http.cpp" />
     <ClCompile Include="project\utilities\steam\impl\user.cpp" />
@@ -262,70 +246,14 @@
     <ClInclude Include="project\core\features\world\world.hpp" />
     <ClInclude Include="project\core\hooks\hooks.hpp" />
     <ClInclude Include="project\core\rendering\rendering.hpp" />
-    <ClInclude Include="project\core\resources\fonts\font_awesome.hpp" />
-    <ClInclude Include="project\core\resources\fonts\hurme_geometric.hpp" />
-    <ClInclude Include="project\core\resources\fonts\inter.hpp" />
-    <ClInclude Include="project\core\resources\fonts\pixel7.hpp" />
     <ClInclude Include="project\core\resources\particles\effects.hpp" />
     <ClInclude Include="project\core\resources\particles\weather.hpp" />
-    <ClInclude Include="project\core\resources\sounds\embedded_agpa2_sound.hpp" />
-    <ClInclude Include="project\core\resources\sounds\embedded_bubble_sound.hpp" />
-    <ClInclude Include="project\core\resources\sounds\embedded_hit_sound.hpp" />
-    <ClInclude Include="project\core\resources\sounds\embedded_metal_sound.hpp" />
-    <ClInclude Include="project\core\resources\sounds\embedded_neverlose_sound.hpp" />
-    <ClInclude Include="project\core\resources\sounds\embedded_rust_headshot_sound.hpp" />
     <ClInclude Include="project\core\settings.hpp" />
     <ClInclude Include="project\core\systems\systems.hpp" />
     <ClInclude Include="project\external\bc7.hpp" />
     <ClInclude Include="project\external\config.hpp" />
-    <ClInclude Include="project\external\inline-syscall\inline_syscall.hpp" />
     <ClInclude Include="project\external\lz4\lz4.h" />
     <ClInclude Include="project\external\nlohmann\json.hpp" />
-    <ClInclude Include="project\external\phnt\ntafd.h" />
-    <ClInclude Include="project\external\phnt\ntbcd.h" />
-    <ClInclude Include="project\external\phnt\ntd3dkmt.h" />
-    <ClInclude Include="project\external\phnt\ntdbg.h" />
-    <ClInclude Include="project\external\phnt\ntexapi.h" />
-    <ClInclude Include="project\external\phnt\ntgdi.h" />
-    <ClInclude Include="project\external\phnt\ntimage.h" />
-    <ClInclude Include="project\external\phnt\ntintsafe.h" />
-    <ClInclude Include="project\external\phnt\ntioapi.h" />
-    <ClInclude Include="project\external\phnt\ntkeapi.h" />
-    <ClInclude Include="project\external\phnt\ntldr.h" />
-    <ClInclude Include="project\external\phnt\ntlpcapi.h" />
-    <ClInclude Include="project\external\phnt\ntmisc.h" />
-    <ClInclude Include="project\external\phnt\ntmmapi.h" />
-    <ClInclude Include="project\external\phnt\ntnls.h" />
-    <ClInclude Include="project\external\phnt\ntobapi.h" />
-    <ClInclude Include="project\external\phnt\ntpebteb.h" />
-    <ClInclude Include="project\external\phnt\ntpfapi.h" />
-    <ClInclude Include="project\external\phnt\ntpnpapi.h" />
-    <ClInclude Include="project\external\phnt\ntpoapi.h" />
-    <ClInclude Include="project\external\phnt\ntpsapi.h" />
-    <ClInclude Include="project\external\phnt\ntregapi.h" />
-    <ClInclude Include="project\external\phnt\ntrtl.h" />
-    <ClInclude Include="project\external\phnt\ntsam.h" />
-    <ClInclude Include="project\external\phnt\ntseapi.h" />
-    <ClInclude Include="project\external\phnt\ntsmss.h" />
-    <ClInclude Include="project\external\phnt\ntstrsafe.h" />
-    <ClInclude Include="project\external\phnt\ntsxs.h" />
-    <ClInclude Include="project\external\phnt\nttmapi.h" />
-    <ClInclude Include="project\external\phnt\nttp.h" />
-    <ClInclude Include="project\external\phnt\nttypesafe.h" />
-    <ClInclude Include="project\external\phnt\ntuser.h" />
-    <ClInclude Include="project\external\phnt\ntwmi.h" />
-    <ClInclude Include="project\external\phnt\ntwow64.h" />
-    <ClInclude Include="project\external\phnt\ntxcapi.h" />
-    <ClInclude Include="project\external\phnt\ntzwapi.h" />
-    <ClInclude Include="project\external\phnt\phnt.h" />
-    <ClInclude Include="project\external\phnt\phnt_ntdef.h" />
-    <ClInclude Include="project\external\phnt\phnt_windows.h" />
-    <ClInclude Include="project\external\phnt\smbios.h" />
-    <ClInclude Include="project\external\phnt\subprocesstag.h" />
-    <ClInclude Include="project\external\phnt\usermgr.h" />
-    <ClInclude Include="project\external\phnt\winsta.h" />
-    <ClInclude Include="project\external\poly2d.hpp" />
-    <ClInclude Include="project\external\stackwalker\stackwalker.hpp" />
     <ClInclude Include="project\external\xdraw\dependencies\fonts.hpp" />
     <ClInclude Include="project\external\xdraw\dependencies\freetype\include.hpp" />
     <ClInclude Include="project\external\xdraw\dependencies\nanosvg\include.hpp" />
@@ -336,7 +264,6 @@
     <ClInclude Include="project\external\xdraw\xui\xui.hpp" />
     <ClInclude Include="project\external\xorstr.hpp" />
     <ClInclude Include="project\external\zydis\zydis.h" />
-    <ClInclude Include="project\pch\pch.hpp" />
     <ClInclude Include="project\protection\game_addresses.hpp" />
     <ClInclude Include="project\protection\patterns.hpp" />
     <ClInclude Include="project\utilities\addresses\addresses.hpp" />
@@ -351,23 +278,10 @@
     <ClInclude Include="project\utilities\memory\memory.hpp" />
     <ClInclude Include="project\utilities\proto\proto.hpp" />
     <ClInclude Include="project\utilities\random\random.hpp" />
-    <ClInclude Include="project\utilities\security\security.hpp" />
     <ClInclude Include="project\utilities\steam\steam.hpp" />
     <ClInclude Include="project\utilities\threadpool\threadpool.hpp" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include=".editorconfig" />
-    <None Include="project\external\inline-syscall\inline_syscall.inl" />
-    <None Include="vcpkg.json" />
-  </ItemGroup>
-  <ItemGroup>
-    <MASM Include="project\external\inline-syscall\syscall_impl.asm" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Import Project="$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.targets" Condition="'$(VelocityImportVcpkg)'=='true'" />
-  <Target Name="EnsureVcpkgAvailable" BeforeTargets="PrepareForBuild" Condition="'$(VcpkgPropsImported)'!='true'">
-    <Error Text="vcpkg was not found. Install the Visual Studio vcpkg component or set VCPKG_ROOT to a vcpkg installation." />
-  </Target>
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
   </ImportGroup>

@@ -3,7 +3,7 @@
  *  Header File
  *  Copyright (c) Yann Collet. All rights reserved.
 
-   BSD 2-Clause License (http://www.opensource.org/licenses/bsd-license.php)
+   BSD 2-Clause License (http:
 
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions are
@@ -29,8 +29,8 @@
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
    You can contact the author at :
-    - LZ4 homepage : http://www.lz4.org
-    - LZ4 source repository : https://github.com/lz4/lz4
+    - LZ4 homepage : http:
+    - LZ4 source repository : https:
 */
 #if defined (__cplusplus)
 extern "C" {
@@ -269,7 +269,7 @@ LZ4LIB_API int LZ4_compress_fast_extState (void* state, const char* src, char* d
  *        If this can't be done or ensured,
  *        the receiving decompression function should provide
  *        a dstCapacity which is > decompressedSize, by at least 1 byte.
- *        See https://github.com/lz4/lz4/issues/859 for details
+ *        See https:
  */
 LZ4LIB_API int LZ4_compress_destSize(const char* src, char* dst, int* srcSizePtr, int targetDstSize);
 
@@ -319,7 +319,7 @@ typedef union LZ4_stream_u LZ4_stream_t;  /* incomplete type (defined later) */
  Note about RC_INVOKED
 
  - RC_INVOKED is predefined symbol of rc.exe (the resource compiler which is part of MSVC/Visual Studio).
-   https://docs.microsoft.com/en-us/windows/win32/menurc/predefined-macros
+   https:
 
  - Since rc.exe is a legacy compiler, it truncates long symbol (> 30 chars)
    and reports warning "RC4011: identifier truncated".
@@ -328,7 +328,7 @@ typedef union LZ4_stream_u LZ4_stream_t;  /* incomplete type (defined later) */
    "#if !defined(RC_INVOKED) ... #endif" block that means
    "skip this block when rc.exe is trying to read it".
 */
-#if !defined(RC_INVOKED) /* https://docs.microsoft.com/en-us/windows/win32/menurc/predefined-macros */
+#if !defined(RC_INVOKED) /* https:
 #if !defined(LZ4_STATIC_LINKING_ONLY_DISABLE_MEMORY_ALLOCATION)
 LZ4LIB_API LZ4_stream_t* LZ4_createStream(void);
 LZ4LIB_API int           LZ4_freeStream (LZ4_stream_t* streamPtr);
@@ -462,7 +462,7 @@ typedef union LZ4_streamDecode_u LZ4_streamDecode_t;   /* tracking context */
  *  creation / destruction of streaming decompression tracking context.
  *  A tracking context can be re-used multiple times.
  */
-#if !defined(RC_INVOKED) /* https://docs.microsoft.com/en-us/windows/win32/menurc/predefined-macros */
+#if !defined(RC_INVOKED) /* https:
 #if !defined(LZ4_STATIC_LINKING_ONLY_DISABLE_MEMORY_ALLOCATION)
 LZ4LIB_API LZ4_streamDecode_t* LZ4_createStreamDecode(void);
 LZ4LIB_API int                 LZ4_freeStreamDecode (LZ4_streamDecode_t* LZ4_stream);

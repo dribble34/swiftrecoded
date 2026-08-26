@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/math/math.hpp>
 #include <core/settings.hpp>
 
@@ -14,9 +13,8 @@ namespace rendering {
 		std::vector<std::wstring> config_list{};
 		auto selected{ -1 };
 		auto needs_refresh{ true };
-		auto confirm_delete{ false };
-		auto confirm_reset{ false };
-		auto confirm_timer{ 0.0f };
+		auto delete_pending{ false };
+		auto delete_pending_tick{ 0.0f };
 
 		static inline void wide_to_utf8( const std::wstring& wide, char* out, int out_size )
 		{
@@ -68,26 +66,7 @@ namespace rendering {
 			return narrow;
 		}
 
-		static inline void reset_defaults( )
-		{
-			auto& reg = config::detail::get_registry( );
-
-			for ( auto& f : reg.fields )
-			{
-				char key_str[ 12 ];
-				std::snprintf( key_str, sizeof( key_str ), "%08x", f.key );
-
-				auto def = reg.defaults.find( key_str );
-				if ( def != reg.defaults.end( ) )
-				{
-					config::serial::json_to_field( *def, f );
-				}
-			}
-
-			settings::finalize_binds( );
-		}
-
-	} // namespace detail
+	} 
 
 	void menu::draw_config( float group_w )
 	{
@@ -104,19 +83,6 @@ namespace rendering {
 			}
 		}
 
-		const auto dt = xdraw::delta_time( );
-
-		if ( detail::confirm_delete || detail::confirm_reset )
-		{
-			detail::confirm_timer += dt;
-
-			if ( detail::confirm_timer > 3.0f )
-			{
-				detail::confirm_delete = false;
-				detail::confirm_reset = false;
-			}
-		}
-
 		auto& dl = xui::draw::current( );
 		const auto& s = xui::ctx( ).style;
 		const auto& input = xui::ctx( ).input;
@@ -130,82 +96,11 @@ namespace rendering {
 
 		xui::text_input( "##cfg_search", detail::search_buf, 64, "search configs..." );
 
-		xui::layout::spacing( );
-
 		constexpr auto btn_h{ 28.0f };
-		const auto avail_w = xui::layout::avail( ).first;
-		const auto btn_w = ( avail_w - s.item_spacing_x * 4.0f ) / 5.0f;
-		const auto has_selection = detail::selected >= 0 && detail::selected < static_cast< int >( detail::config_list.size( ) );
-		const auto save_name = has_selection ? detail::selected_name( ) : detail::search_buf;
-		const auto can_save = !save_name.empty( );
+		const auto [ avail_w, avail_h ] = xui::layout::avail( );
+		const auto list_h = std::max( 80.0f, avail_h - btn_h - s.item_spacing_y );
 
-		if ( xui::button( "save", btn_w, btn_h ) && can_save )
-		{
-			config::registry::save( detail::utf8_to_wide( save_name ) );
-			detail::needs_refresh = true;
-		}
-
-		xui::layout::same_line( );
-
-		if ( xui::button( "refresh", btn_w, btn_h ) )
-		{
-			detail::needs_refresh = true;
-		}
-
-		xui::layout::same_line( );
-
-		if ( detail::confirm_reset )
-		{
-			if ( xui::button( "confirm", btn_w, btn_h ) )
-			{
-				detail::reset_defaults( );
-				detail::confirm_reset = false;
-			}
-		}
-		else if ( xui::button( "reset", btn_w, btn_h ) )
-		{
-			detail::confirm_reset = true;
-			detail::confirm_delete = false;
-			detail::confirm_timer = 0.0f;
-		}
-
-		xui::layout::same_line( );
-
-		if ( detail::confirm_delete )
-		{
-			if ( xui::button( "confirm", btn_w, btn_h ) && has_selection )
-			{
-				config::registry::remove( detail::config_list[ detail::selected ] );
-				detail::selected = -1;
-				detail::needs_refresh = true;
-				detail::confirm_delete = false;
-			}
-		}
-		else if ( xui::button( "delete", btn_w, btn_h ) && has_selection )
-		{
-			detail::confirm_delete = true;
-			detail::confirm_reset = false;
-			detail::confirm_timer = 0.0f;
-		}
-
-		xui::layout::same_line( );
-
-		if ( xui::button( "open folder", btn_w, btn_h ) )
-		{
-			const auto dir = config::registry::directory( );
-
-			std::error_code ec;
-			std::filesystem::create_directories( dir, ec );
-
-			ShellExecuteW( nullptr, L"open", dir.c_str( ), nullptr, nullptr, SW_SHOWNORMAL );
-		}
-
-		xui::layout::spacing( );
-
-		const auto [ lw, lh ] = xui::layout::avail( );
-		const auto list_h = std::max( 80.0f, lh - s.item_spacing_y );
-
-		if ( xui::begin_child( "##cfg_list", lw, list_h, true ) )
+		if ( xui::begin_child( "##cfg_list", avail_w, list_h, true ) )
 		{
 			const auto row_w = xui::layout::avail( ).first;
 			constexpr auto row_h{ 28.0f };
@@ -230,8 +125,6 @@ namespace rendering {
 				if ( is_hovered && input.mouse_clicked && !xui::ctx( ).overlay_blocking( ) )
 				{
 					detail::selected = i;
-					detail::confirm_delete = false;
-					detail::confirm_reset = false;
 					config::registry::load( wname );
 					settings::finalize_binds( );
 				}
@@ -267,7 +160,64 @@ namespace rendering {
 			xui::end_child( );
 		}
 
+		constexpr auto btn_count{ 4 };
+		const auto btn_w = ( avail_w - s.item_spacing_x * ( btn_count - 1 ) ) / btn_count;
+		const auto has_selection = detail::selected >= 0 && detail::selected < static_cast< int >( detail::config_list.size( ) );
+		const auto save_name = has_selection ? detail::selected_name( ) : detail::search_buf;
+		const auto can_save = !save_name.empty( );
+
+		if ( xui::button( "create", btn_w, btn_h ) && !detail::search_buf.empty( ) )
+		{
+			config::registry::save( detail::utf8_to_wide( detail::search_buf ) );
+			detail::needs_refresh = true;
+		}
+
+		xui::layout::same_line( );
+
+		const auto dt = xdraw::delta_time( );
+		detail::delete_pending_tick += dt;
+		if ( detail::delete_pending && detail::delete_pending_tick > 3.0f )
+		{
+			detail::delete_pending = false;
+		}
+
+		if ( xui::button( detail::delete_pending ? "sure?" : "delete", btn_w, btn_h ) && has_selection )
+		{
+			if ( !detail::delete_pending )
+			{
+				detail::delete_pending = true;
+				detail::delete_pending_tick = 0.0f;
+			}
+			else
+			{
+				std::error_code ec;
+				std::filesystem::remove( config::registry::sanitize_name( detail::config_list[ detail::selected ] ), ec );
+				detail::needs_refresh = true;
+				detail::delete_pending = false;
+			}
+		}
+
+		xui::layout::same_line( );
+
+		if ( xui::button( "save", btn_w, btn_h ) && can_save )
+		{
+			config::registry::save( detail::utf8_to_wide( save_name ) );
+			detail::needs_refresh = true;
+		}
+
+		xui::layout::same_line( );
+
+		if ( xui::button( "open folder", btn_w, btn_h ) )
+		{
+			const auto dir = config::registry::directory( );
+
+			std::error_code ec;
+			std::filesystem::create_directories( dir, ec );
+
+			ShellExecuteW( nullptr, L"open", dir.c_str( ), nullptr, nullptr, SW_SHOWNORMAL );
+		}
+
 		xui::end_child( );
 	}
 
-} // namespace rendering
+} 

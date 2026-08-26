@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/logging/logging.hpp>
@@ -11,7 +10,7 @@ namespace systems {
     {
         set result{};
 
-        // CSkeletonInstance moved its model handle in the current client.
+        
         auto model_handle = seh ? memory::safe_read<std::uintptr_t>( game_scene_node + 0x1E0 ).value_or( 0 ) : memory::read<std::uintptr_t>( game_scene_node + 0x1E0 );
         if ( !model_handle )
         {
@@ -25,11 +24,6 @@ namespace systems {
 
         const auto cmodel = memory::read<std::uintptr_t>( model_handle );
         if ( !cmodel )
-        {
-            return result;
-        }
-
-        if ( this->cache_lookup( cmodel, result ) )
         {
             return result;
         }
@@ -48,8 +42,8 @@ namespace systems {
 
         std::uintptr_t hitbox_set{};
 
-        // Hitbox sets now live in the render mesh's set container. Player
-        // models use the first set; retain the old direct pointer as fallback.
+        
+        
         const auto set_count = memory::read<int>( render_meshes + 0x174 );
         if ( set_count > 0 && set_count <= 32 )
         {
@@ -128,74 +122,7 @@ namespace systems {
             hb.translation_only = memory::read<std::uint8_t>( base + 0x3D ) != 0;
         }
 
-        if ( result.count > 0 )
-        {
-            this->cache_store( cmodel, result );
-        }
-
         return result;
-    }
-
-    bool hitboxes::cache_lookup( std::uintptr_t model, set& out )
-    {
-        const auto count = std::min( this->m_cache_count.load( std::memory_order_acquire ), k_cache_capacity );
-
-        for ( std::size_t i = 0; i < count; ++i )
-        {
-            auto& slot = this->m_cache[ i ];
-
-            if ( slot.model.load( std::memory_order_acquire ) != model )
-            {
-                continue;
-            }
-
-            out = slot.data;
-
-            if ( slot.model.load( std::memory_order_acquire ) == model )
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        return false;
-    }
-
-    void hitboxes::cache_store( std::uintptr_t model, const set& data )
-    {
-        std::lock_guard lock( this->m_cache_write_mtx );
-
-        const auto count = this->m_cache_count.load( std::memory_order_relaxed );
-
-        for ( std::size_t i = 0; i < count; ++i )
-        {
-            if ( this->m_cache[ i ].model.load( std::memory_order_relaxed ) == model )
-            {
-                return;
-            }
-        }
-
-        if ( count >= k_cache_capacity )
-        {
-            return;
-        }
-
-        this->m_cache[ count ].data = data;
-        this->m_cache[ count ].model.store( model, std::memory_order_release );
-        this->m_cache_count.store( count + 1, std::memory_order_release );
-    }
-
-    void hitboxes::invalidate_cache( )
-    {
-        std::lock_guard lock( this->m_cache_write_mtx );
-
-        for ( auto& slot : this->m_cache )
-        {
-            slot.model.store( 0, std::memory_order_release );
-        }
-
-        this->m_cache_count.store( 0, std::memory_order_release );
     }
 
 	int hitboxes::hitgroup_from_hitbox( int hitbox )
@@ -231,4 +158,4 @@ namespace systems {
 		return hitgroup < 9 ? k_names[ hitgroup ] : "body";
 	}
 
-} // namespace systems
+} 

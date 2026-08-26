@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/logging/logging.hpp>
 #include <protection/game_addresses.hpp>
@@ -38,6 +39,9 @@ namespace addresses::globals {
 		game_entity_system     = PATTERN (patterns::game_entity_system);
 		weapon_recoil_data     = PATTERN (patterns::weapon_recoil_data);
 		hud                    = PATTERN (patterns::hud);
+		main_menu_panel        = PATTERN (patterns::main_menu_panel);
+		if ( !main_menu_panel )
+			logging::console::print (xs ("[model_preview] main menu panel pattern not resolved; preview will be unavailable outside matches"));
 		prediction_seed        = PATTERN (patterns::prediction_seed);
 		simulation_player      = PATTERN (patterns::simulation_player);
 		prediction_player      = PATTERN (patterns::prediction_player);
@@ -89,4 +93,4 @@ namespace addresses::globals {
 		return initialized;
 	}
 
-} // namespace addresses::globals
+} 

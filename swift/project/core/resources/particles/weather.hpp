@@ -996,4 +996,4 @@ namespace resources::particles::weather {
 		0xDD, 0xEE, 0xFF
 	};
 
-} // namespace resources::particles::weather
+} 

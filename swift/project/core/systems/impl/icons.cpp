@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/game_path.hpp>
 #include "../systems.hpp"
 
@@ -59,7 +58,7 @@ namespace systems {
 			{ "C_Item_Healthshot"_hash, "healthshot" },
 		};
 
-	} // namespace detail
+	} 
 
 	bool icons::initialize( )
 	{
@@ -331,4 +330,4 @@ namespace systems {
 		return {};
 	}
 
-} // namespace systems
+} 

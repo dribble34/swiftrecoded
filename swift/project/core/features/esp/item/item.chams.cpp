@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <core/systems/systems.hpp>
@@ -38,13 +37,9 @@ namespace features::esp::item {
 			}
 		}
 
-		const auto& cfg = chams_cfg.get_group( group_id );
-		if ( !cfg.enabled.value )
-		{
-			return false;
-		}
+		const auto& cfg = chams_cfg.cfg;
 
-		if ( !cfg.primary.enabled.value && !cfg.secondary.enabled.value )
+		if ( !cfg.visible.enabled.value && !cfg.occluded.enabled.value )
 		{
 			return false;
 		}
@@ -58,14 +53,14 @@ namespace features::esp::item {
 			}
 		}
 
-		if ( cfg.secondary.enabled.value )
+		if ( cfg.occluded.enabled.value )
 		{
-			this->apply_layer( primitive_buffer, original_fn, a1, scene_object, scene_view, cfg.secondary.color, cfg.secondary.material );
+			this->apply_layer( primitive_buffer, original_fn, a1, scene_object, scene_view, cfg.occluded.color, cfg.occluded.material );
 		}
 
-		if ( cfg.primary.enabled.value )
+		if ( cfg.visible.enabled.value )
 		{
-			this->apply_layer( primitive_buffer, original_fn, a1, scene_object, scene_view, cfg.primary.color, cfg.primary.material );
+			this->apply_layer( primitive_buffer, original_fn, a1, scene_object, scene_view, cfg.visible.color, cfg.visible.material );
 		}
 
 		return true;
@@ -162,4 +157,4 @@ namespace features::esp::item {
 		}
 	}
 
-} // namespace features::esp::item
+} 

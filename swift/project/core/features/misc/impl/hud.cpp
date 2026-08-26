@@ -1,8 +1,13 @@
-#include <pch/pch.hpp>
+#include <numbers>
+#include <chrono>
+#include <deque>
+#include <algorithm>
+
 #include <utilities/memory/memory.hpp>
 #include <core/systems/systems.hpp>
 #include <core/settings.hpp>
 #include <core/features/features.hpp>
+#include <core/rendering/rendering.hpp>
 #include <protection/game_addresses.hpp>
 #include <utilities//addresses/addresses.hpp>
 #include <external/xdraw/xui/xui.hpp>
@@ -29,7 +34,7 @@ namespace features::misc {
 		this->do_scope( draw_list, cx, cy, static_cast< float >( screen_h ), local.pawn );
 		this->do_crosshair( draw_list, cx, cy );
 		this->do_hat( draw_list, local.pawn );
-		this->do_velocity( draw_list, cx, static_cast< float >( screen_h ), local.pawn );
+		this->do_velocity( );
 	}
 
 	void hud::do_crosshair( xdraw::draw_list& draw_list, float cx, float cy ) const
@@ -71,20 +76,6 @@ namespace features::misc {
 		{
 			this->m_cached_spread_pixels = 0.0f;
 			this->m_scope_update_frame = 0;
-			return;
-		}
-
-		if ( cfg.style.value == settings::misc::hud::scope::style_type::classic )
-		{
-			// Fixed two-line "classic" scope split: no spread tracking, no
-			// glow, no gap animation -- just a thin cross spanning the
-			// screen, faded in/out with the scope-in animation.
-			constexpr auto thickness = 1.0f;
-			const auto alpha = static_cast< std::uint8_t >( cfg.color.value.a * this->m_scope_anim );
-			const auto col = xdraw::color{ cfg.color.value.r, cfg.color.value.g, cfg.color.value.b, alpha };
-
-			draw_list.line( cx, 0.0f, cx, screen_h, col, thickness );
-			draw_list.line( 0.0f, cy, cx * 2.0f, cy, col, thickness );
 			return;
 		}
 
@@ -225,15 +216,6 @@ namespace features::misc {
 		draw_line( cx, cy + gap, cx, cy + gap + length );
 		draw_line( cx - gap, cy, cx - gap - length, cy );
 		draw_line( cx + gap, cy, cx + gap + length, cy );
-
-		if ( cfg.spread_circle )
-		{
-			const auto spread_radius = std::lerp( this->m_spread_smooth, this->m_cached_spread_pixels, std::min( xdraw::delta_time( ) * 50.0f, 1.0f ) );
-
-			const auto col = xdraw::color{ cfg.color.value.r, cfg.color.value.g, cfg.color.value.b, static_cast< std::uint8_t >( cfg.color.value.a * 0.5f ) };
-
-			draw_list.circle_filled( cx, cy, spread_radius, col, 200 );
-		}
 	}
 
 	void hud::do_hat( xdraw::draw_list& draw_list, std::uintptr_t local_pawn ) const
@@ -322,7 +304,7 @@ namespace features::misc {
 				}
 			};
 
-		if ( cfg.type == settings::misc::hud::hat::hat_type::chinese )
+		if ( cfg.type == settings::misc::hud::hat::hat_type::kasa )
 		{
 			constexpr auto base_radius{ 10.0f };
 			constexpr auto rim_points{ 24 };
@@ -592,46 +574,180 @@ namespace features::misc {
 		}
 	}
 
-	void hud::do_velocity( xdraw::draw_list& draw_list, float cx, float screen_h, std::uintptr_t local_pawn )
+	void hud::do_velocity( )
 	{
-		const auto& cfg = settings::g_misc.m_hud.m_velocity;
-		if ( !cfg.counter.value )
-		{
-			return;
-		}
-
-		const auto velocity = memory::read<math::vector3>( local_pawn + SCHEMA( "C_BaseEntity", "m_vecAbsVelocity"_hash ) );
-		const auto speed = velocity.length_2d( );
-		const auto dt = xdraw::delta_time( );
-
-		this->m_velocity_smoothed += ( speed - this->m_velocity_smoothed ) * std::min( 14.0f * dt, 1.0f );
-		this->m_velocity_history[ this->m_velocity_history_head ] = this->m_velocity_smoothed;
-		this->m_velocity_history_head = ( this->m_velocity_history_head + 1 ) % k_velocity_history;
-		this->m_velocity_history_count = std::min( this->m_velocity_history_count + 1, k_velocity_history );
-
-		const xdraw::color accent = cfg.color;
-		const auto accent_dim = xdraw::color{ accent.r, accent.g, accent.b, static_cast< std::uint8_t >( accent.a * 0.45f ) };
-
-		constexpr auto inner_pad{ 4.0f };
-		constexpr auto text_pad_x{ 8.0f };
-		constexpr auto text_nudge{ -1.0f };
-
-		char speed_buf[ 16 ]{};
-		std::snprintf( speed_buf, sizeof( speed_buf ), "%.0f", this->m_velocity_smoothed );
-
-		const auto [ speed_vw, speed_vh ] = xdraw::measure_text( speed_buf );
-		const auto [ speed_uw, speed_uh ] = xdraw::measure_text( " u/s" );
-		const auto counter_pill_w = speed_vw + speed_uw + text_pad_x * 2.0f;
-		const auto counter_pill_h = speed_vh + inner_pad * 2.0f;
-
-		const auto bottom_offset = std::clamp( cfg.bottom_offset.value, 20.0f, 220.0f );
-		const auto panel_y = std::floor( screen_h - bottom_offset - (counter_pill_h + inner_pad * 2.0f) );
-
-		const auto pill_x = std::floor( cx - counter_pill_w * 0.5f );
-		const auto pill_y = panel_y + inner_pad;
 		
-		draw_list.text( pill_x + text_pad_x, pill_y + ( counter_pill_h - speed_vh ) * 0.5f + text_nudge, speed_buf, accent );
-		draw_list.text( pill_x + text_pad_x + speed_vw, pill_y + ( counter_pill_h - speed_uh ) * 0.5f + text_nudge, " u/s", accent_dim );
+		g_velocity_graph.update();
+		g_velocity_graph.render();
+		g_velocity_graph.render_indicator();
 	}
 
-} // namespace features::misc
+	
+	
+	
+
+	namespace {
+		struct velocity_data {
+			std::deque<float> velocity_history;
+			float max_velocity = 0.0f;
+			float jump_height = 0.0f;
+			float multiplicator = 1.0f;
+			std::chrono::steady_clock::time_point last_max_reset;
+			std::chrono::steady_clock::time_point last_mul_reset;
+			static constexpr size_t max_history_size = 100;
+			static constexpr float max_reset_interval = 1.0f; 
+			static constexpr float mul_reset_interval = 2.0f; 
+		};
+		
+		velocity_data g_velocity_data;
+	}
+
+	void velocity_graph::update() {
+		const auto local = systems::g_local.get();
+		if (!local.is_alive || !local.pawn)
+			return;
+
+		const auto velocity = memory::read<math::vector3>(local.pawn + SCHEMA("C_BaseEntity", "m_vecVelocity"_hash));
+		const auto speed_2d = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+		
+		g_velocity_data.jump_height = velocity.z;
+		
+		static float last_speed = 0.0f;
+		static float max_jump_distance = 0.0f;
+		const auto now = std::chrono::steady_clock::now();
+		
+		if (g_velocity_data.jump_height > 0.1f) {
+			const float current_jump_distance = speed_2d * 0.1f;
+			max_jump_distance = std::max(max_jump_distance, current_jump_distance);
+		} else if (g_velocity_data.jump_height <= 0.0f && max_jump_distance > 0.0f) {
+			const float ideal_distance = 250.0f;
+			g_velocity_data.multiplicator = std::min(max_jump_distance / ideal_distance, 2.0f);
+			max_jump_distance = 0.0f;
+		}
+		
+		const auto elapsed_mul = std::chrono::duration<float>(now - g_velocity_data.last_mul_reset).count();
+		if (elapsed_mul >= velocity_data::mul_reset_interval) {
+			if (g_velocity_data.jump_height <= 0.0f) {
+				g_velocity_data.multiplicator = 1.0f;
+			}
+			g_velocity_data.last_mul_reset = now;
+		}
+		
+		last_speed = speed_2d;
+		
+		g_velocity_data.velocity_history.push_back(speed_2d);
+		if (g_velocity_data.velocity_history.size() > velocity_data::max_history_size) {
+			g_velocity_data.velocity_history.pop_front();
+		}
+
+		if (speed_2d > g_velocity_data.max_velocity) {
+			g_velocity_data.max_velocity = speed_2d;
+		}
+
+		const auto elapsed = std::chrono::duration<float>(now - g_velocity_data.last_max_reset).count();
+		
+		if (elapsed >= velocity_data::max_reset_interval) {
+			g_velocity_data.max_velocity = speed_2d;
+			g_velocity_data.last_max_reset = now;
+		}
+	}
+
+	void velocity_graph::render() {
+		const auto& cfg = settings::g_misc.m_hud.m_velocity;
+		if (!cfg.graph.value)
+			return;
+			
+		const auto local = systems::g_local.get();
+		if (!local.is_alive || !local.pawn || g_velocity_data.velocity_history.empty())
+			return;
+
+		auto& dl = xdraw::get();
+
+		const float graph_width = cfg.graph_width.value;
+		const float graph_height = cfg.graph_height.value;
+		const float line_width = cfg.graph_line_width.value;
+		
+		const auto [screen_w, screen_h] = xdraw::viewport_size();
+		const float x = (static_cast<float>(screen_w) - graph_width) * 0.5f;
+		const float y = static_cast<float>(screen_h) - graph_height - cfg.graph_bottom_offset.value;
+
+		if (g_velocity_data.velocity_history.size() >= 2) {
+			const float fixed_max_scale = 500.0f;
+			
+			auto line_color = xdraw::color{ 255, 255, 255, 255 };
+			
+			for (size_t i = 1; i < g_velocity_data.velocity_history.size(); ++i) {
+				const float speed1 = g_velocity_data.velocity_history[i - 1];
+				const float speed2 = g_velocity_data.velocity_history[i];
+				
+				const float clamped_speed1 = std::min(speed1, fixed_max_scale);
+				const float clamped_speed2 = std::min(speed2, fixed_max_scale);
+				
+				const float norm1 = clamped_speed1 / fixed_max_scale;
+				const float norm2 = clamped_speed2 / fixed_max_scale;
+				
+				const float x1 = x + ((i - 1) * graph_width) / static_cast<float>(velocity_data::max_history_size - 1);
+				const float y1 = y + graph_height - (norm1 * graph_height);
+				const float x2 = x + (i * graph_width) / static_cast<float>(velocity_data::max_history_size - 1);
+				const float y2 = y + graph_height - (norm2 * graph_height);
+				
+				dl.line(x1, y1, x2, y2, line_color, line_width);
+			}
+		}
+	}
+
+	void velocity_graph::render_indicator() {
+		const auto& cfg = settings::g_misc.m_hud.m_velocity;
+		if (!cfg.indicator.value)
+			return;
+			
+		const auto local = systems::g_local.get();
+		if (!local.is_alive || !local.pawn)
+			return;
+
+		auto& dl = xdraw::get();
+		const auto [screen_w, screen_h] = xdraw::viewport_size();
+		
+		const float current_speed = g_velocity_data.velocity_history.empty() ? 0.0f : g_velocity_data.velocity_history.back();
+		const float takeoff_speed = g_velocity_data.max_velocity;
+		
+		static float alpha = 0.0f;
+		const float target_alpha = (current_speed > 5.0f) ? 1.0f : 0.0f;
+		const float dt = xdraw::delta_time();
+		alpha += (target_alpha - alpha) * std::min(1.0f, 8.0f * dt);
+		if (alpha < 0.01f) alpha = 0.0f;
+		if (alpha > 0.99f) alpha = 1.0f;
+		
+		if (alpha <= 0.0f)
+			return;
+		
+		char vel_text[64];
+		if (takeoff_speed > 1.0f)
+			std::snprintf(vel_text, sizeof(vel_text), "%.0f (%.0f)", current_speed, takeoff_speed);
+		else
+			std::snprintf(vel_text, sizeof(vel_text), "%.0f", current_speed);
+		
+		xdraw::push_font(rendering::g_fonts.sfpro_bold[rendering::fonts::size::xlarge]);
+		
+		const auto [text_w, text_h] = xdraw::measure_text(vel_text);
+		const float padding = 10.0f;
+		const float box_w = text_w + padding * 2.0f;
+		const float box_h = text_h + padding * 2.0f;
+		
+		const float pos_x = (static_cast<float>(screen_w) - box_w) * 0.5f;
+		const float pos_y = static_cast<float>(screen_h) - box_h - cfg.indicator_y.value * static_cast<float>(screen_h);
+		
+		const float text_x = pos_x + padding + std::floor((box_w - padding * 2.0f - text_w) * 0.5f);
+		const float text_y = pos_y + padding + std::floor((box_h - padding * 2.0f - text_h) * 0.5f);
+		
+		auto color = cfg.color.value;
+		const auto shadow_col = xdraw::color{ 0, 0, 0, static_cast<uint8_t>(180.0f * alpha) };
+		const auto text_col = xdraw::color{ color.r, color.g, color.b, static_cast<uint8_t>(color.a * alpha) };
+		
+		dl.text(text_x + 1.0f, text_y + 1.0f, vel_text, shadow_col);
+		dl.text(text_x, text_y, vel_text, text_col);
+		
+		xdraw::pop_font();
+	}
+
+} 

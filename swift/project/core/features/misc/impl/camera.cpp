@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <numbers>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/logging/logging.hpp>
@@ -34,7 +35,7 @@ namespace features::misc {
 			this->do_fov_change( view_setup, local.pawn );
 		}
 
-		// Aspect conversion must run after the base FOV has been selected.
+		
 		this->do_aspect_ratio_change( view_setup );
 	}
 
@@ -134,7 +135,7 @@ namespace features::misc {
 			const auto base_fov = memory::read<float>( view_setup + k_fov_offset );
 			const auto flags = memory::read<std::uint8_t>( view_setup + k_view_flags_offset );
 
-			// Explicit aspect bypasses the game's native 4:3-based FOV conversion.
+			
 			memory::write<float>( view_setup + k_fov_offset, scale_horizontal_fov( base_fov, cfg.aspect_ratio ) );
 			memory::write<float>( view_setup + k_aspect_ratio_offset, cfg.aspect_ratio );
 			memory::write<std::uint8_t>( view_setup + k_view_flags_offset, flags | k_explicit_aspect_ratio_flag );
@@ -147,4 +148,4 @@ namespace features::misc {
 		}
 	}
 
-} // namespace features::misc
+} 

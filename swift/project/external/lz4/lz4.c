@@ -2,7 +2,7 @@
    LZ4 - Fast LZ compression algorithm
    Copyright (c) Yann Collet. All rights reserved.
 
-   BSD 2-Clause License (http://www.opensource.org/licenses/bsd-license.php)
+   BSD 2-Clause License (http:
 
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions are
@@ -28,8 +28,8 @@
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
    You can contact the author at :
-    - LZ4 homepage : http://www.lz4.org
-    - LZ4 source repository : https://github.com/lz4/lz4
+    - LZ4 homepage : http:
+    - LZ4 source repository : https:
 */
 
 /*-************************************

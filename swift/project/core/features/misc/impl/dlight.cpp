@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+
 
 #include <utilities/memory/memory.hpp>
 #include <utilities/logging/logging.hpp>
@@ -15,7 +16,7 @@ namespace features::misc {
 
 		constexpr std::uintptr_t k_min_ptr = 0x10000000ull;
 		constexpr std::uintptr_t k_max_ptr = 0x7FFFFFFFFFFFull;
-		constexpr std::uint32_t k_light_key = 0x564C4954u; // "VLIT"
+		constexpr std::uint32_t k_light_key = 0x564C4954u; 
 		constexpr std::uint32_t k_color_exponent = 5u;
 		constexpr float k_rgb_channel_scale = 1.0f / 255.0f;
 		constexpr float k_entry_lifetime = 5.0f;
@@ -25,14 +26,14 @@ namespace features::misc {
 			return p >= k_min_ptr && p <= k_max_ptr;
 		}
 
-	} // namespace
+	} 
 
 	void dlight::on_present( )
 	{
 		const std::lock_guard lock( this->m_mutex );
 
-		// Settings are edited on Present. Publish a coherent snapshot for the game
-		// thread without touching the engine's light manager from the render thread.
+		
+		
 		const auto& cfg = settings::g_misc.m_dlight;
 		const auto& c = cfg.color.value;
 		this->m_config.enabled = cfg.enabled.value;
@@ -56,8 +57,8 @@ namespace features::misc {
 		const auto scale = std::ldexp( 1.0f, exponent )
 			* this->m_scene_color_scale.load( std::memory_order_relaxed )
 			* k_rgb_channel_scale;
-		// Source 2 normalizes RGBExp32 byte channels, then scales them by radius
-		// when deriving linear attenuation. Preserve both parts for only our light.
+		
+		
 		const math::vector3 color{
 			static_cast<float>( packed & 0xFFu ) * scale,
 			static_cast<float>( ( packed >> 8u ) & 0xFFu ) * scale,
@@ -71,8 +72,8 @@ namespace features::misc {
 		if ( valid_ptr( this->m_manager ) && valid_ptr( this->m_entry )
 			&& memory::safe_read<std::uint32_t>( this->m_entry + 0x24 ).value_or( 0 ) == k_light_key )
 		{
-			// The allocator owns the manager lock and releases the scene object
-			// attached to an existing keyed entry before clearing the slot.
+			
+			
 			if ( const auto alloc_light = PATTERN (patterns::dynamic_light_alloc) )
 			{
 				(void) memory::call<std::uintptr_t>( alloc_light, this->m_manager, k_light_key, 0 );
@@ -92,8 +93,8 @@ namespace features::misc {
 	{
 		const std::lock_guard lock( this->m_mutex );
 
-		// Retire while the scene system is still alive. Keeping the engine entry
-		// across teardown leaves its queued scene object pointing at a dead parent.
+		
+		
 		this->retire_entry( );
 	}
 
@@ -191,7 +192,7 @@ namespace features::misc {
 		const auto write_ok = memory::safe_write<math::vector3>( this->m_entry + 0x04, origin )
 			&& memory::safe_write<float>( this->m_entry + 0x10, cfg.radius )
 			&& memory::safe_write<std::uint32_t>( this->m_entry + 0x14, cfg.packed_color )
-			// Update before Source 2 copies the entry into its scene-light descriptor.
+			
 			&& memory::safe_write<float>( this->m_entry + 0x18, curtime + k_entry_lifetime )
 			&& memory::safe_write<float>( this->m_entry + 0x1C, 0.0f );
 
@@ -226,4 +227,4 @@ namespace features::misc {
 		}
 	}
 
-} // namespace features::misc
+} 

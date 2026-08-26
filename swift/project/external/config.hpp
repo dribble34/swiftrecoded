@@ -1,6 +1,8 @@
-#pragma once
+﻿#pragma once
 
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 
 #include <windows.h>
 
@@ -10,6 +12,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <cstring>
 
 namespace config {
 
@@ -53,9 +56,6 @@ namespace config {
 		{
 			std::vector<field> fields{};
 			nlohmann::json defaults{};
-			// Snapshot of compile-time defaults before apply_blank_profile; legacy share codes (delta v1)
-			// encode diffs against this baseline, not against the blank defaults snapshot.
-			nlohmann::json factory_defaults{};
 		};
 
 		inline config_registry& get_registry( )
@@ -75,7 +75,7 @@ namespace config {
 			std::memcpy( buf + cat_len + 1, name.data( ), name_len );
 			buf[ cat_len + 1 + name_len ] = '\0';
 
-			return xui::fnv1a( buf );
+			return static_cast<std::uint32_t>(xui::fnv1a( buf ));
 		}
 
 		inline void register_field( field f )
@@ -89,7 +89,7 @@ namespace config {
 			v.erase( std::remove_if( v.begin( ), v.end( ), [ ptr ]( const field& f ) { return f.ptr == ptr; } ), v.end( ) );
 		}
 
-	} // namespace detail
+	} 
 
 	template <typename T>
 	struct val
@@ -431,78 +431,7 @@ namespace config {
 			catch ( ... ) {}
 		}
 
-	} // namespace serial
-
-	namespace base64 {
-
-		inline constexpr char k_table[ ]{ "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" };
-
-		inline std::string encode( const std::uint8_t* data, std::size_t len )
-		{
-			std::string out;
-			out.reserve( ( len + 2 ) / 3 * 4 );
-
-			for ( std::size_t i = 0; i < len; i += 3 )
-			{
-				const auto b0 = data[ i ];
-				const auto b1 = ( i + 1 < len ) ? data[ i + 1 ] : 0;
-				const auto b2 = ( i + 2 < len ) ? data[ i + 2 ] : 0;
-				out.push_back( k_table[ b0 >> 2 ] );
-				out.push_back( k_table[ ( ( b0 & 0x03 ) << 4 ) | ( b1 >> 4 ) ] );
-				out.push_back( ( i + 1 < len ) ? k_table[ ( ( b1 & 0x0F ) << 2 ) | ( b2 >> 6 ) ] : '=' );
-				out.push_back( ( i + 2 < len ) ? k_table[ b2 & 0x3F ] : '=' );
-			}
-
-			return out;
-		}
-
-		inline std::string encode( const std::string& s )
-		{
-			return encode( reinterpret_cast< const std::uint8_t* >( s.data( ) ), s.size( ) );
-		}
-
-		inline std::optional<std::vector<std::uint8_t>> decode( std::string_view s )
-		{
-			static constexpr auto make_rev = [ ]( ) { std::array<std::uint8_t, 256> t{}; t.fill( 0xff ); for ( auto i = 0; i < 64; ++i ) t[ static_cast< unsigned char >( k_table[ i ] ) ] = static_cast< std::uint8_t >( i ); t[ '=' ] = 0; return t; };
-			static constexpr auto k_rev = make_rev( );
-
-			if ( s.size( ) % 4 != 0 )
-			{
-				return std::nullopt;
-			}
-
-			std::vector<std::uint8_t> out;
-			out.reserve( s.size( ) / 4 * 3 );
-
-			for ( std::size_t i = 0; i < s.size( ); i += 4 )
-			{
-				const auto a = k_rev[ static_cast< unsigned char >( s[ i ] ) ];
-				const auto b = k_rev[ static_cast< unsigned char >( s[ i + 1 ] ) ];
-				const auto c = k_rev[ static_cast< unsigned char >( s[ i + 2 ] ) ];
-				const auto d = k_rev[ static_cast< unsigned char >( s[ i + 3 ] ) ];
-
-				if ( a == 0xff || b == 0xff || c == 0xff || d == 0xff )
-				{
-					return std::nullopt;
-				}
-
-				out.push_back( ( a << 2 ) | ( b >> 4 ) );
-
-				if ( s[ i + 2 ] != '=' )
-				{
-					out.push_back( ( ( b & 0x0f ) << 4 ) | ( c >> 2 ) );
-				}
-
-				if ( s[ i + 3 ] != '=' )
-				{
-					out.push_back( ( ( c & 0x03 ) << 6 ) | d );
-				}
-			}
-
-			return out;
-		}
-
-	} // namespace base64
+	} 
 
 	namespace compress {
 
@@ -556,127 +485,9 @@ namespace config {
 			return out;
 		}
 
-	} // namespace compress
+	} 
 
-	namespace words {
-
-		inline constexpr const char* k_wordlist[ 256 ]
-		{
-			"thighhighs", "skirt", "softboy", "feral", "twink", "astolfo", "estrogen", "corset",
-			"constexpr", "cuddles", "consteval", "atp", "tbh", "ngl", "lol", "mutable_input_history",
-			"niche", "asf", "inaccuracy", "spread", "shoot position ring buffer", "buddha_reset_hp", "pseudo code generation failure", "jump -> bugged",
-			"subtick", "ts", "etc", "pwned", "on the bin", "missed due to prediction error", "hitchanced", "interp",
-			"UwU", "OwO", ">w<", "^w^", ":3", ">:3", "^.^", "^_^",
-			".-.", ";-;", "T_T", ":p", ">///<", "-w-", "qwq", "x3",
-			"nya", "nyan", "nyaaa", "meow", "kawaii", "sugoi", "baka", "senpai",
-			"senpai~", "senpaiii", "oniichan", "ara~", "tsundere", "neko", "mochi", "pocky",
-			"hehe", "ehehe", "hihi", "teehee", "bleh", "mlem", "rawr", "rawrr",
-			"giggle", "gasp", "whimper", "purr", "squeak", "crybaby", "hmph", "sigh",
-			"cutie", "sweetie", "honey", "honeyyy", "darling", "angel", "doll", "kitten",
-			"kitty", "bunny", "pup", "goodboy", "goodgirl", "babygirl", "princess", "prettyboy",
-			"brat", "bratty", "bratcore", "sassy", "chaotic", "gremlin", "menace", "clingy",
-			"needy", "needyyy", "whiny", "pouty", "blushy", "flustered", "shy", "dorky",
-			"silly", "goofy", "playful", "teasing", "flirty", "dreamy", "spacey", "smug",
-			"cheeky", "mischievous", "sneaky", "dramatic", "extra", "intense", "wild", "untamed",
-			"cuddle", "snuggle", "huggy", "kissy", "mwah", "chu", "chuu", "boykissing",
-			"nom", "nibble", "bitey", "notice", "please", "gimme", "wanty", "muah",
-			"smol", "tiny", "lil", "softie", "eepy", "sleepy", "dozy", "cozy",
-			"comfy", "sleepyhead", "zzz", "fragile", "delicate", "precious", "floaty", "dreamer",
-			"sparkly", "glittery", "shinyyy", "silky", "pastel", "aesthetic", "vibey", "neon",
-			"nightcore", "dreamcore", "weirdcore", "moonlit", "twilight", "spooky", "radiant", "divine",
-			"stockings", "choker", "collar", "bell", "ribbon", "bow", "paws", "thighs",
-			"blush", "garter", "hello kitty", "strawberry", "peachy", "candy", "sugar", "boba",
-			"someone tried to leave a 'was here'", "weener", "velocity.cat core1!!11", "spiderman 3", "ironman 3", "//^_^//", "wiggle", "tappy",
-			"resolver", "antiaim", "fakelag", "hideshot", "onshot", "hitchance", "multipoint",
-			"safepoint", "baim", "lagcomp", "backtrack", "tickbase", "exploit", "autopeek", "quickpeek",
-			"duckpeek", "autostop", "wallbang", "cfg diff", "force body", "min damage", "silent aim", "prediction error",
-			"skill issue", "gg go next", "no shot", "actual bot", "cope", "ratio", "touch grass", "delulu",
-			"brainrot", "copium", "mald", "unhinged", "pilled", "mid", "cooked", "glazing",
-			"aura", "negative aura", "rent free", "rolled", "obsessed", "addictive", "hypnotic", "alluring",
-			"chaoticgood", "chaoticneutral", "tempting", "sinful", "naughty", "heavenly", "shattered", "broken"
-		};
-
-		namespace detail {
-
-			inline std::unordered_map<std::string_view, std::uint8_t>& get_lookup( )
-			{
-				static auto map = [ ]( )
-					{
-						std::unordered_map<std::string_view, std::uint8_t> m;
-						m.reserve( 256 );
-
-						for ( auto i = 0; i < 256; ++i )
-						{
-							m[ k_wordlist[ i ] ] = static_cast< std::uint8_t >( i );
-						}
-
-						return m;
-					}( );
-
-				return map;
-			}
-
-		} // namespace detail
-
-		inline std::string encode( const std::uint8_t* data, std::size_t len )
-		{
-			std::string out;
-			out.reserve( len * 7 );
-
-			for ( std::size_t i = 0; i < len; ++i )
-			{
-				if ( i > 0 )
-				{
-					out.push_back( '|' );
-				}
-
-				out.append( k_wordlist[ data[ i ] ] );
-			}
-
-			return out;
-		}
-
-		inline std::optional<std::vector<std::uint8_t>> decode( std::string_view input )
-		{
-			const auto& lookup = detail::get_lookup( );
-			std::vector<std::uint8_t> out;
-			out.reserve( input.size( ) / 5 );
-
-			std::size_t pos{};
-
-			while ( pos < input.size( ) )
-			{
-				const auto start = pos;
-
-				while ( pos < input.size( ) && input[ pos ] != '|' )
-				{
-					++pos;
-				}
-
-				const auto word = input.substr( start, pos - start );
-				auto it = lookup.find( word );
-
-				if ( it == lookup.end( ) )
-				{
-					return std::nullopt;
-				}
-
-				out.push_back( it->second );
-
-				if ( pos < input.size( ) )
-				{
-					++pos;
-				}
-			}
-
-			return out;
-		}
-
-	} // namespace words
-
-	inline constexpr int k_version{ 2 };
-	inline constexpr int k_delta_blank_baseline_version{ 2 };
-	inline constexpr char k_share_magic[ ]{ "AC" };
+	inline constexpr int k_version{ 3 };
 
 	inline void apply_blank_profile( )
 	{
@@ -732,16 +543,6 @@ namespace config {
 		}
 
 		auto& reg = detail::get_registry( );
-		{
-			auto factory_obj = nlohmann::json::object( );
-			for ( const auto& f : reg.fields )
-			{
-				char key_str[ 12 ];
-				std::snprintf( key_str, sizeof( key_str ), "%08x", f.key );
-				factory_obj[ key_str ] = serial::field_to_json( f );
-			}
-			reg.factory_defaults = std::move( factory_obj );
-		}
 
 		apply_blank_profile( );
 
@@ -779,6 +580,12 @@ namespace config {
 			return false;
 		}
 
+		// strict: foreign/old formats never load
+		if ( !root[ "version" ].is_number_integer( ) || root[ "version" ].get<int>( ) != k_version )
+		{
+			return false;
+		}
+
 		const auto& fields_obj = root[ "fields" ];
 		if ( !fields_obj.is_object( ) )
 		{
@@ -808,87 +615,52 @@ namespace config {
 		return true;
 	}
 
-	inline nlohmann::json to_json_delta( )
-	{
-		auto& reg = detail::get_registry( );
-		auto fields_obj = nlohmann::json::object( );
-
-		for ( const auto& f : reg.fields )
-		{
-			char key_str[ 12 ];
-			std::snprintf( key_str, sizeof( key_str ), "%08x", f.key );
-
-			auto current = serial::field_to_json( f );
-			auto it = reg.defaults.find( key_str );
-
-			if ( it != reg.defaults.end( ) && *it == current )
-			{
-				continue;
-			}
-
-			fields_obj[ key_str ] = std::move( current );
-		}
-
-		return nlohmann::json{ { "v", k_version }, { "f", std::move( fields_obj ) } };
-	}
-
-	inline bool from_json_delta( const nlohmann::json& root )
-	{
-		if ( !root.contains( "f" ) )
-		{
-			return false;
-		}
-
-		const auto& fields_obj = root[ "f" ];
-		if ( !fields_obj.is_object( ) )
-		{
-			return false;
-		}
-
-		auto& reg = detail::get_registry( );
-
-		const auto delta_ver = root.value( "v", 1 );
-		const nlohmann::json* baseline = &reg.defaults;
-		if ( delta_ver < k_delta_blank_baseline_version && reg.factory_defaults.is_object( ) && !reg.factory_defaults.empty( ) )
-		{
-			baseline = &reg.factory_defaults;
-		}
-
-		std::unordered_map<std::uint32_t, field*> lookup;
-		lookup.reserve( reg.fields.size( ) );
-
-		for ( auto& f : reg.fields )
-		{
-			lookup[ f.key ] = &f;
-
-			char key_str[ 12 ];
-			std::snprintf( key_str, sizeof( key_str ), "%08x", f.key );
-
-			auto def = baseline->find( key_str );
-			if ( def != baseline->end( ) )
-			{
-				serial::json_to_field( *def, f );
-			}
-		}
-
-		for ( auto it = fields_obj.begin( ); it != fields_obj.end( ); ++it )
-		{
-			auto found = lookup.find( static_cast< std::uint32_t >( std::strtoul( it.key( ).c_str( ), nullptr, 16 ) ) );
-			if ( found == lookup.end( ) )
-			{
-				continue;
-			}
-
-			serial::json_to_field( it.value( ), *found->second );
-		}
-
-		return true;
-	}
-
 	namespace registry {
 
 		inline constexpr wchar_t k_root_dir[ ]{ L"C:\\swift" };
 		inline constexpr wchar_t k_file_ext[ ]{ L".cfg" };
+
+		// envelope so only configs written by this build family load
+		inline constexpr std::uint8_t k_magic[ 8 ]{ 'S', 'W', 'I', 'F', 'T', 'C', 'F', 'G' };
+		inline constexpr std::uint32_t k_format_id{ 0x53574633 };
+
+		inline std::vector<std::uint8_t> wrap_payload( const std::vector<std::uint8_t>& compressed )
+		{
+			std::vector<std::uint8_t> out;
+			out.reserve( compressed.size( ) + 12 );
+
+			out.insert( out.end(), std::begin( k_magic ), std::end( k_magic ) );
+
+			const auto id = k_format_id;
+			const auto* id_bytes = reinterpret_cast< const std::uint8_t* >( &id );
+			out.insert( out.end( ), id_bytes, id_bytes + sizeof( id ) );
+
+			out.insert( out.end( ), compressed.begin( ), compressed.end( ) );
+			return out;
+		}
+
+		inline bool unwrap_payload( const std::vector<std::uint8_t>& file_data, std::vector<std::uint8_t>& compressed )
+		{
+			if ( file_data.size( ) <= sizeof( k_magic ) + sizeof( std::uint32_t ) )
+			{
+				return false;
+			}
+
+			if ( std::memcmp( file_data.data( ), k_magic, sizeof( k_magic ) ) != 0 )
+			{
+				return false;
+			}
+
+			std::uint32_t id{};
+			std::memcpy( &id, file_data.data( ) + sizeof( k_magic ), sizeof( id ) );
+			if ( id != k_format_id )
+			{
+				return false;
+			}
+
+			compressed.assign( file_data.begin( ) + sizeof( k_magic ) + sizeof( id ), file_data.end( ) );
+			return true;
+		}
 
 		inline std::filesystem::path directory( )
 		{
@@ -938,13 +710,15 @@ namespace config {
 				return false;
 			}
 
+			const auto payload = wrap_payload( compressed );
+
 			std::ofstream file( sanitize_name( name ), std::ios::binary );
 			if ( !file.is_open( ) )
 			{
 				return false;
 			}
 
-			file.write( reinterpret_cast< const char* >( compressed.data( ) ), static_cast< std::streamsize >( compressed.size( ) ) );
+			file.write( reinterpret_cast< const char* >( payload.data( ) ), static_cast< std::streamsize >( payload.size( ) ) );
 			file.close( );
 			return file.good( );
 		}
@@ -959,7 +733,13 @@ namespace config {
 
 			std::vector<std::uint8_t> buf( ( std::istreambuf_iterator< char >( file ) ), std::istreambuf_iterator< char >( ) );
 
-			const auto json_str = compress::inflate( buf.data( ), buf.size( ) );
+			std::vector<std::uint8_t> compressed;
+			if ( !unwrap_payload( buf, compressed ) )
+			{
+				return false;
+			}
+
+			const auto json_str = compress::inflate( compressed.data( ), compressed.size( ) );
 			if ( !json_str )
 			{
 				return false;
@@ -976,12 +756,6 @@ namespace config {
 				return from_json( j );
 			}
 			catch ( ... ) { return false; }
-		}
-
-		inline bool remove( std::wstring_view name )
-		{
-			std::error_code ec;
-			return std::filesystem::remove( sanitize_name( name ), ec ) && !ec;
 		}
 
 		inline std::vector<std::wstring> list( )
@@ -1023,180 +797,6 @@ namespace config {
 			return names;
 		}
 
-	} // namespace registry
+	} 
 
-	namespace share_detail {
-
-		inline std::vector<std::uint8_t> make_payload( std::string_view name = {} )
-		{
-			auto delta = to_json_delta( );
-
-			if ( !name.empty( ) )
-			{
-				delta[ "n" ] = std::string( name );
-			}
-
-			const auto json_str = delta.dump( -1 );
-			const auto compressed = compress::deflate( json_str );
-
-			if ( compressed.empty( ) )
-			{
-				return {};
-			}
-
-			std::vector<std::uint8_t> payload;
-			payload.reserve( 3 + compressed.size( ) );
-			payload.push_back( k_share_magic[ 0 ] );
-			payload.push_back( k_share_magic[ 1 ] );
-			payload.push_back( static_cast< std::uint8_t >( k_version ) );
-			payload.insert( payload.end( ), compressed.begin( ), compressed.end( ) );
-			return payload;
-		}
-
-		struct import_result
-		{
-			bool success{};
-			std::string name{};
-		};
-
-		inline import_result import_payload( const std::vector<std::uint8_t>& d )
-		{
-			if ( d.size( ) < 4 )
-			{
-				return {};
-			}
-
-			if ( d[ 0 ] != k_share_magic[ 0 ] || d[ 1 ] != k_share_magic[ 1 ] )
-			{
-				return {};
-			}
-
-			const auto json_str = compress::inflate( d.data( ) + 3, d.size( ) - 3 );
-			if ( !json_str )
-			{
-				return {};
-			}
-
-			try
-			{
-				const auto j = nlohmann::json::parse( *json_str, nullptr, false );
-				if ( j.is_discarded( ) )
-				{
-					return {};
-				}
-
-				std::string name{};
-				if ( j.contains( "n" ) && j[ "n" ].is_string( ) )
-				{
-					name = j[ "n" ].get<std::string>( );
-				}
-
-				bool ok{};
-				if ( j.contains( "f" ) )
-				{
-					ok = from_json_delta( j );
-				}
-				else
-				{
-					ok = from_json( j );
-				}
-
-				return { ok, std::move( name ) };
-			}
-			catch ( ... ) { return {}; }
-		}
-
-	} // namespace share_detail
-
-	inline std::string export_share( )
-	{
-		const auto payload = share_detail::make_payload( );
-		if ( payload.empty( ) )
-		{
-			return {};
-		}
-
-		return base64::encode( payload.data( ), payload.size( ) );
-	}
-
-	inline std::string export_share_words( std::string_view name = {} )
-	{
-		const auto payload = share_detail::make_payload( name );
-		if ( payload.empty( ) )
-		{
-			return {};
-		}
-
-		return words::encode( payload.data( ), payload.size( ) );
-	}
-
-	inline std::string export_share( std::string_view name = {} )
-	{
-		const auto payload = share_detail::make_payload( name );
-		if ( payload.empty( ) )
-		{
-			return {};
-		}
-
-		return base64::encode( payload.data( ), payload.size( ) );
-	}
-
-	inline share_detail::import_result import_share( std::string_view share_str )
-	{
-		std::string cleaned;
-		cleaned.reserve( share_str.size( ) );
-
-		for ( auto c : share_str )
-		{
-			if ( c != ' ' && c != '\n' && c != '\r' && c != '\t' )
-			{
-				cleaned.push_back( c );
-			}
-		}
-
-		const auto decoded = base64::decode( cleaned );
-		if ( !decoded )
-		{
-			return {};
-		}
-
-		return share_detail::import_payload( *decoded );
-	}
-
-	inline share_detail::import_result import_share_words( std::string_view word_str )
-	{
-		const auto decoded = words::decode( word_str );
-		if ( !decoded )
-		{
-			return {};
-		}
-
-		return share_detail::import_payload( *decoded );
-	}
-
-	inline share_detail::import_result import_auto( std::string_view input )
-	{
-		while ( !input.empty( ) && ( input.front( ) == ' ' || input.front( ) == '\n' || input.front( ) == '\r' ) )
-		{
-			input.remove_prefix( 1 );
-		}
-
-		while ( !input.empty( ) && ( input.back( ) == ' ' || input.back( ) == '\n' || input.back( ) == '\r' ) )
-		{
-			input.remove_suffix( 1 );
-		}
-
-		if ( input.empty( ) )
-		{
-			return {};
-		}
-
-		if ( input.find( '|' ) != std::string_view::npos )
-		{
-			return import_share_words( input );
-		}
-
-		return import_share( input );
-	}
-
-} // namespace config
+} 

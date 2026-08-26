@@ -6,10 +6,12 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace xui {
 
@@ -82,7 +84,7 @@ namespace xui {
 		[[nodiscard]] float in_out_cubic( float t ) noexcept;
 		[[nodiscard]] float smoothstep( float t ) noexcept;
 
-	} // namespace ease
+	} 
 
 	struct input_state
 	{
@@ -157,7 +159,7 @@ namespace xui {
 		float border_thickness{ 0.0f };
 
 		float checkbox_size{ 16.0f };
-		float slider_h{ 7.0f };
+		float slider_h{ 4.0f };
 		float keybind_w{ 80.0f };
 		float keybind_h{ 22.0f };
 		float combo_h{ 20.0f };
@@ -193,17 +195,17 @@ namespace xui {
 		xdraw::color combo_border{ 0, 0, 0, 0 };
 		xdraw::color combo_arrow{ 221, 229, 255, 82 };
 		xdraw::color combo_hovered{ 17, 17, 17, 120 };
-		xdraw::color combo_popup_bg{ 17, 17, 17, 120 };
+		xdraw::color combo_popup_bg{ 17, 17, 17, 255 };
 		xdraw::color combo_popup_border{ 0, 0, 0, 0 };
 		xdraw::color combo_popup_item_hovered{ 17, 17, 17, 120 };
 		xdraw::color combo_popup_item_selected{ 173, 192, 255, 36 };
 
-		xdraw::color popup_bg{ 17, 17, 17, 120 };
+		xdraw::color popup_bg{ 17, 17, 17, 255 };
 		xdraw::color popup_border{ 0, 0, 0, 0 };
 
 		xdraw::color picker_bg{ 17, 17, 17, 82 };
 		xdraw::color picker_border{ 0, 0, 0, 0 };
-		xdraw::color picker_popup_bg{ 17, 17, 17, 120 };
+		xdraw::color picker_popup_bg{ 17, 17, 17, 255 };
 		xdraw::color picker_popup_border{ 0, 0, 0, 0 };
 
 		xdraw::color text_input_bg{ 17, 17, 17, 82 };
@@ -293,7 +295,7 @@ namespace xui {
 	void push_style_color( style_col idx, xdraw::color col );
 	void pop_style_color( int count = 1 );
 
-	/// Global multiplier applied to every animation speed in xui (menu smoothness).
+	
 	inline float anim_speed_multiplier{ 1.0f };
 
 	namespace anim {
@@ -305,7 +307,7 @@ namespace xui {
 		void remove( std::uintptr_t id );
 		void clear_all( );
 
-	} // namespace anim
+	} 
 
 	enum class bind_mode : int
 	{
@@ -356,7 +358,7 @@ namespace xui {
 			auto& get_bind_registry_internal( );
 		}
 
-	} // namespace binds
+	} 
 
 	inline setting::setting( bool v, bind_info b, std::string n, std::string c ) : value{ v }, bind{ std::move( b ) }, name{ std::move( n ) }, category{ std::move( c ) } { binds::register_setting( this ); }
 
@@ -428,7 +430,7 @@ namespace xui {
 		void sweep( );
 		void add( std::unique_ptr<overlay> ov );
 
-	} // namespace overlays
+	} 
 
 	void push_id( std::uintptr_t id );
 	void push_id( std::string_view sv );
@@ -480,7 +482,7 @@ namespace xui {
 		void set_cursor( float x, float y );
 		[[nodiscard]] std::pair<float, float> get_cursor( );
 
-	} // namespace layout
+	} 
 
 	namespace draw {
 
@@ -489,7 +491,7 @@ namespace xui {
 		void push_layer( xdraw::layer l );
 		void pop_layer( );
 
-	} // namespace draw
+	} 
 
 	struct context
 	{
@@ -505,6 +507,9 @@ namespace xui {
 		std::uintptr_t active_child_scroll{};
 
 		std::uintptr_t inside_overlay{};
+
+		std::uintptr_t pending_window_drag{};
+		bool widget_claimed{};
 
 		std::string slider_edit_buf{};
 		std::size_t slider_edit_cursor{};
@@ -587,4 +592,4 @@ namespace xui {
 
 	bool text_input( std::string_view label, std::string& buf, std::size_t max_len = 256, std::string_view hint = "" );
 
-} // namespace xui
+} 

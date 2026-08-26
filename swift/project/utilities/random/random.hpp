@@ -19,6 +19,6 @@ namespace random {
 		float random_float( float min, float max );
 		std::int32_t md5_pseudo_random( std::int32_t seed );
 
-	} // namespace engine
+	} 
 
-} // namespace random
+} 

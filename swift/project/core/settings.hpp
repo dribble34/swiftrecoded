@@ -1,6 +1,12 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+
 #include <utilities/math/math.hpp>
+#include <utilities/cstypes.hpp>
 #include <external/config.hpp>
 
 namespace settings {
@@ -10,52 +16,23 @@ namespace settings {
 		struct ragebot
 		{
 			static constexpr auto k_group_count{ 6u };
+			static constexpr auto k_lethal_min_damage{ 126 };
 
 			xui::setting enabled{ true, {}, "enabled", "ragebot" };
 
-			xui::setting multithreaded_scan{ true, {}, "multithreaded scan", "ragebot" };
-
-			enum class prefer_mode : std::uint8_t
-			{
-				head,
-				damage,
-				reliable
-			};
-
-			enum class delay_shot_mode : std::uint8_t
-			{
-				none,
-				always,
-				on_peak,
-				on_unduck
-			};
-
-struct weapon_group
+			struct weapon_group
 			{
 				xui::setting silent{ true, {}, "silent", "ragebot" };
 				xui::setting no_spread{ false, {}, "no spread", "ragebot" };
 				xui::setting body_aim{ false, {}, "force b-aim", "ragebot" };
-				xui::setting force_shot_air{ false, {}, "force shot in air", "ragebot" };
-				xui::setting force_shot_ground{ false, {}, "force shot on ground", "ragebot" };
-				xui::setting forceshot{ false, {}, "forceshot", "ragebot" };
-				config::val<int> forceshot_inair_hitchance{ 0, "ragebot", "forceshot in-air hitchance" };
-				config::val<int> forceshot_grounded_hitchance{ 0, "ragebot", "forceshot grounded hitchance" };
 				xui::setting autostop{ true, {}, "autostop", "ragebot" };
-				config::bools<2> autostop_mode{ { true, false } };
-				xui::setting crouch_to_stop{ false, {}, "crouch to stop", "ragebot" };
-				xui::setting refine_shot{ false, {}, "refine shot", "ragebot" };
-
-				config::enm<delay_shot_mode> delay_shot{ delay_shot_mode::none };
-				config::val<int> delay_ticks{ 2 };
-
-				config::val<int> inair_hitchance{ 0 };
+				xui::setting autostop_early{ false, {}, "autostop early", "ragebot" };
+				xui::setting force_shot{ false, {}, "force shot", "ragebot" };
 
 				config::val<float> max_fov{ 180.0f };
 
 				config::val<int> hitchance{ 80 };
-				config::val<int> min_damage{ 1 };
-
-				xui::setting ignore_hitchance_if_accurate{ false, {}, "ignore hitchance if accurate", "ragebot" };
+				config::val<int> min_damage{ 101 };
 
 				config::val<int> min_damage_override_value{ 11 };
 				xui::setting min_damage_override{ false, {}, "min damage override", "ragebot" };
@@ -67,47 +44,37 @@ struct weapon_group
 			xui::setting dynamic_pointscale{ true, {}, "dynamic point scale", "ragebot" };
 			xui::setting debug_multipoints{ false, {}, "debug multipoints", "ragebot" };
 
-			config::enm<prefer_mode> prefer{ prefer_mode::head };
-
 			config::bools<6> hitboxes{ { true, true, true, true, true, true } };
+
+			xui::setting auto_lineup{ false, {}, "auto lineup", "ragebot" };
 
 			void init( std::string_view cat )
 			{
 				const auto s = std::string( cat );
 
-this->silent.category = s;
+				this->silent.category = s;
 				this->no_spread.category = s;
 				this->body_aim.category = s;
-				this->forceshot.category = s;
-				this->force_shot_air.category = s;
-				this->force_shot_ground.category = s;
-				this->refine_shot.category = s;
+				this->autostop.category = s;
+				this->autostop_early.category = s;
+				this->force_shot.category = s;
 				this->min_damage_override.category = s;
 				this->hitchance_override.category = s;
-				this->ignore_hitchance_if_accurate.category = s;
 				this->dynamic_pointscale.category = s;
 				this->debug_multipoints.category = s;
+				this->auto_lineup.category = s;
 
 				this->max_fov.reg( s, "max fov" );
 				this->hitchance.reg( s, "hit chance" );
 				this->min_damage.reg( s, "min damage" );
-				this->inair_hitchance.reg( s, "in-air hit chance" );
-				this->delay_shot.reg( s, "delay shot" );
-				this->delay_ticks.reg( s, "delay shot ticks" );
 				this->min_damage_override_value.reg( s, "min damage override value" );
 				this->hitchance_override_value.reg( s, "hit chance override value" );
 				this->pointscale.reg( s, "point scale" );
 				this->hitboxes.reg( s, "hitboxes" );
-				this->prefer.reg( s, "target preference" );
-				this->forceshot_inair_hitchance.reg( s, "forceshot in-air hitchance" );
-				this->forceshot_grounded_hitchance.reg( s, "forceshot grounded hitchance" );
-				this->autostop_mode.reg( s, "autostop mode" );
-				this->autostop.category = s;
 			}
 
 				void set_default_binds( )
 				{
-					this->force_shot_air.bind = { .key = VK_XBUTTON1, .mode = xui::bind_mode::hold_on };
 					this->min_damage_override.bind = { .key = VK_XBUTTON2, .mode = xui::bind_mode::hold_on };
 					this->hitchance_override.bind = { .key = VK_SPACE, .mode = xui::bind_mode::hold_on };
 				}
@@ -201,7 +168,6 @@ this->silent.category = s;
 				}
 			};
 
-			xui::setting enabled{ false, {}, "enabled", "legitbot" };
 			std::array<weapon_group, k_group_count> groups{};
 
 			legitbot( )
@@ -245,7 +211,6 @@ this->silent.category = s;
 			};
 
 			xui::setting enabled{ true, {}, "anti aim", "anti aim" };
-			xui::setting at_target{ false, {}, "at target", "anti aim" };
 			config::enm<pitch_mode> pitch{ pitch_mode::down, "anti aim", "pitch" };
 			config::val<float> custom_pitch{ 0.0f, "anti aim", "custom pitch" };
 			config::enm<yaw_mode> yaw{ yaw_mode::backwards, "anti aim", "yaw" };
@@ -256,11 +221,6 @@ this->silent.category = s;
 			xui::setting manual_right{ false, { 'C', xui::bind_mode::toggle }, "force right", "anti aim" };
 			xui::setting hide_shots{ true, {}, "hide onshot", "anti aim" };
 			xui::setting avoid_backstab{ true, {}, "avoid backstab", "anti aim" };
-
-			xui::setting pitch_jitter{ false, {}, "pitch jitter", "anti aim" };
-			config::val<float> pitch_jitter_amount{ 45.0f, "anti aim", "pitch jitter amount" };
-			xui::setting yaw_jitter{ false, {}, "yaw jitter", "anti aim" };
-			config::val<float> yaw_jitter_amount{ 30.0f, "anti aim", "yaw jitter amount" };
 
 			xui::setting direction_indicator{ true, {}, "direction indicator", "anti aim" };
 			config::col direction_indicator_color{ { 173, 192, 255, 220 }, "anti aim", "direction indicator color" };
@@ -288,10 +248,9 @@ this->silent.category = s;
 
 		struct lagcomp_settings
 		{
-			config::val<int> max_backtrack_ticks{ 14, "ragebot", "max backtrack ticks" };
-			config::val<int> backtrack_safety_ticks{ 2, "ragebot", "backtrack safety ticks" };
+			config::val<int> max_backtrack_ticks{ 8, "ragebot", "max backtrack ticks" };
 			xui::setting extrapolation{ true, {}, "extrapolation", "ragebot" };
-			config::val<int> max_extrapolate_ticks{ 32, "ragebot", "max extrapolate ticks" };
+			config::val<int> max_extrapolate_ticks{ 8, "ragebot", "max extrapolate ticks" };
 		} m_lagcomp{};
 
 		struct zeusbot
@@ -316,8 +275,6 @@ this->silent.category = s;
 		struct penetration_crosshair
 		{
 			xui::setting enabled{ false, {}, "penetration crosshair", "pen crosshair" };
-			config::val<float> size{ 3.0f, "pen crosshair", "size" };
-			config::val<float> outline_size{ 1.0f, "pen crosshair", "outline size" };
 			config::col can_penetrate_fill{ { 173, 192, 255, 120 }, "pen crosshair", "can penetrate fill" };
 			config::col can_penetrate_outline{ { 173, 192, 255, 210 }, "pen crosshair", "can penetrate outline" };
 			config::col blocked_fill{ { 252, 217, 240, 80 }, "pen crosshair", "blocked fill" };
@@ -355,9 +312,8 @@ this->silent.category = s;
 		struct chams_config
 		{
 			xui::setting enabled{ false, {}, "chams", "chams" };
-			chams_layer primary{};
-			chams_layer secondary{};
-			chams_layer overlay{};
+			chams_layer visible{};
+			chams_layer occluded{};
 		};
 
 		struct glow_target
@@ -548,13 +504,22 @@ this->silent.category = s;
 				struct name
 				{
 					xui::setting enabled{};
+					xui::setting glow{};
+					xui::setting outline{};
 					config::col color{ { 255, 255, 255, 225 } };
+					config::col glow_color{ { 173, 192, 255, 255 } };
+					config::val<float> glow_strength{ 0.55f };
 
 					name( ) = default;
 
-					explicit name( const std::string& prefix ) : enabled{ true, {}, "name", prefix + " name" }
+					explicit name( const std::string& prefix ) 
+						: enabled{ true, {}, "name", prefix + " name" }
+						, glow{ false, {}, "glow", prefix + " name" }
+						, outline{ true, {}, "outline", prefix + " name" }
 					{
 						this->color.reg( prefix + " name", "color" );
+						this->glow_color.reg( prefix + " name", "glow color" );
+						this->glow_strength.reg( prefix + " name", "glow strength" );
 					}
 				};
 
@@ -644,70 +609,22 @@ this->silent.category = s;
 				chams_config enemy
 				{
 					.enabled = { true, {}, "chams", "chams enemy" },
-					.primary = {.enabled = { true, {}, "primary layer", "chams enemy" }, .color = { { 173, 192, 255, 150 }, "chams enemy", "primary color" }, .material = { cham_ids::flat, "chams enemy", "primary material" } },
-					.secondary = {.enabled = { true, {}, "secondary layer", "chams enemy" }, .color = { { 255, 208, 243, 118 }, "chams enemy", "secondary color" }, .material = { cham_ids::flat_ignorez, "chams enemy", "secondary material" } }
+					.visible = {.enabled = { true, {}, "visible layer", "chams enemy" }, .color = { { 173, 192, 255, 150 }, "chams enemy", "visible color" }, .material = { cham_ids::flat, "chams enemy", "visible material" } },
+					.occluded = {.enabled = { true, {}, "occluded layer", "chams enemy" }, .color = { { 255, 208, 243, 118 }, "chams enemy", "occluded color" }, .material = { cham_ids::flat_ignorez, "chams enemy", "occluded material" } }
 				};
-				chams_config enemy_ragdoll
-				{
-					.enabled = { false, {}, "ragdoll chams", "chams enemy ragdoll" },
-					.primary = {.enabled = { false, {}, "primary layer", "chams enemy ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams enemy ragdoll", "primary color" }, .material = { cham_ids::matte, "chams enemy ragdoll", "primary material" } },
-					.secondary = {.enabled = { false, {}, "secondary layer", "chams enemy ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams enemy ragdoll", "secondary color" }, .material = { cham_ids::matte, "chams enemy ragdoll", "secondary material" } },
-					.overlay = {.enabled = { false, {}, "overlay layer", "chams enemy ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams enemy ragdoll", "overlay color" }, .material = { cham_ids::outlines, "chams enemy ragdoll", "overlay material" } }
-				};
-				chams_config team
-				{
-					.enabled = { false, {}, "chams", "chams team" },
-					.primary = {.enabled = { false, {}, "primary layer", "chams team" }, .color = { { 255, 255, 255, 255 }, "chams team", "primary color" }, .material = { cham_ids::flat, "chams team", "primary material" } },
-					.secondary = {.enabled = { false, {}, "secondary layer", "chams team" }, .color = { { 255, 255, 255, 255 }, "chams team", "secondary color" }, .material = { cham_ids::flat_ignorez, "chams team", "secondary material" } },
-					.overlay = {.enabled = { false, {}, "overlay layer", "chams team" }, .color = { { 255, 255, 255, 255 }, "chams team", "overlay color" }, .material = { cham_ids::outlines, "chams team", "overlay material" } }
-				};
-				chams_config team_ragdoll
-				{
-					.enabled = { false, {}, "ragdoll chams", "chams team ragdoll" },
-					.primary = {.enabled = { false, {}, "primary layer", "chams team ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams team ragdoll", "primary color" }, .material = { cham_ids::matte, "chams team ragdoll", "primary material" } },
-					.secondary = {.enabled = { false, {}, "secondary layer", "chams team ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams team ragdoll", "secondary color" }, .material = { cham_ids::matte, "chams team ragdoll", "secondary material" } },
-					.overlay = {.enabled = { false, {}, "overlay layer", "chams team ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams team ragdoll", "overlay color" }, .material = { cham_ids::outlines, "chams team ragdoll", "overlay material" } }
-				};
+				chams_config team{ .enabled = { false, {}, "chams", "chams team" } };
 				chams_config local
 				{
 					.enabled = { true, {}, "chams", "chams local" },
-					.primary = {.enabled = { false, {}, "primary layer", "chams local" }, .color = { { 255, 255, 255, 255 }, "chams local", "primary color" }, .material = { cham_ids::flat, "chams local", "primary material" } },
-					.secondary = {.enabled = { false, {}, "secondary layer", "chams local" }, .color = { { 255, 255, 255, 255 }, "chams local", "secondary color" }, .material = { cham_ids::flat_ignorez, "chams local", "secondary material" } },
-					.overlay = {.enabled = { true, {}, "overlay layer", "chams local" }, .color = { { 173, 192, 255, 175 }, "chams local", "overlay color" }, .material = { cham_ids::outlines, "chams local", "overlay material" } }
+					.visible = {.enabled = { true, {}, "visible layer", "chams local" }, .color = { { 173, 192, 255, 175 }, "chams local", "visible color" }, .material = { cham_ids::outlines, "chams local", "visible material" } }
 				};
-				chams_config local_ragdoll
-				{
-					.enabled = { false, {}, "ragdoll chams", "chams local ragdoll" },
-					.primary = {.enabled = { false, {}, "primary layer", "chams local ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams local ragdoll", "primary color" }, .material = { cham_ids::matte, "chams local ragdoll", "primary material" } },
-					.secondary = {.enabled = { false, {}, "secondary layer", "chams local ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams local ragdoll", "secondary color" }, .material = { cham_ids::matte, "chams local ragdoll", "secondary material" } },
-					.overlay = {.enabled = { false, {}, "overlay layer", "chams local ragdoll" }, .color = { { 255, 255, 255, 255 }, "chams local ragdoll", "overlay color" }, .material = { cham_ids::outlines, "chams local ragdoll", "overlay material" } }
-				};
-
-				chams_config backtrack
-				{
-					.enabled = { false, {}, "backtrack chams", "chams backtrack" },
-					.primary = {.enabled = { false, {}, "primary layer", "chams backtrack" }, .color = { { 173, 192, 255, 25 }, "chams backtrack", "primary color" }, .material = { cham_ids::flat, "chams backtrack", "primary material" } },
-					.secondary = {.enabled = { false, {}, "secondary layer", "chams backtrack" }, .color = { { 173, 192, 255, 255 }, "chams backtrack", "secondary color" }, .material = { cham_ids::outlines, "chams backtrack", "secondary material" } }
-				};
-
-				chams_config onshot
-				{
-					.enabled = { false, {}, "onshot chams",    "chams onshot" },
-					.primary = {.enabled = { true,  {}, "primary layer",   "chams onshot" }, .color = { { 255, 100, 100, 200 }, "chams onshot", "primary color" }, .material = { cham_ids::flat, "chams onshot", "primary material" } },
-					.secondary = {.enabled = { false, {}, "secondary layer", "chams onshot" }, .color = { { 255, 100, 100, 100 }, "chams onshot", "secondary color" }, .material = { cham_ids::flat_ignorez, "chams onshot", "secondary material" } },
-					.overlay = {.enabled = { false, {}, "overlay layer",   "chams onshot" }, .color = { { 255, 100, 100, 255 }, "chams onshot", "overlay color" }, .material = { cham_ids::outlines, "chams onshot", "overlay material" } },
-				};
-				config::val<float> onshot_fade_time {0.8f, "chams onshot", "fade time"};
 			} m_chams{};
 
 			struct glow
 			{
 				glow_target enemy{ .enabled = { true, {}, "glow", "glow enemy" }, .color = { { 173, 192, 255, 40 }, "glow enemy", "color" } };
-				glow_target enemy_ragdoll{ .enabled = { false, {}, "ragdoll glow", "glow enemy" }, .color = { { 173, 192, 255, 40 }, "glow enemy", "ragdoll color" } };
 				glow_target team{ .enabled = { true, {}, "glow", "glow team" }, .color = { { 225, 225, 225, 40 }, "glow team", "color" } };
-				glow_target team_ragdoll{ .enabled = { false, {}, "ragdoll glow", "glow team" }, .color = { { 173, 192, 255, 40 }, "glow team", "ragdoll color" } };
 				glow_target local{ .enabled = { false, {}, "glow", "glow local" }, .color = { { 252, 217, 240, 50 }, "glow local", "color" } };
-				glow_target local_ragdoll{ .enabled = { false, {}, "ragdoll glow", "glow local" }, .color = { { 173, 192, 255, 40 }, "glow local", "ragdoll color" } };
 		} m_glow{};
 
 	} m_player{};
@@ -717,16 +634,12 @@ this->silent.category = s;
 			chams_config weapon
 			{
 				.enabled = { true, {}, "weapon chams", "viewmodel" },
-				.primary = {.enabled = { false, {}, "primary layer", "viewmodel weapon" }, .color = { { 255, 255, 255, 255 }, "viewmodel weapon", "primary color" }, .material = { cham_ids::flat, "viewmodel weapon", "primary material" } },
-				.secondary = {.enabled = { false, {}, "secondary layer", "viewmodel weapon" }, .color = { { 255, 255, 255, 255 }, "viewmodel weapon", "secondary color" }, .material = { cham_ids::flat_ignorez, "viewmodel weapon", "secondary material" } },
-				.overlay = {.enabled = { true, {}, "overlay layer", "viewmodel weapon" }, .color = { { 217, 173, 202, 175 }, "viewmodel weapon", "overlay color" }, .material = { cham_ids::glow, "viewmodel weapon", "overlay material" } }
+				.visible = {.enabled = { true, {}, "visible layer", "viewmodel weapon" }, .color = { { 217, 173, 202, 175 }, "viewmodel weapon", "visible color" }, .material = { cham_ids::glow, "viewmodel weapon", "visible material" } }
 			};
 			chams_config arms
 			{
 				.enabled = { true, {}, "arms chams", "viewmodel" },
-				.primary = {.enabled = { false, {}, "primary layer", "viewmodel arms" }, .color = { { 173, 192, 255, 255 }, "viewmodel arms", "primary color" }, .material = { cham_ids::outlines, "viewmodel arms", "primary material" } },
-				.secondary = {.enabled = { false, {}, "secondary layer", "viewmodel arms" }, .color = { { 255, 255, 255, 255 }, "viewmodel arms", "secondary color" }, .material = { cham_ids::flat_ignorez, "viewmodel arms", "secondary material" } },
-				.overlay = {.enabled = { true, {}, "overlay layer", "viewmodel arms" }, .color = { { 173, 192, 255, 255 }, "viewmodel arms", "overlay color" }, .material = { cham_ids::outlines, "viewmodel arms", "overlay material" } }
+				.visible = {.enabled = { true, {}, "visible layer", "viewmodel arms" }, .color = { { 173, 192, 255, 255 }, "viewmodel arms", "visible color" }, .material = { cham_ids::outlines, "viewmodel arms", "visible material" } }
 			};
 		} m_viewmodel{};
 
@@ -737,27 +650,16 @@ this->silent.category = s;
 			xui::setting only_scoped{ true, {}, "only when scoped", "chams local" };
 		} m_local_alpha{};
 
-		struct local_spread
-		{
-			xui::setting enabled{ false, {}, "spread circle", "local" };
-			config::col color{ { 173, 192, 255, 160 }, "local", "spread circle color" };
-			config::col color_outer{ { 173, 192, 255, 10 }, "local", "spread circle outer color" };
-			xui::setting only_scoped{ false, {}, "only when scoped", "local" };
-		} m_local_spread{};
-
 		struct item
 		{
-			static constexpr auto k_group_count{ 6u };
-			static constexpr const char* k_group_names[ ]{ "pistol", "smg", "rifle", "shotgun", "sniper", "utility" };
-
 			struct overlay
 			{
 				struct group
 				{
 					enum class display_type : std::uint8_t { text, icon, text_and_icon };
 
-					config::enm<display_type> display{ display_type::icon };
-					config::val<float> max_distance{ 50.0f };
+					config::enm<display_type> display{ display_type::text_and_icon };
+					config::val<float> max_distance{ 100.0f };
 					config::col text_color{ { 255, 255, 255, 225 } };
 					config::col icon_color{ { 255, 255, 255, 225 } };
 
@@ -772,196 +674,40 @@ this->silent.category = s;
 				};
 
 				xui::setting enabled{ true, {}, "item esp", "esp items" };
-				xui::setting pistol{ false, {}, "pistol", "esp items" };
-				xui::setting smg{ false, {}, "smg", "esp items" };
-				xui::setting rifle{ false, {}, "rifle", "esp items" };
-				xui::setting shotgun{ false, {}, "shotgun", "esp items" };
-				xui::setting sniper{ true, {}, "sniper", "esp items" };
-				xui::setting utility{ true, {}, "utility", "esp items" };
-
-				std::array<group, k_group_count> groups{};
+				group cfg{};
 
 				overlay( )
 				{
-					for ( auto i = 0u; i < k_group_count; ++i )
-					{
-						this->groups[ i ].init( std::string( "esp items - " ) + k_group_names[ i ] );
-					}
-
-					this->groups[ 4 ].display = group::display_type::text_and_icon;
-					this->groups[ 4 ].max_distance = 100.0f;
-					this->groups[ 5 ].display = group::display_type::text_and_icon;
-					this->groups[ 5 ].max_distance = 100.0f;
-				}
-
-				xui::setting& group_toggle( std::uint32_t id )
-				{
-					switch ( id )
-					{
-					case 0: return this->pistol;
-					case 1: return this->smg;
-					case 2: return this->rifle;
-					case 3: return this->shotgun;
-					case 4: return this->sniper;
-					case 5: return this->utility;
-					default: return this->pistol;
-					}
-				}
-
-				[[nodiscard]] bool is_active( std::uint32_t group_id ) const
-				{
-					switch ( group_id )
-					{
-					case 0: return this->pistol.value;
-					case 1: return this->smg.value;
-					case 2: return this->rifle.value;
-					case 3: return this->shotgun.value;
-					case 4: return this->sniper.value;
-					case 5: return this->utility.value;
-					default: return false;
-					}
-				}
-
-				group& get_group( std::uint32_t group_id )
-				{
-					return this->groups[ group_id < k_group_count ? group_id : 2 ];
-				}
-
-				const group& get_group( std::uint32_t group_id ) const
-				{
-					return this->groups[ group_id < k_group_count ? group_id : 2 ];
+					this->cfg.init( "esp items" );
 				}
 			} m_overlay{};
 
 			struct chams
 			{
 				xui::setting enabled{ true, {}, "item chams", "chams items" };
-				xui::setting pistol{ false, {}, "pistol", "chams items" };
-				xui::setting smg{ false, {}, "smg", "chams items" };
-				xui::setting rifle{ false, {}, "rifle", "chams items" };
-				xui::setting shotgun{ false, {}, "shotgun", "chams items" };
-				xui::setting sniper{ true, {}, "sniper", "chams items" };
-				xui::setting utility{ true, {}, "utility", "chams items" };
-
-				std::array<chams_config, k_group_count> groups{};
+				chams_config cfg{};
 
 				chams( )
 				{
-					for ( auto i = 0u; i < k_group_count; ++i )
-					{
-						const auto cat = std::string( "chams items - " ) + k_group_names[ i ];
-						this->groups[ i ].primary.init( cat, "primary layer" );
-						this->groups[ i ].secondary.init( cat, "secondary layer" );
-					}
+					const auto cat = std::string( "chams items" );
+					this->cfg.visible.init( cat, "visible layer" );
+					this->cfg.occluded.init( cat, "occluded layer" );
 
-					this->groups[ 4 ].primary.enabled.value = true;
-					this->groups[ 4 ].primary.color = { 173, 192, 255, 255 };
-					this->groups[ 4 ].primary.material = cham_ids::flat;
-
-					this->groups[ 5 ].primary.enabled.value = true;
-					this->groups[ 5 ].primary.color = { 173, 192, 255, 255 };
-					this->groups[ 5 ].primary.material = cham_ids::flat;
-				}
-
-				xui::setting& group_toggle( std::uint32_t id )
-				{
-					switch ( id )
-					{
-					case 0: return this->pistol;
-					case 1: return this->smg;
-					case 2: return this->rifle;
-					case 3: return this->shotgun;
-					case 4: return this->sniper;
-					case 5: return this->utility;
-					default: return this->pistol;
-					}
-				}
-
-				[[nodiscard]] bool is_active( std::uint32_t group_id ) const
-				{
-					switch ( group_id )
-					{
-					case 0: return this->pistol.value;
-					case 1: return this->smg.value;
-					case 2: return this->rifle.value;
-					case 3: return this->shotgun.value;
-					case 4: return this->sniper.value;
-					case 5: return this->utility.value;
-					default: return false;
-					}
-				}
-
-				chams_config& get_group( std::uint32_t group_id )
-				{
-					return this->groups[ group_id < k_group_count ? group_id : 2 ];
-				}
-
-				const chams_config& get_group( std::uint32_t group_id ) const
-				{
-					return this->groups[ group_id < k_group_count ? group_id : 2 ];
+					this->cfg.visible.enabled.value = true;
+					this->cfg.visible.color = { 173, 192, 255, 255 };
+					this->cfg.visible.material = cham_ids::flat;
 				}
 			} m_chams{};
 
 			struct glow
 			{
 				xui::setting enabled{ true, {}, "item glow", "glow items" };
-				xui::setting pistol{ false, {}, "pistol", "glow items" };
-				xui::setting smg{ false, {}, "smg", "glow items" };
-				xui::setting rifle{ false, {}, "rifle", "glow items" };
-				xui::setting shotgun{ false, {}, "shotgun", "glow items" };
-				xui::setting sniper{ true, {}, "sniper", "glow items" };
-				xui::setting utility{ true, {}, "utility", "glow items" };
-
-				std::array<glow_target, k_group_count> groups{};
+				glow_target cfg{};
 
 				glow( )
 				{
-					for ( auto i = 0u; i < k_group_count; ++i )
-					{
-						const auto cat = std::string( "glow items - " ) + k_group_names[ i ];
-						this->groups[ i ].init( cat );
-					}
-
-					this->groups[ 4 ].color = { 173, 192, 255, 50 };
-					this->groups[ 5 ].color = { 173, 192, 255, 50 };
-				}
-
-				xui::setting& group_toggle( std::uint32_t id )
-				{
-					switch ( id )
-					{
-					case 0: return this->pistol;
-					case 1: return this->smg;
-					case 2: return this->rifle;
-					case 3: return this->shotgun;
-					case 4: return this->sniper;
-					case 5: return this->utility;
-					default: return this->pistol;
-					}
-				}
-
-				[[nodiscard]] bool is_active( std::uint32_t group_id ) const
-				{
-					switch ( group_id )
-					{
-					case 0: return this->pistol.value;
-					case 1: return this->smg.value;
-					case 2: return this->rifle.value;
-					case 3: return this->shotgun.value;
-					case 4: return this->sniper.value;
-					case 5: return this->utility.value;
-					default: return false;
-					}
-				}
-
-				glow_target& get_group( std::uint32_t group_id )
-				{
-					return this->groups[ group_id < k_group_count ? group_id : 2 ];
-				}
-
-				const glow_target& get_group( std::uint32_t group_id ) const
-				{
-					return this->groups[ group_id < k_group_count ? group_id : 2 ];
+					this->cfg.init( "glow items" );
+					this->cfg.color = { 173, 192, 255, 50 };
 				}
 			} m_glow{};
 		} m_item{};
@@ -1105,11 +851,6 @@ this->silent.category = s;
 					return this->groups[ group_id < 5 ? group_id : 0 ];
 				}
 			} m_overlay{};
-
-			struct tracers
-			{
-
-			} m_tracers{};
 		} m_projectile{};
 
 		struct other
@@ -1138,14 +879,14 @@ this->silent.category = s;
 			nlohmann::json serialize( ) const override
 			{
 				auto j = nlohmann::json::object( );
-				for ( const auto& [def, s] : data )
+
+				for ( const auto& [ def_index, skin ] : data )
 				{
-					j[ std::to_string( def ) ] = nlohmann::json
-					{
-						{"p", s.paint_kit_id},
-						{"w", s.wear},
-						{"s", s.seed},
-						{"t", s.stattrak}
+					j[ std::to_string( def_index ) ] = nlohmann::json{
+						{ "p", skin.paint_kit_id },
+						{ "s", skin.seed },
+						{ "t", skin.stattrak },
+						{ "w", skin.wear }
 					};
 				}
 
@@ -1163,16 +904,12 @@ this->silent.category = s;
 
 				for ( auto it = j.begin( ); it != j.end( ); ++it )
 				{
-					try
-					{
-						const auto def = static_cast< std::int16_t >( std::stoi( it.key( ) ) );
-						auto& s = data[ def ];
-						s.paint_kit_id = it.value( ).value( "p", 0 );
-						s.wear = it.value( ).value( "w", 0.01f );
-						s.seed = it.value( ).value( "s", 0 );
-						s.stattrak = it.value( ).value( "t", false );
-					}
-					catch ( ... ) {}
+					applied_skin skin{};
+					skin.paint_kit_id = it.value( ).value( "p", 0 );
+					skin.seed = it.value( ).value( "s", 0 );
+					skin.stattrak = it.value( ).value( "t", false );
+					skin.wear = it.value( ).value( "w", 0.01f );
+					data[ static_cast<std::int16_t>( std::strtol( it.key( ).c_str( ), nullptr, 10 ) ) ] = skin;
 				}
 			}
 		};
@@ -1184,104 +921,23 @@ this->silent.category = s;
 
 			nlohmann::json serialize( ) const override
 			{
-				return nlohmann::json
-				{
-					{ "ct", ct_def },
-					{ "t", t_def }
-				};
+				return nlohmann::json{ { "ct", ct_def }, { "t", t_def } };
 			}
 
 			void deserialize( const nlohmann::json& j ) override
 			{
-				if ( !j.is_object( ) )
-				{
-					return;
-				}
-
-				ct_def = j.value( "ct", static_cast< std::int16_t >( 0 ) );
-				t_def = j.value( "t", static_cast< std::int16_t >( 0 ) );
-			}
-		};
-
-		struct model_changer_field : config::custom_field
-		{
-			enum class model_source : int { disabled = 0, custom = 1, ct = 2, t = 3 };
-			config::val< int > ct_source{ static_cast< int >( model_source::ct ), "model changer", "CT source" };
-			config::val< int > t_source{ static_cast< int >( model_source::t ), "model changer", "T source" };
-			config::str ct_custom{ "models/player/custom_player/ctm/ctm_gsg9.vmdl", "model changer", "CT custom model" };
-			config::str t_custom{ "models/player/custom_player/tm/tm_phoenix.vmdl", "model changer", "T custom model" };
-			xui::setting enabled{ false, {}, "model changer", "enabled" };
-
-			nlohmann::json serialize( ) const override
-			{
-				return nlohmann::json
-				{
-					{ "ct_source", ct_source.value },
-					{ "t_source", t_source.value },
-					{ "ct_custom", ct_custom.value },
-					{ "t_custom", t_custom.value },
-					{ "enabled", enabled.value }
-				};
-			}
-
-			void deserialize( const nlohmann::json& j ) override
-			{
-				if ( !j.is_object( ) )
-				{
-					return;
-				}
-
-				ct_source.value = j.value( "ct_source", static_cast< int >( model_source::ct ) );
-				t_source.value = j.value( "t_source", static_cast< int >( model_source::t ) );
-				ct_custom.value = j.value( "ct_custom", "models/player/custom_player/ctm/ctm_gsg9.vmdl" );
-				t_custom.value = j.value( "t_custom", "models/player/custom_player/tm/tm_phoenix.vmdl" );
-				enabled.value = j.value( "enabled", false );
-			}
-		};
-
-		struct custom_agent_field : config::custom_field
-		{
-			std::string ct_path{};
-			std::string t_path{};
-			bool ct_enabled{ false };
-			bool t_enabled{ false };
-
-			nlohmann::json serialize( ) const override
-			{
-				return nlohmann::json
-				{
-					{ "ct_path", ct_path },
-					{ "t_path", t_path },
-					{ "ct_enabled", ct_enabled },
-					{ "t_enabled", t_enabled }
-				};
-			}
-
-			void deserialize( const nlohmann::json& j ) override
-			{
-				if ( !j.is_object( ) )
-				{
-					return;
-				}
-
-				ct_path = j.value( "ct_path", std::string{} );
-				t_path = j.value( "t_path", std::string{} );
-				ct_enabled = j.value( "ct_enabled", false );
-				t_enabled = j.value( "t_enabled", false );
+				ct_def = j.value( "ct", 0 );
+				t_def = j.value( "t", 0 );
 			}
 		};
 
 		skin_map_field skins{};
 		agent_selection_field agents{};
-		model_changer_field models{};
-		custom_agent_field custom_agents{};
 
 		changer( )
 		{
-			config::detail::register_field( { .key = config::detail::make_key( "changer", "applied skins" ), .type = config::field_type::custom, .ptr = &skins, .count = 1 } );
-			config::detail::register_field( { .key = config::detail::make_key( "changer", "agents" ), .type = config::field_type::custom, .ptr = &agents, .count = 1 } );
-			config::detail::register_field( { .key = config::detail::make_key( "changer", "models" ), .type = config::field_type::custom, .ptr = &models, .count = 1 } );
-			config::detail::register_field( { .key = config::detail::make_key( "changer", "custom agents" ), .type = config::field_type::custom, .ptr = &custom_agents, .count = 1 } );
+			config::detail::register_field( { .key = config::detail::make_key( "changer", "applied skins" ), .type = config::field_type::custom, .ptr = &this->skins, .count = 1 } );
+			config::detail::register_field( { .key = config::detail::make_key( "changer", "agents" ), .type = config::field_type::custom, .ptr = &this->agents, .count = 1 } );
 		}
 	};
 
@@ -1316,14 +972,13 @@ this->silent.category = s;
 
 		struct impacts
 		{
-			enum class sound_type : int { shop_click, home_click, bell, killcard, bullet_casing, coin_pickup, item_drop, popcan, key_press, custom, hit, bubble, metal, neverlose, rust_headshot, agpa2 };
+			enum class sound_type : int { shop_click, home_click, bell, killcard, bullet_casing, coin_pickup, item_drop, popcan, key_press, custom };
 			enum class marker_type : int { classic, damage, both };
 			enum class bullet_impact_type : int { overlay, sparks, both };
+			enum class death_effect_type : int { classic, sparks };
 
 			xui::setting hit_log{ true, {}, "hit logs", "impacts" };
 			config::val<float> hit_log_duration{ 3.5f, "impacts", "hit log duration" };
-			xui::setting console_log{ true, {}, "console logs", "impacts" };
-			xui::setting chat_log{ false, {}, "chat logs", "impacts" };
 
 			xui::setting miss_log{ true, {}, "miss logs", "impacts" };
 			config::val<float> miss_log_duration{ 4.5f, "impacts", "miss log duration" };
@@ -1345,10 +1000,10 @@ this->silent.category = s;
 
 			xui::setting death_effect{ true, {}, "death effect", "impacts" };
 			config::col death_effect_color{ { 173, 192, 255, 255 }, "impacts", "death effect color" };
+			config::enm<death_effect_type> death_effect_style{ death_effect_type::classic, "impacts", "death effect style" };
 
 			xui::setting bullet_impact_effect{ true, {}, "bullet impacts", "impacts" };
 			config::enm<bullet_impact_type> bullet_impact_effect_type{ bullet_impact_type::overlay, "impacts", "bullet impact type" };
-			config::val<float> bullet_impact_effect_size{ 1.75f, "impacts", "bullet impact size" };
 			config::col bullet_impact_effect_fill_color{ { 173, 192, 255, 85 }, "impacts", "bullet impact fill color" };
 			config::col bullet_impact_effect_edge_color{ { 173, 192, 255, 255 }, "impacts", "bullet impact edge color" };
 			config::col bullet_impact_effect_color_spark{ { 173, 192, 255, 255 }, "impacts", "bullet impact spark color" };
@@ -1420,28 +1075,24 @@ this->silent.category = s;
 
 			struct scope
 			{
-				enum class style_type : std::uint8_t { cross, classic };
-
 				xui::setting enabled{ true, {}, "scope overlay", "scope overlay" };
-				config::enm<style_type> style{ style_type::cross, "scope overlay", "style" };
 				config::val<float> line_length{ 125.0f, "scope overlay", "line length" };
 				config::val<float> gap{ 8.0f, "scope overlay", "gap" };
 				config::val<float> thickness{ 0.5f, "scope overlay", "thickness" };
 				config::val<float> anim_speed{ 10.0f, "scope overlay", "anim speed" };
 				config::col color{ { 173, 192, 255, 255 }, "scope overlay", "color" };
 				xui::setting fade_in{ true, {}, "fade in", "scope overlay" };
-				xui::setting dynamic_spread{ true, {}, "dynamic spread", "scope overlay" };
-				xui::setting spread_circle{ false, {}, "spread circle", "scope overlay" };
+
 				xui::setting glow{ true, {}, "glow", "scope overlay" };
 				config::val<float> glow_strength{ 1.0f, "scope overlay", "glow strength" };
 			} m_scope{};
 
 			struct hat
 			{
-				enum class hat_type : std::uint8_t { chinese };
+				enum class hat_type : std::uint8_t { kasa, bucket };
 
 				xui::setting enabled{ false, {}, "hat", "hat" };
-				config::enm<hat_type> type{ hat_type::chinese, "hat", "type" };
+				config::enm<hat_type> type{ hat_type::kasa, "hat", "type" };
 				config::col color{ { 255, 171, 234, 160 }, "hat", "color" };
 				config::col secondary_color{ { 173, 192, 255, 160 }, "hat", "secondary color" };
 				xui::setting glow{ true, {}, "glow", "hat" };
@@ -1450,30 +1101,17 @@ this->silent.category = s;
 
 			struct velocity
 			{
-				xui::setting counter{ false, {}, "velocity counter", "velocity hud" };
-				xui::setting chart{ false, {}, "velocity chart", "velocity hud" };
 				xui::setting graph{ true, {}, "velocity graph", "velocity hud" };
 				xui::setting indicator{ false, {}, "velocity indicator", "velocity hud" };
 				config::col color{ { 173, 192, 255, 255 }, "velocity hud", "color" };
-				config::col max_color{ { 120, 120, 120, 255 }, "velocity hud", "max color" };
 				config::val<float> bottom_offset{ 80.0f, "velocity hud", "bottom offset" };
-				config::val<float> chart_width{ 200.0f, "velocity hud", "chart width" };
-				config::val<float> chart_height{ 44.0f, "velocity hud", "chart height" };
 				config::val<float> graph_width{ 200.0f, "velocity hud", "graph width" };
 				config::val<float> graph_height{ 120.0f, "velocity hud", "graph height" };
 				config::val<float> graph_line_width{ 1.0f, "velocity hud", "graph line width" };
+				config::val<float> graph_bottom_offset{ 0.0f, "velocity hud", "graph bottom offset" };
 				config::val<float> indicator_y{ 0.5f, "velocity hud", "indicator y position" };
 			} m_velocity{};
 		} m_hud{};
-
-		struct post_process
-		{
-			struct chromatic_aberration
-			{
-				xui::setting enabled{ false, {}, "chromatic aberration", "post process" };
-				config::val<float> intensity{ 0.003f, "post process", "chromatic aberration intensity" };
-			} m_chromatic_aberration{};
-		} m_post_process{};
 
 		struct dlight
 		{
@@ -1506,54 +1144,11 @@ this->silent.category = s;
 			xui::setting show_ping{ true, {}, "show ping",       "watermark" };
 			xui::setting show_time{ true, {}, "show time",       "watermark" };
 			xui::setting show_user{ true, {}, "show user",       "watermark" };
-			xui::setting show_map { true, {}, "show map",        "watermark" };
-			xui::setting show_tick{ true, {}, "show tick",       "watermark" };
 			xui::setting show_velocity{ true, {}, "show velocity", "watermark" };
 		} m_watermark{};
 
 		xui::setting keybinds_enabled{ true, {}, "keybinds", "widgets" };
-
-		struct widgets_cfg
-		{
-			enum class style : std::uint8_t { modern, classic, neo, glass };
-
-			config::enm<style> widget_style{ style::modern, "widgets", "style" };
-
-			struct glass_cfg
-			{
-				config::col text_color{ { 235, 238, 248, 255 }, "glass widget", "text color" };
-				config::col icon_color{ { 173, 192, 255, 255 }, "glass widget", "icon color" };
-				xui::setting per_stat_icon_colors{ false, {}, "per stat icon colors", "glass widget" };
-				config::col logo_icon_color{ { 173, 192, 255, 255 }, "glass widget", "logo icon color" };
-				config::col fps_icon_color{ { 173, 192, 255, 255 }, "glass widget", "fps icon color" };
-				config::col ping_icon_color{ { 173, 192, 255, 255 }, "glass widget", "ping icon color" };
-				config::col time_icon_color{ { 173, 192, 255, 255 }, "glass widget", "time icon color" };
-				config::col vel_icon_color{ { 173, 192, 255, 255 }, "glass widget", "velocity icon color" };
-				config::col warn_text_color{ { 255, 92, 92, 255 }, "glass widget", "warn text color" };
-				config::col warn_icon_color{ { 255, 92, 92, 255 }, "glass widget", "warn icon color" };
-				config::val<int> ping_warn_threshold{ 80, "glass widget", "ping warn threshold" };
-				config::col bg_color{ { 12, 14, 20, 155 }, "glass widget", "background color" };
-				config::col shadow_color{ { 0, 0, 0, 255 }, "glass widget", "shadow color" };
-				config::col avatar_ring_color{ { 255, 255, 255, 40 }, "glass widget", "avatar ring color" };
-				config::val<float> blur_strength{ 1.0f, "glass widget", "blur strength" };
-				config::val<float> shadow_strength{ 1.4f, "glass widget", "shadow strength" };
-				config::val<float> shadow_spread{ 1.2f, "glass widget", "shadow spread" };
-				config::val<float> icon_size{ 15.0f, "glass widget", "icon size" };
-				config::val<float> pill_height{ 32.0f, "glass widget", "pill height" };
-				config::val<float> section_gap{ 16.0f, "glass widget", "section gap" };
-				config::val<float> pad_x{ 14.0f, "glass widget", "padding x" };
-				xui::setting show_avatar{ true, {}, "show avatar", "glass widget" };
-			} m_glass{};
-		} m_widgets{};
-
-		struct theme
-		{
-			config::col accent{ { 210, 214, 220, 255 }, "theme", "menu color" };
-			config::col text{ { 215, 215, 215, 235 }, "theme", "label color" };
-			config::col card{ { 20, 21, 24, 230 }, "theme", "island color" };
-			config::col background{ { 16, 16, 16, 255 }, "theme", "background color" };
-			config::val<float> anim_speed{ 1.0f, "theme", "animation speed" };
-		} m_theme{};
+		xui::setting indicators_enabled{ true, {}, "indicators", "widgets" };
 	};
 
 	struct movement
@@ -1564,37 +1159,8 @@ this->silent.category = s;
 		xui::setting jumpbug{ true, {}, "jumpbug", "movement" };
 		xui::setting fastladder{ true, {}, "fastladder", "movement" };
 		xui::setting edgejump{ false, { 'E', xui::bind_mode::hold_on}, "edgejump", "movement" };
-		xui::setting edgestop{ false, { 'N', xui::bind_mode::hold_on}, "edgestop", "movement" };
-		xui::setting edgebug{ false, {}, "edgebug", "movement" };
-		/// 0..4 — matches jmp table order around \c loc_C80A3A in dump (mode dword selects case before the active path).
-		config::val<int> edgebug_mode{ 1, "movement", "edgebug mode" };
-		/// Analog of \c xmmword_E22CA4+0xC — extra subtick duck cycles (each cycle = press+release pair).
-		config::val<int> edgebug_passes{ 1, "movement", "edgebug passes" };
-		/// Adds jump up/down subticks like jumpbug after duck sequence (not in every dump path; optional).
-		xui::setting edgebug_include_jump_steps{ false, {}, "edgebug jump steps", "movement" };
 		xui::setting slowwalk{ false, { 'P', xui::bind_mode::hold_on}, "slowwalk", "movement" };
 		config::val<float> slowwalk_speed{ 33.0f, "movement", "slowwalk speed" };
-
-		struct pixel_surf
-		{
-			xui::setting enabled{ false, {}, "pixel surf", "movement" };
-			/// 0 = IN_JUMP, 1 = IN_ATTACK2, 2 = None (no button press)
-			config::val<int> button_type{ 0, "movement", "pixel surf button" };
-			xui::setting angle_correction{ true, {}, "pixel surf angles", "movement" };
-			/// Max ledge width (in units) that still counts as a "pixel" edge.
-			config::val<float> ledge_units{ 1.0f, "movement", "pixel surf ledge" };
-		} m_pixelsurf{};
-
-		struct test_strafer
-		{
-			xui::setting enabled{ false, {}, "test strafer", "movement" };
-		} m_test_strafer{};
-
-		struct velocity_debug
-		{
-			xui::setting enabled{ false, {}, "velocity debug", "movement" };
-			xui::setting reset_on_land{ true, {}, "reset peak on land", "movement - velocity debug" };
-		} m_velocity_debug{};
 	};
 
 	struct world
@@ -1657,10 +1223,6 @@ this->silent.category = s;
 			config::val<float> dof_near_crisp{ 5.0f, "scene", "dof near crisp" };
 			config::val<float> dof_far_crisp{ 600.0f, "scene", "dof far crisp" };
 			config::val<float> dof_far_blurry{ 1400.0f, "scene", "dof far blurry" };
-
-			xui::setting ambient{ true, {}, "ambient", "scene" };
-			config::col ambient_color{ { 233, 145, 255, 255 }, "scene", "ambient color" };
-			config::val<float> ambient_intensity{ 1.1f, "scene", "ambient intensity" };
 		} m_scene{};
 	};
 
@@ -1684,4 +1246,4 @@ this->silent.category = s;
 		}
 	}
 
-} // namespace settings
+} 

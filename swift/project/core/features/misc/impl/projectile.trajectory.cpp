@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <numbers>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/logging/logging.hpp>
@@ -14,10 +15,10 @@ namespace features::misc {
 
 	namespace {
 
-		// Hull sim mask used before, merged with solids mask from visibility traces so thin breakables (e.g. glass) collide.
+		
 		constexpr std::uint32_t grenade_collision_mask_v = static_cast<std::uint32_t>( 0x2000c3001u | 0x001c3003u );
 
-		// Penetration fudge after a pawn hit so the next trace does not re-penetrate the same hull.
+		
 		constexpr float k_pass_player_nudge{ 3.5f };
 
 		[[nodiscard]] bool grenade_passes_through_hit_entity( std::uintptr_t entity )
@@ -33,7 +34,7 @@ namespace features::misc {
 				return false;
 			}
 
-			// CS grenade simulation does not collide with player pawns; traces that stop on them fake bounces.
+			
 			return fnv1a::runtime_hash( name ) == "C_CSPlayerPawn"_hash;
 		}
 
@@ -43,7 +44,7 @@ namespace features::misc {
 			return systems::g_tracing.make_filter( skip_thrower ? thrower_pawn : 0, grenade_collision_mask_v, 4 );
 		}
 
-		// Segment trace: advance through player hulls to match in-game grenades, stop on world/geo.
+		
 		[[nodiscard]] std::pair<math::vector3, std::optional<systems::tracing::result>> grenade_trace_hull_segment(
 			const math::vector3& from,
 			const math::vector3& to,
@@ -85,7 +86,7 @@ namespace features::misc {
 			return { cursor, std::nullopt };
 		}
 
-	} // namespace
+	} 
 
 	void projectile_trajectory::on_render( xdraw::draw_list& draw_list )
 	{
@@ -575,6 +576,7 @@ namespace features::misc {
 
 	void projectile_trajectory::update_weapon_properties( std::uintptr_t weapon, std::uintptr_t weapon_vdata )
 	{
+		(void)weapon;
 		if ( !weapon_vdata || weapon_vdata == this->m_weapon_vdata )
 		{
 			return;
@@ -1200,4 +1202,4 @@ namespace features::misc {
 		}
 	}
 
-} // namespace features::misc
+} 

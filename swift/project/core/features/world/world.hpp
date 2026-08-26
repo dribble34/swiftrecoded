@@ -64,21 +64,15 @@ namespace features::world {
         std::uintptr_t m_active_skybox_descriptor{};
         std::array<float, 3> m_active_original_sky_color{};
         bool m_active_sky_tinted{};
-    };
-
-    class smoke
-    {
-    public:
-        void on_render_smoke_pre( ) { this->m_active = true; }
-        void on_render_smoke_post( ) { this->m_active = false; }
-
+    };	class smoke
+	{
+	public:
         void on_map( std::uintptr_t token, std::size_t size, std::uintptr_t buf_ptr );
         void on_unmap( std::uintptr_t token );
 
     private:
-        static inline bool m_active{};
         static inline std::uintptr_t m_buf{};
         static inline std::uintptr_t m_token{};
     };
 
-} // namespace features::world
+} 

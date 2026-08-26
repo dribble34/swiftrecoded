@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 
@@ -49,4 +50,4 @@ namespace systems {
 		return 0;
 	}
 
-} // namespace systems
+} 

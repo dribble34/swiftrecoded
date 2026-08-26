@@ -1,4 +1,6 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+#include <external/bc7.hpp>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/logging/logging.hpp>
@@ -15,8 +17,8 @@ namespace features::changer {
 		constexpr auto max_attempts{ 300 };
 		constexpr auto retry_delay{ std::chrono::milliseconds( 100 ) };
 
-		// Early injection can precede the schema's item-definition and paint-kit
-		// tables. Wait until both are populated, then parse exactly once.
+		
+		
 		for ( auto attempt = 0; attempt < max_attempts; ++attempt )
 		{
 			const auto system = memory::call<std::uintptr_t>( addresses::globals::item_system );
@@ -1005,4 +1007,4 @@ namespace features::changer {
 		return std::string( xs( "econ/default_generated/" ) ) + std::string( stem ) + "_" + pk->name + xs( "_light" );
 	}
 
-} // namespace features::changer
+} 

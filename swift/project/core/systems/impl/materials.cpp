@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/logging/logging.hpp>
@@ -152,7 +153,7 @@ namespace systems {
                 g_tNormal = resource:"materials/default/default_normal_tga_7652cb.vtex"
             })#";
 
-		// TODO
+		
 		static constexpr char matte_ignorez[ ] = R"#(<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}
             format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
             {
@@ -485,7 +486,7 @@ namespace systems {
 				g_tIridescentThickness_Mask = resource:"materials/dev/primary_white_color_tga_21186c76.vtex"
 			})#";
 
-	} // namespace detail
+	} 
 
 	bool materials::initialize( )
 	{
@@ -768,7 +769,7 @@ namespace systems {
 			memory::call<void*>( material_create, nullptr, &handle, name, &kv3, 0, true );
 		}
 
-		// CreateMaterial copies the parsed tree; release the parser-owned value.
+		
 		memory::call<void>( kv3_destroy, &kv3, 0u );
 
 		if ( !loaded || !handle.binding )
@@ -840,4 +841,4 @@ namespace systems {
 		}
 	}
 
-} // namespace systems
+} 

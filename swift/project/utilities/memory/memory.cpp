@@ -1,4 +1,8 @@
-#include <pch/pch.hpp>
+#include <array>
+#include <span>
+
+#include <external/xorstr.hpp>
+
 #include "memory.hpp"
 #include <utilities/logging/logging.hpp>
 
@@ -153,7 +157,7 @@ namespace memory {
 			};
 		}
 
-	} // namespace detail
+	} 
 
 	std::uintptr_t get_module_base (std::string_view module_name) {
 		return reinterpret_cast<std::uintptr_t>(GetModuleHandleA (std::string (module_name).c_str ()));
@@ -311,7 +315,7 @@ namespace memory {
 
 
 	std::uintptr_t resolve_pattern (std::string_view pattern) {
-		// parse "module.dll:pattern" format
+		
 		const auto colon = pattern.find (':');
 		if (colon == std::string_view::npos) {
 			logging::console::print (xs ("[error] pattern missing module prefix | pattern: {}"), pattern);
@@ -327,7 +331,7 @@ namespace memory {
 			return 0;
 		}
 
-		// rest of function unchanged, just swap pattern -> pattern_str and module_base is now local
+		
 		const auto module_size = get_module_size (module_base);
 		if (!module_size) {
 			logging::console::print (xs ("[error] invalid module size | pattern: {}"), pattern_str);
@@ -601,4 +605,4 @@ found_type_descriptor:
 		return std::string (str_ptr, len);
 	}
 
-} // namespace memory
+} 

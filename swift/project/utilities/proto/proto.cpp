@@ -1,15 +1,14 @@
-#include <pch/pch.hpp>
 #include "proto.hpp"
 
 namespace proto {
 
-	// has_bits
+	
 
 	bool has_bits::test( std::uint32_t mask ) const { return ( this->bits[ 0 ] & mask ) != 0; }
 	void has_bits::set( std::uint32_t mask ) { this->bits[ 0 ] |= mask; }
 	void has_bits::clear( std::uint32_t mask ) { this->bits[ 0 ] &= ~mask; }
 
-	// msg_qangle
+	
 
 	float msg_qangle::x( ) const { return this->m_x; }
 	float msg_qangle::y( ) const { return this->m_y; }
@@ -18,7 +17,7 @@ namespace proto {
 	void msg_qangle::set_y( float v ) { this->m_has_bits.set( 0x2u ); this->m_y = v; }
 	void msg_qangle::set_z( float v ) { this->m_has_bits.set( 0x4u ); this->m_z = v; }
 
-	// msg_vector
+	
 
 	float msg_vector::x( ) const { return this->m_x; }
 	float msg_vector::y( ) const { return this->m_y; }
@@ -27,7 +26,7 @@ namespace proto {
 	void msg_vector::set_y( float v ) { this->m_has_bits.set( 0x2u ); this->m_y = v; }
 	void msg_vector::set_z( float v ) { this->m_has_bits.set( 0x4u ); this->m_z = v; }
 
-	// interpolation_info
+	
 
 	bool interpolation_info::has_frac( ) const { return this->m_has_bits.test( 0x1u ); }
 	float interpolation_info::frac( ) const { return this->m_frac; }
@@ -39,13 +38,13 @@ namespace proto {
 	std::int32_t interpolation_info::dst_tick( ) const { return this->m_dst_tick; }
 	void interpolation_info::set_dst_tick( std::int32_t v ) { this->m_has_bits.set( 0x4u ); this->m_dst_tick = v; }
 
-	// interpolation_info_cl
+	
 
 	bool interpolation_info_cl::has_frac( ) const { return this->m_has_bits.test( 0x1u ); }
 	float interpolation_info_cl::frac( ) const { return this->m_frac; }
 	void interpolation_info_cl::set_frac( float v ) { this->m_has_bits.set( 0x1u ); this->m_frac = v; }
 
-	// in_button_state_pb
+	
 
 	std::uint64_t in_button_state_pb::buttonstate1( ) const { return this->m_buttonstate1; }
 	std::uint64_t in_button_state_pb::buttonstate2( ) const { return this->m_buttonstate2; }
@@ -54,7 +53,7 @@ namespace proto {
 	void in_button_state_pb::set_buttonstate2( std::uint64_t v ) { this->m_has_bits.set( 0x2u ); this->m_buttonstate2 = v; }
 	void in_button_state_pb::set_buttonstate3( std::uint64_t v ) { this->m_has_bits.set( 0x4u ); this->m_buttonstate3 = v; }
 
-	// subtick_move_step
+	
 
 	std::uint64_t subtick_move_step::button( ) const { return this->m_button; }
 	void subtick_move_step::set_button( std::uint64_t v ) { this->m_has_bits.set( 0x1u ); this->m_button = v; }
@@ -71,7 +70,7 @@ namespace proto {
 	float subtick_move_step::yaw_delta( ) const { return this->m_yaw_delta; }
 	void subtick_move_step::set_yaw_delta( float v ) { this->m_has_bits.set( 0x40u ); this->m_yaw_delta = v; }
 
-	// base_usercmd_pb
+	
 
 	bool base_usercmd_pb::has_buttons_pb( ) const { return this->m_has_bits.test( 0x2u ); }
 	const in_button_state_pb* base_usercmd_pb::buttons_pb( ) const { return impl_ptr<const in_button_state_pb>( this->m_buttons_pb ); }
@@ -119,7 +118,7 @@ namespace proto {
 	bool base_usercmd_pb::has_upmove( ) const { return this->m_has_bits.test( 0x100u ); }
 	bool base_usercmd_pb::has_pawn_entity_handle( ) const { return this->m_has_bits.test( 0x20000u ); }
 
-	// input_history_entry
+	
 
 	bool input_history_entry::has_view_angles( ) const { return this->m_has_bits.test( 0x1u ); }
 	const msg_qangle* input_history_entry::view_angles( ) const { return impl_ptr<const msg_qangle>( this->m_view_angles ); }
@@ -173,7 +172,7 @@ namespace proto {
 	std::int32_t input_history_entry::target_ent_index( ) const { return this->m_target_ent_index; }
 	void input_history_entry::set_target_ent_index( std::int32_t v ) { this->m_has_bits.set( 0x4000u ); this->m_target_ent_index = v; }
 
-	// csgo_usercmd_pb
+	
 
 	bool csgo_usercmd_pb::has_base( ) const { return this->m_has_bits.test( 0x1u ); }
 	base_usercmd_pb* csgo_usercmd_pb::mutable_base( ) { this->m_has_bits.set( 0x1u ); return impl_ptr<base_usercmd_pb>( this->m_base ); }
@@ -197,4 +196,4 @@ namespace proto {
 	std::int32_t csgo_usercmd_pb::attack1_start_history_index( ) const { return this->m_attack1_start_history_index; }
 	std::int32_t csgo_usercmd_pb::attack2_start_history_index( ) const { return this->m_attack2_start_history_index; }
 
-} // namespace proto
+} 

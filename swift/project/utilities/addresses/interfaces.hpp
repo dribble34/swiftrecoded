@@ -14,18 +14,18 @@ union cvvalue_t
 class c_convar
 {
 public:
-	const char* m_name; // 0x0000
-	const void* m_default_value_ptr; // 0x0008
-	const void* m_min_value; // 0x0010
-	const void* m_max_value; // 0x0018
-	const char* m_description; // 0x0020
-	int16_t m_type; // 0x28
-	char _pad_01 [0x2]; // 0x2A
-	uint32_t m_change_count; // 0x2C
-	uint64_t m_flags; // 0x30
-	char _pad_02 [0x20]; // 0x38
-	cvvalue_t m_value; // 0x58
-	char _value_tail [0x8]; // 0x60
+	const char* m_name; 
+	const void* m_default_value_ptr; 
+	const void* m_min_value; 
+	const void* m_max_value; 
+	const char* m_description; 
+	int16_t m_type; 
+	char _pad_01 [0x2]; 
+	uint32_t m_change_count; 
+	uint64_t m_flags; 
+	char _pad_02 [0x20]; 
+	cvvalue_t m_value; 
+	char _value_tail [0x8]; 
 
 	template<typename T>
 	T get() {
@@ -51,17 +51,17 @@ namespace interfaces {
 	public:
 		struct cvar_container_t
 		{
-			c_convar* m_cvar;		// 0x000
-			uint16_t m_generation;	// 0x008
-			uint16_t m_next_index;	// 0x00A
-			uint32_t m_links;		// 0x00C
+			c_convar* m_cvar;		
+			uint16_t m_generation;	
+			uint16_t m_next_index;	
+			uint32_t m_links;		
 		};
 
-		char _pad0 [0x4A]; // 0x0000
-		uint16_t m_allocation_count; // 0x004A
-		char _pad1 [0x4]; // 0x004C
-		cvar_container_t* m_container; // 0x0050
-		uint16_t m_head; // 0x0058
+		char _pad0 [0x4A]; 
+		uint16_t m_allocation_count; 
+		char _pad1 [0x4]; 
+		cvar_container_t* m_container; 
+		uint16_t m_head; 
 
 		[[nodiscard]] c_convar* find (std::uint32_t name_hash);
 

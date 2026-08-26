@@ -1,15 +1,22 @@
 #pragma once
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include <windows.h>
+#include <dxgi.h>
 #include <wrl/client.h>
 #include <d3d11.h>
 
 #include <cstdint>
+#include <array>
 #include <vector>
 #include <unordered_map>
 #include <span>
 #include <utility>
 #include <string_view>
+#include <numbers>
 
 namespace xdraw {
 
@@ -30,18 +37,15 @@ namespace xdraw {
 
 	struct color
 	{
-		union
-		{
-			std::uint32_t val;
-			struct { std::uint8_t r, g, b, a; };
-		};
+		std::uint8_t r{}, g{}, b{}, a{};
 
-		constexpr color( ) : val{ 0 } {}
-		constexpr color( std::uint32_t v ) : val{ v } {}
+		constexpr color( ) = default;
+		constexpr color( std::uint32_t v ) : r( static_cast< std::uint8_t >( v & 0xFF ) ), g( static_cast< std::uint8_t >( ( v >> 8 ) & 0xFF ) ), b( static_cast< std::uint8_t >( ( v >> 16 ) & 0xFF ) ), a( static_cast< std::uint8_t >( ( v >> 24 ) & 0xFF ) ) {}
 		constexpr color( std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255 ) : r{ r }, g{ g }, b{ b }, a{ a } {}
 
+		[[nodiscard]] constexpr std::uint32_t val( ) const { return static_cast< std::uint32_t >( r ) | ( static_cast< std::uint32_t >( g ) << 8 ) | ( static_cast< std::uint32_t >( b ) << 16 ) | ( static_cast< std::uint32_t >( a ) << 24 ); }
 		constexpr color alpha( std::uint8_t a_ ) const { return color{ r, g, b, a_ }; }
-		constexpr operator std::uint32_t( ) const { return val; }
+		constexpr operator std::uint32_t( ) const { return val( ); }
 		constexpr std::array<float, 4> to_float( ) const { return { r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f }; }
 	};
 
@@ -98,8 +102,6 @@ namespace xdraw {
 		std::unordered_map<char32_t, glyph> glyph_cache{};
 		glyph missing_glyph{};
 
-		font* fallback{};
-
 		void* ft_library{};
 		void* ft_face{};
 
@@ -137,8 +139,6 @@ namespace xdraw {
 		void rect_filled( float x, float y, float w, float h, color col, corner_radius rounding, bool aa = true );
 		void rect_filled_gradient( float x, float y, float w, float h, color tl, color tr, color br, color bl );
 		void rect_filled_gradient( float x, float y, float w, float h, color tl, color tr, color br, color bl, corner_radius rounding, bool aa = true );
-		void rect_filled_blurred( float x, float y, float w, float h, color tint = color{ 255, 255, 255, 255 } );
-		void rect_filled_blurred( float x, float y, float w, float h, corner_radius rounding, color tint = color{ 255, 255, 255, 255 }, bool aa = true );
 		void circle_filled( float cx, float cy, float radius, color col, int segments = 0, bool aa = true );
 		void triangle_filled( float x0, float y0, float x1, float y1, float x2, float y2, color col, bool aa = true );
 		void convex_filled( std::span<const float> points, color col, bool aa = true );
@@ -157,6 +157,7 @@ namespace xdraw {
 		void image( float x, float y, float w, float h, ID3D11ShaderResourceView* tex, color tint = color{ 255, 255, 255, 255 } );
 		void image( float x, float y, float w, float h, ID3D11ShaderResourceView* tex, corner_radius rounding, color tint = color{ 255, 255, 255, 255 }, bool aa = true );
 		void image_uv( float x, float y, float w, float h, ID3D11ShaderResourceView* tex, float u0, float v0, float u1, float v1, color tint = color{ 255, 255, 255, 255 } );
+		void image_uv( float x, float y, float w, float h, ID3D11ShaderResourceView* tex, float u0, float v0, float u1, float v1, corner_radius rounding, color tint = color{ 255, 255, 255, 255 }, bool aa = true );
 
 		void ensure_cmd( ID3D11ShaderResourceView* texture );
 		std::uint32_t emit_vtx( float x, float y, float u, float v, color c );
@@ -199,6 +200,11 @@ namespace xdraw {
 	void begin_frame( bool update_timing = true );
 	void end_frame( );
 
+	// Registers a glass backdrop region. The current game backbuffer is blurred
+	// at the end of the frame and composited into this rounded rectangle before
+	// the regular overlay draw lists are rendered.
+	void backdrop( float x, float y, float w, float h, corner_radius rounding, color tint = color{ 255, 255, 255, 255 } );
+
 	[[nodiscard]] draw_list& get( layer l = layer::middle );
 	[[nodiscard]] draw_list& get_glow( layer l = layer::middle );
 
@@ -224,33 +230,23 @@ namespace xdraw {
 
 	[[nodiscard]] ID3D11Device* device( );
 
-} // namespace xdraw
+} 
 
 namespace tokens {
 
-	inline xdraw::color col_accent{ 210, 214, 220, 255 };
-	inline xdraw::color col_accent_glow{ 210, 214, 220, 60 };
-	inline xdraw::color col_accent_soft{ 180, 184, 190, 255 };
-	inline xdraw::color col_dark{ 12, 12, 14, 255 };
-	inline xdraw::color col_text{ 235, 237, 240, 240 };
-	inline xdraw::color col_text_dim{ 165, 169, 176, 130 };
-	inline xdraw::color col_card{ 20, 21, 24, 200 };
-	inline xdraw::color col_card_hover{ 32, 34, 38, 210 };
-	inline xdraw::color col_elevated{ 27, 29, 33, 210 };
-	inline xdraw::color col_border{ 0, 0, 0, 220 };
-	inline xdraw::color col_border_focus{ 210, 214, 220, 180 };
-	inline xdraw::color col_surface{ 15, 16, 18, 220 };
-	inline xdraw::color col_surface_hover{ 28, 30, 34, 230 };
+	inline xdraw::color col_accent{ 205, 195, 255, 255 };
+	inline xdraw::color col_dark{ 17, 17, 17, 255 };
+	inline xdraw::color col_text{ 235, 230, 255, 235 };
+	inline xdraw::color col_text_dim{ 210, 209, 218, 145 };
+	inline xdraw::color col_card{ 23, 23, 23, 92 };
+	inline xdraw::color col_elevated{ 27, 27, 27, 106 };
+	inline xdraw::color col_border{ 255, 255, 255, 55 };
 
-	constexpr auto sidebar_w{ 180.0f };
-	constexpr auto tab_icon_size{ 38.0f };
-	constexpr auto subtab_bar_h{ 40.0f };
-	constexpr auto header_bar_h{ 46.0f };
-	constexpr auto tab_bar_h{ 52.0f };
+	constexpr auto sidebar_w{ 172.0f };
+	constexpr auto tab_icon_size{ 35.0f };
+	constexpr auto subtab_bar_h{ 42.0f };
 	constexpr auto gap{ 10.0f };
-	constexpr auto card_rounding{ 14.0f };
-	constexpr auto btn_rounding{ 10.0f };
-	constexpr auto sidebar_rounding{ 16.0f };
-	constexpr auto animation_speed{ 14.0f };
+	constexpr auto card_rounding{ 16.0f };
+	constexpr auto btn_rounding{ 12.0f };
 
-} // namespace tokens
+} 

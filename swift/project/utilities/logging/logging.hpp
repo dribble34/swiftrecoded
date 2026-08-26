@@ -1,6 +1,7 @@
 #pragma once
 
-#include <utilities/tls/dynamic_tls.hpp>
+#include <format>
+#include <string_view>
 
 namespace logging {
 
@@ -16,15 +17,15 @@ namespace logging {
 			print_raw( std::vformat( fmt, std::make_format_args( args... ) ).c_str( ) );
 		}
 
-		inline tls::dynamic_tls<bool> emitting{};
+		inline thread_local bool emitting{};
 
-	} // namespace console
+	} 
 
 	namespace popup {
 
 		bool initialize( );
 		void show( const char* title, const char* message );
 
-	} // namespace popup
+	} 
 
-} // namespace logging
+} 

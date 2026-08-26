@@ -35,8 +35,8 @@ namespace features::esp::detail {
 	static_assert( offsetof( mesh_primitive, draw_order ) == primitive_draw_order_offset );
 	static_assert( offsetof( mesh_primitive, flags ) == primitive_flags_offset );
 
-	// GeneratePrimitives writes to a fixed array and then a separate overflow
-	// array. Treating the two as one allocation corrupts renderer memory.
+	
+	
 	struct primitive_output_buffer
 	{
 		std::uintptr_t fixed_data{};
@@ -141,4 +141,4 @@ namespace features::esp::detail {
 		}
 	}
 
-} // namespace features::esp::detail
+} 

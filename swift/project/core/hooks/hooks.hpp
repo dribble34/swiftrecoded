@@ -1,5 +1,15 @@
 #pragma once
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include <windows.h>
+#include <dxgi.h>
+#include <d3d11.h>
+
+#include <cstdint>
+
 #include <utilities/hooking/hooking.hpp>
 
 namespace hooks {
@@ -29,6 +39,7 @@ namespace hooks {
 		static std::uintptr_t __fastcall draw_scene_object( std::uintptr_t a1, std::uintptr_t a2, std::uintptr_t batch, int batch_count, int a5, std::uintptr_t a6, std::uintptr_t a7, std::uintptr_t a8 );
 		static bool __fastcall is_glowing( std::uintptr_t glow_property );
 		static void __fastcall get_glow_color( std::uintptr_t glow_property, float* color );
+		static ID3D11ShaderResourceView* __fastcall get_resource_view( void* texture_manager, void** texture, char a3, char a4, const char* a5 );
 		static void __fastcall generate_primitives( std::uintptr_t thisptr, std::uintptr_t scene_object, std::uintptr_t scene_view, std::uintptr_t primitive_buffer );
 		static std::uintptr_t __fastcall parse_report_hit( std::uintptr_t thisptr, std::uint8_t deleting );
 		static std::uintptr_t __fastcall setup_fog( __m128i* output, int* mode );
@@ -52,7 +63,6 @@ namespace hooks {
 		static void __fastcall process_input_event( std::uintptr_t thisptr, int slot, float frametime );
 		static std::uintptr_t __fastcall render_decals( std::uintptr_t render_context, std::uintptr_t** render_view, bool pass_flag_a, bool pass_flag_b );
 		static void __fastcall render_smoke( std::uintptr_t a1, std::uintptr_t a2, int a3, int a4, std::uintptr_t a5, std::uintptr_t a6 );
-		static void* __fastcall calc_viewmodel( float* unk, float* offsets, float* fov );
 		static std::uintptr_t __fastcall render_smoke_map( std::uintptr_t thisptr, std::size_t size, std::uintptr_t* out_ptr );
 		static void __fastcall render_smoke_unmap( std::uintptr_t thisptr, std::uintptr_t ctx, std::size_t size );
 		static void __fastcall draw_flash_effect( std::uintptr_t a1, int a2, std::uintptr_t* a3, std::uintptr_t a4, __m128* a5 );
@@ -76,6 +86,7 @@ namespace hooks {
 		inline static hooking::jmp m_draw_scene_object{};
 		inline static hooking::jmp m_is_glowing{};
 		inline static hooking::jmp m_get_glow_color{};
+		inline static hooking::jmp m_get_resource_view{};
 		inline static hooking::jmp m_generate_primitives{};
 		inline static hooking::jmp m_parse_report_hit{};
 		inline static hooking::jmp m_setup_fog{};
@@ -99,7 +110,6 @@ namespace hooks {
 		inline static hooking::jmp m_process_input_event{};
 		inline static hooking::jmp m_render_decals{};
 		inline static hooking::jmp m_render_smoke{};
-		inline static hooking::jmp m_calc_viewmodel{};
 		inline static hooking::jmp m_render_smoke_map{};
 		inline static hooking::jmp m_render_smoke_unmap{};
 		inline static hooking::jmp m_draw_flash_effect{};
@@ -122,4 +132,4 @@ namespace hooks {
 		inline static hooking::jmp m_log_internal{};
 	};
 
-} // namespace hooks
+} 

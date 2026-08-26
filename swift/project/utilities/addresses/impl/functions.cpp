@@ -1,4 +1,16 @@
-#include <pch/pch.hpp>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include <external/xorstr.hpp>
+
+#include <windows.h>
+#include <dxgi.h>
+#include <d3d11.h>
+
+#include <cstddef>
+#include <cstdint>
+
 #include <utilities/logging/logging.hpp>
 #include "../addresses.hpp"
 
@@ -16,7 +28,7 @@ namespace {
 		window_class.cbSize = sizeof( window_class );
 		window_class.lpfnWndProc = DefWindowProcA;
 		window_class.hInstance = GetModuleHandleA( nullptr );
-		window_class.lpszClassName = "velocity_dummy_window";
+		window_class.lpszClassName = "swift.fly_dummy_window";
 
 		if ( !RegisterClassExA( &window_class ) )
 		{
@@ -104,7 +116,7 @@ namespace {
 		return present && resize_buffers;
 	}
 
-} // namespace
+} 
 
 namespace addresses::functions {
 
@@ -113,4 +125,4 @@ namespace addresses::functions {
 		return acquire_swap_chain_functions( present, resize_buffers );
 	}
 
-} // namespace addresses::functions
+} 

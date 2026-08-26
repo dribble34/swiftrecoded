@@ -1,7 +1,15 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
+#include <deque>
+#include <mutex>
+#include <optional>
+#include <shared_mutex>
+#include <unordered_map>
+#include <vector>
+
 #include <core/systems/systems.hpp>
-#include <utilities/tls/dynamic_tls.hpp>
 
 namespace features::combat {
 
@@ -38,23 +46,21 @@ namespace features::combat {
 				void restore( );
 			};
 
-			struct visual_record
-			{
-				math::vector3 origin{};
-				std::array<systems::bones::data, 27> bones{};
-			};
-
 			struct extrapolation_data
 			{
 				math::vector3 origin{};
 				math::vector3 velocity{};
-				math::vector3 acceleration{};
 				math::vector3 obb_mins{};
 				math::vector3 obb_maxs{};
 				std::uint32_t flags{};
 				float sim_time{};
-				float max_speed{};
-				float turn_rate{ 0.0f };
+				float direction{};
+			};
+
+			struct visual_record
+			{
+				math::vector3 origin{};
+				std::array<systems::bones::data, 27> bones{};
 			};
 
 			void run( );
@@ -64,9 +70,6 @@ namespace features::combat {
 			[[nodiscard]] std::optional<visual_record> get_oldest_was_valid_visual( std::uintptr_t pawn ) const;
 			[[nodiscard]] std::vector<record*> get_valid_records( std::uintptr_t pawn );
 			[[nodiscard]] std::array<systems::bones::data, 27> get_skeleton( const record& record ) const;
-
-			[[nodiscard]] const systems::bones::data* skeleton_view( const record& record ) const;
-
 			[[nodiscard]] std::optional<record> extrapolate( std::uintptr_t pawn );
 
 		private:
@@ -110,6 +113,16 @@ namespace features::combat {
 				lagcomp::record* record{};
 			};
 
+			struct target_static
+			{
+				int armor{};
+				int team{};
+				bool has_helmet{};
+				damage_scales scales{};
+				float armor_ratio{};
+				float headshot_multiplier{};
+			};
+
 			struct result
 			{
 				float damage{};
@@ -120,13 +133,12 @@ namespace features::combat {
 
 			void prepare( std::uintptr_t weapon_vdata, std::uintptr_t weapon );
 
+			[[nodiscard]] target_static prepare_target_static( std::uintptr_t target_pawn ) const;
 			[[nodiscard]] run_context prepare_target( std::uintptr_t target_pawn, lagcomp::record* record ) const;
-
-			void prepare_target( std::uintptr_t target_pawn, lagcomp::record* record, run_context& out ) const;
+			[[nodiscard]] run_context prepare_target( std::uintptr_t target_pawn, lagcomp::record* record, const target_static& ts ) const;
 			[[nodiscard]] bool run( const math::vector3& start, const math::vector3& end, const run_context& ctx, std::uintptr_t local_pawn, int local_team, result& out ) const;
 			[[nodiscard]] bool can( const math::vector3& start, const math::vector3& direction, float& out_damage, const systems::local::snapshot& local ) const;
 			[[nodiscard]] float get_max_damage( int hitgroup, int target_armor, bool has_helmet, int target_team ) const;
-			[[nodiscard]] const weapon_data& get_weapon_data( ) const { return this->m_weapon_data; }
 
 		private:
 			void scale_damage( int hitgroup, int armor, bool has_helmet, int team, float armor_ratio, float headshot_multiplier, const damage_scales& scales, float& damage ) const;
@@ -161,15 +173,6 @@ namespace features::combat {
 
 			void snapshot( std::uintptr_t local_pawn, std::uintptr_t weapon_services );
 			[[nodiscard]] eye_candidates get_candidates( ) const;
-			[[nodiscard]] bool has_data( ) const { return this->m_count > 0; }
-			[[nodiscard]] int client_tick( ) const { return this->m_client_tick; }
-			[[nodiscard]] float client_tick_frac( ) const { return this->m_client_tick_frac; }
-			[[nodiscard]] int server_tick( ) const { return this->m_server_tick; }
-			[[nodiscard]] int lerp_ticks_int( ) const { return this->m_lerp_ticks_int; }
-			[[nodiscard]] float lerp_ticks_frac( ) const { return this->m_lerp_ticks_frac; }
-			[[nodiscard]] int count( ) const { return this->m_count; }
-			[[nodiscard]] int oldest_tick( ) const { return this->m_count > 0 ? this->m_entries[ 0 ].tick : -1; }
-			[[nodiscard]] int newest_tick( ) const { return this->m_count > 0 ? this->m_entries[ this->m_count - 1 ].tick : -1; }
 
 		private:
 			ring_entry m_entries[ 32 ]{};
@@ -211,15 +214,18 @@ namespace features::combat {
 		[[nodiscard]] lagcomp& lc( ) { return this->m_lc; }
 		[[nodiscard]] shoot_history& sh( ) { return this->m_sh; }
 
-		[[nodiscard]] bool autowalling( ) const { return this->m_autowalling.get( ); }
-		[[nodiscard]] lagcomp::record* current_autowall_record( ) const { return this->m_current_autowall_record.get( ); }
+		[[nodiscard]] bool autowalling( ) const { return this->m_autowalling; }
+		[[nodiscard]] lagcomp::record* current_autowall_record( ) const { return this->m_current_autowall_record; }
+
+		void begin_autowall( lagcomp::record* record ) { this->m_autowalling = true; this->m_current_autowall_record = record; }
+		void end_autowall( ) { this->m_autowalling = false; this->m_current_autowall_record = nullptr; }
 
 		[[nodiscard]] int& last_shoot_tick( ) { return this->m_last_shoot_tick; }
 
 		[[nodiscard]] std::uint32_t get_spread_seed( const math::vector3& angles, int tick ) const;
 		[[nodiscard]] math::vector2 calculate_spread( int seed, float accuracy, float spread, float recoil_index, int item_def_idx, int num_bullets ) const;
 		[[nodiscard]] math::vector3 get_aim_punch( std::uintptr_t local_pawn ) const;
-		[[nodiscard]] float calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples = 256 ) const;
+		[[nodiscard]] float calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples = 256, float needed = 0.0f ) const;
 		[[nodiscard]] math::vector3 find_spread_correction( const math::vector3& aim_angle, int tick ) const;
 		[[nodiscard]] math::vector3 get_eye_position( std::uintptr_t local_pawn ) const;
 		[[nodiscard]] math::vector3 get_shoot_position( ) const;
@@ -229,13 +235,11 @@ namespace features::combat {
 		[[nodiscard]] float get_inaccuracy( bool update_accuracy_penalty ) const;
 		[[nodiscard]] float get_inaccuracy_at_velocity( std::uintptr_t local_pawn, const math::vector3& velocity ) const;
 		[[nodiscard]] float get_air_inaccuracy( float vertical_speed, float jump_initial, float jump_apex ) const;
-		[[nodiscard]] float get_inaccuracy_for_rate( float base_inaccuracy, float velocity_2d, bool on_ground, bool ducking, bool scoped ) const;
-		[[nodiscard]] float get_spread_for_rate( float base_spread, int recoil_idx ) const;
-		[[nodiscard]] int get_rate_tick_compensation( int tick_base, int next_tick ) const;
 		[[nodiscard]] bool can_shoot( systems::input::usercmd* cmd, std::uintptr_t local_controller, bool check_next_attack = true ) const;
 		[[nodiscard]] bool is_max_accuracy( float inaccuracy ) const;
 		[[nodiscard]] math::vector3 simulate_aim_punch( int recoil_index ) const;
 
+		static void write_history_entry( proto::input_history_entry* entry, const math::vector3& angles, bool set_z, int render_tick, const shoot_history::eye_candidate* source_eye );
 		bool ray_vs_capsule( const math::vector3& ray_origin, const math::vector3& ray_dir, const math::vector3& capsule_a, const math::vector3& capsule_b, float radius, float& out_fraction ) const;
 
 	private:
@@ -244,9 +248,9 @@ namespace features::combat {
 		lagcomp m_lc{};
 		shoot_history m_sh{};
 
-		// Parallel rage workers must not overwrite each other's trace record.
-		inline static tls::dynamic_tls<bool> m_autowalling{};
-		inline static tls::dynamic_tls<lagcomp::record*> m_current_autowall_record{};
+		
+		inline static thread_local bool m_autowalling{};
+		inline static thread_local lagcomp::record* m_current_autowall_record{ nullptr };
 
 		int m_last_shoot_tick{};
 	};
@@ -260,17 +264,21 @@ namespace features::combat {
 			void on_create_move( systems::input::usercmd* cmd );
 			void on_render( xdraw::draw_list& draw_list ) const;
 
-			[[nodiscard]] bool has_modified_angles( ) const { return this->m_should_correct || this->m_modified_angles.y != this->m_old_angles.y; }
-			[[nodiscard]] const math::vector3& get_modified_angles( ) const { return this->m_modified_angles; }
-
 		private:
 			[[nodiscard]] float get_pitch( float view_pitch );
 			[[nodiscard]] float get_yaw( const math::vector3& view_angles, const systems::local::snapshot& local );
 			void correct_movement( systems::input::usercmd* cmd );
 			[[nodiscard]] bool is_near_ladder( std::uintptr_t local_pawn ) const;
 
+			struct movement_quantizer
+			{
+				float forward_error{};
+				float side_error{};
+			};
+
 			math::vector3 m_old_angles{};
 			math::vector3 m_modified_angles{};
+			movement_quantizer m_quantizer{};
 
 			int m_yaw_side{};
 			bool m_should_correct{};
@@ -319,6 +327,7 @@ namespace features::combat {
 
 		private:
 			[[nodiscard]] float get_effective_accel_base( std::uintptr_t local_pawn, std::uintptr_t movement_services, std::uint32_t flags, float max_weapon_speed ) const;
+			void apply_counter_strafe( systems::input::usercmd* cmd, float wish_x, float wish_y, float move_magnitude );
 		};
 
 		antiaim m_antiaim{};
@@ -338,6 +347,7 @@ namespace features::combat {
 	public:
 		void on_create_move( systems::input::usercmd* cmd );
 		void on_render( xdraw::draw_list& draw_list );
+		void on_override_view( std::uintptr_t view_setup );
 
 		[[nodiscard]] bool should_stop( ) const noexcept { return this->m_should_stop; }
 		[[nodiscard]] bool is_firing_this_tick( ) const noexcept { return this->m_firing_this_tick; }
@@ -346,8 +356,8 @@ namespace features::combat {
 		[[nodiscard]] bool duckpeek_wants_reduck( ) const noexcept { return this->m_duckpeek_reduck; }
 		void clear_duckpeek_reduck( ) noexcept { this->m_duckpeek_reduck = false; }
 
-		static constexpr auto k_max_lagcomp_records{ 32 };
-		static constexpr auto k_max_scan_records{ 12 };
+		static constexpr auto k_max_lagcomp_records{ 8 };
+		static constexpr auto k_max_scan_records{ 2 };
 
 	private:
 		struct aim_context
@@ -357,9 +367,9 @@ namespace features::combat {
 
 			float predicted_inaccuracy{};
 			float spread{};
-
 			float weapon_max_speed{};
 			float accurate_threshold{};
+
 			bool on_ground{};
 			bool is_scoped{};
 		};
@@ -376,7 +386,7 @@ namespace features::combat {
 			int health{};
 			int armor{};
 			float min_damage{};
-			std::array<shared::lagcomp::record*, k_max_lagcomp_records> records{};
+			std::array<shared::lagcomp::record*, k_max_scan_records> records{};
 			int record_count{};
 		};
 
@@ -409,10 +419,6 @@ namespace features::combat {
 			float score{};
 			bool valid{};
 
-			[[nodiscard]] bool is_lethal( ) const noexcept
-			{
-				return this->hit.damage >= static_cast< float >( this->hit.health );
-			}
 		};
 
 		struct knife_info
@@ -424,32 +430,77 @@ namespace features::combat {
 		};
 
 		[[nodiscard]] aim_context build_context( systems::input::usercmd* cmd, const systems::local::snapshot& local ) const;
-		[[nodiscard]] std::optional<stop_prediction> predict_stop( const aim_context& ctx, const math::vector3& current_eye, const systems::local::snapshot& local ) const;
-		[[nodiscard]] std::vector<candidate> gather_candidates( const systems::local::snapshot& local, float max_distance_sq = 0.0f ) const;
+		[[nodiscard]] std::vector<candidate> gather_candidates( const systems::local::snapshot& local, float max_fov = 180.0f, float max_distance_sq = 0.0f ) const;
 
 		void run_gun( systems::input::usercmd* cmd, const aim_context& ctx, const systems::local::snapshot& local, bool allow_fire = true );
 		void run_taser( systems::input::usercmd* cmd, const aim_context& ctx, const systems::local::snapshot& local );
 		void run_knife( systems::input::usercmd* cmd, const aim_context& ctx, const systems::local::snapshot& local );
 		void auto_revolver( systems::input::usercmd* cmd, const aim_context& ctx, const systems::local::snapshot& local );
 
+		struct hitbox_slot
+		{
+			systems::hitboxes::entry entry{};
+			bool valid{};
+		};
+
+		struct player_scan_state
+		{
+			const settings::combat::ragebot::weapon_group* config{};
+			systems::hitboxes::set hitbox_set{};
+			std::array<hitbox_slot, 19> hitbox_by_index{};
+			std::array<int, 19> scan_order{};
+			int scan_count{};
+			bool force_body{};
+			shared::penetration::target_static pen_static{};
+		};
+
 		[[nodiscard]] std::vector<scan_hit> scan_players( const math::vector3& eye, float inaccuracy, const aim_context& ctx, std::vector<candidate>& candidates, const systems::local::snapshot& local ) const;
-
-		void scan_player( const math::vector3& eye, float inaccuracy, const aim_context& ctx, candidate& cand, shared::lagcomp::record* record, const systems::local::snapshot& local, shared::penetration::run_context& pen_ctx, std::vector<scan_hit>& out ) const;
+		[[nodiscard]] player_scan_state prepare_player( candidate& cand ) const;
+		[[nodiscard]] std::vector<scan_hit> scan_record( const player_scan_state& state, const math::vector3& eye, float inaccuracy, const aim_context& ctx, candidate& cand, shared::lagcomp::record* record, const systems::local::snapshot& local ) const;
 		[[nodiscard]] target select_best( const aim_context& aim_ctx, const std::vector<scan_hit>& hits, float eval_inaccuracy ) const;
-		[[nodiscard]] float evaluate_hitchance( const scan_hit& hit, const aim_context& ctx, float inaccuracy ) const;
-		[[nodiscard]] float get_standing_inaccuracy( const systems::local::snapshot& local, const aim_context& ctx ) const;
-		[[nodiscard]] bool refine_shot( const aim_context& ctx, const target& tgt, const systems::local::snapshot& local ) const;
 
+		[[nodiscard]] shared::shoot_history::eye_candidates get_eye_candidates( ) const;
 		[[nodiscard]] std::vector<scan_hit> scan_taser( const math::vector3& eye, const aim_context& ctx, std::vector<candidate>& candidates, const systems::local::snapshot& local ) const;
 
 		[[nodiscard]] knife_info get_knife_info( const systems::local::snapshot& local ) const;
 		[[nodiscard]] std::vector<scan_hit> scan_knife( const math::vector3& eye, const aim_context& ctx, const knife_info& info, std::vector<candidate>& candidates, const systems::local::snapshot& local ) const;
 
-		void fire_gun( systems::input::usercmd* cmd, const target& tgt, bool was_forced, const math::vector3& shoot_eye, const systems::local::snapshot& local );
-		void fire_melee( systems::input::usercmd* cmd, const target& tgt, const systems::local::snapshot& local );
+		void fire_gun( systems::input::usercmd* cmd, const target& tgt, const math::vector3& shoot_eye, const systems::local::snapshot& local );
+		bool fire_melee( systems::input::usercmd* cmd, const target& tgt, const systems::local::snapshot& local );
+
+		[[nodiscard]] std::optional<stop_prediction> predict_stop( const aim_context& ctx, const math::vector3& current_eye, const systems::local::snapshot& local ) const;
+		[[nodiscard]] bool should_stop_movement( const aim_context& ctx ) const;
+		[[nodiscard]] float evaluate_hitchance( const scan_hit& hit, const aim_context& ctx, float inaccuracy ) const;
+		[[nodiscard]] float get_standing_inaccuracy( const systems::local::snapshot& local, const aim_context& ctx ) const;
+		[[nodiscard]] bool refine_shot( const aim_context& ctx, const target& tgt, const systems::local::snapshot& local ) const;
+
+		// auto lineup
+		struct lineup_position
+		{
+			math::vector3 position{};
+			math::vector3 target_pos{};
+			math::vector3 aim_angle{};
+			float damage{};
+			int hitgroup{};
+			std::uintptr_t target_pawn{};
+			bool valid{};
+		};
+
+		struct auto_lineup_ctx
+		{
+			std::vector<lineup_position> positions{};
+			std::size_t current_check{ 0 };
+			std::size_t checks_this_frame{ 0 };
+			bool initialized{ false };
+			float last_map_hash{ 0.0f };
+		};
+
+		[[nodiscard]] std::optional<lineup_position> find_auto_lineup( const aim_context& ctx, const std::vector<candidate>& candidates, const systems::local::snapshot& local );
+		void init_auto_lineup( const systems::local::snapshot& local );
+		[[nodiscard]] bool test_lineup_position( const math::vector3& pos, const aim_context& ctx, const candidate& cand, const systems::local::snapshot& local, lineup_position& out ) const;
+		[[nodiscard]] math::vector3 get_lineup_origin( const candidate& cand, const systems::local::snapshot& local ) const;
 
 		void generate_multipoints( const systems::hitboxes::entry& hitbox, const math::vector3& center, const math::quaternion& bone_rot, float pointscale, const math::vector3& shoot_pos, float inaccuracy, std::vector<math::vector3>& out ) const;
-		[[nodiscard]] bool should_stop_movement( const aim_context& ctx ) const;
 		[[nodiscard]] float get_min_damage( const settings::combat::ragebot::weapon_group& config, int target_health, bool override_active ) const;
 		[[nodiscard]] float get_knife_damage( float raw, int armor, float armor_ratio ) const;
 		[[nodiscard]] systems::tracing::result trace_taser_hit( const math::vector3& origin, const math::vector3& forward, float range, std::uintptr_t target_pawn, std::uintptr_t local_pawn ) const;
@@ -469,26 +520,22 @@ namespace features::combat {
 		bool m_firing_this_tick{};
 		bool m_release_duck_for_shot{};
 		bool m_duckpeek_reduck{};
-		int m_delay_shot_ticks{};
 
-		std::uint8_t m_knife_attack{};
 		bool m_zeus_fired{};
+
+		// silent no-spread: the corrected angle must reach the live view for the
+		// seed, so the user's view is parked here and restored at view setup
+		math::vector3 m_silent_restore_view{};
+		bool m_silent_restore_required{};
+
+		mutable std::vector<shared::lagcomp::record> m_extrapolated_records{};
+
+		// auto lineup
+		mutable auto_lineup_ctx m_auto_lineup{};
+		std::string m_current_map_name{};
 
 		int m_revolver_cock_ticks{};
 		std::atomic<penetration_crosshair_state> m_penetration_crosshair_state{ penetration_crosshair_state::unavailable };
-		int m_last_crosshair_trace_tick{};
-
-		std::deque<shared::lagcomp::record> m_extrapolated_records{};
-
-		struct debug_point
-		{
-			math::vector3 position{};
-			int hitbox_index{};
-			bool is_center{};
-		};
-
-		mutable std::vector<debug_point> m_debug_points{};
-		mutable std::mutex m_debug_mtx{};
 	};
 
 	class legit
@@ -532,7 +579,7 @@ namespace features::combat {
 		[[nodiscard]] target_result find_target( const math::vector3& shoot_position, const math::vector3& view_angles, const settings::combat::legitbot::weapon_group& config, const systems::local::snapshot& local ) const;
 		[[nodiscard]] scan_point scan_player( std::uintptr_t pawn, shared::lagcomp::record* record, const math::vector3& shoot_position, const math::vector3& view_angles, const settings::combat::legitbot::weapon_group& config, const systems::local::snapshot& local ) const;
 
-		void apply_aimbot( systems::input::usercmd* cmd, const target_result& tgt, const math::vector3& view_angles, const math::vector3& aim_punch, const settings::combat::legitbot::weapon_group& config, const systems::local::snapshot& local );
+		void apply_aimbot( const target_result& tgt, const math::vector3& view_angles, const math::vector3& aim_punch, const settings::combat::legitbot::weapon_group& config, const systems::local::snapshot& local );
 		void apply_triggerbot( systems::input::usercmd* cmd, const math::vector3& shoot_position, const math::vector3& view_angles, const math::vector3& aim_punch, const settings::combat::legitbot::weapon_group& config, const systems::local::snapshot& local );
 		void apply_rcs( math::vector3& aim_angle, const math::vector3& aim_punch, int rand_min, int rand_max ) const;
 
@@ -558,4 +605,4 @@ namespace features::combat {
 		math::vector3 m_cached_aim_punch{};
 	};
 
-} // namespace features::combat
+} 

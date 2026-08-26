@@ -1,5 +1,11 @@
 #pragma once
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include <windows.h>
+
 #include <array>
 #include <filesystem>
 #include <optional>
@@ -30,8 +36,8 @@ namespace game_path
 		return std::nullopt;
 	}
 
-	// Derive the active CS2 content directory from the loaded game rather than
-	// assuming which Steam library or drive the user installed it on.
+	
+	
 	[[nodiscard]] inline std::optional<std::filesystem::path> csgo_directory( )
 	{
 		static const auto directory = [ ]( ) -> std::optional<std::filesystem::path>

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 namespace fnv1a {
 
 	constexpr std::uint32_t hash( const char* str, std::size_t length ) noexcept
@@ -33,7 +36,7 @@ namespace fnv1a {
 		return hash;
 	}
 
-} // namespace fnv1a
+} 
 
 constexpr std::uint32_t operator""_hash( const char* str, std::size_t length ) noexcept
 {

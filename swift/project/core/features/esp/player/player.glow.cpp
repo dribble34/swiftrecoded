@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <core/systems/systems.hpp>
 #include <core/settings.hpp>
@@ -14,7 +13,7 @@ namespace features::esp::player {
 		}
 
 		const auto& cfg = settings::g_esp.m_player.m_glow;
-		if ( !cfg.enemy.enabled.value && !cfg.enemy_ragdoll.enabled.value && !cfg.team.enabled.value && !cfg.team_ragdoll.enabled.value && !cfg.local.enabled.value && !cfg.local_ragdoll.enabled.value )
+		if ( !cfg.enemy.enabled.value && !cfg.team.enabled.value && !cfg.local.enabled.value )
 		{
 			return false;
 		}
@@ -29,17 +28,7 @@ namespace features::esp::player {
 
 		if ( is_dead )
 		{
-			if ( is_local )
-			{
-				return cfg.local_ragdoll.enabled.value;
-			}
-
-			if ( is_other_team )
-			{
-				return cfg.enemy_ragdoll.enabled.value;
-			}
-
-			return cfg.team_ragdoll.enabled.value;
+			return false;
 		}
 
 		if ( is_local && settings::g_misc.m_camera.thirdperson.value )
@@ -63,7 +52,7 @@ namespace features::esp::player {
 		}
 
 		const auto& cfg = settings::g_esp.m_player.m_glow;
-		if ( !cfg.enemy.enabled.value && !cfg.enemy_ragdoll.enabled.value && !cfg.team.enabled.value && !cfg.team_ragdoll.enabled.value && !cfg.local.enabled.value && !cfg.local_ragdoll.enabled.value )
+		if ( !cfg.enemy.enabled.value && !cfg.team.enabled.value && !cfg.local.enabled.value )
 		{
 			return false;
 		}
@@ -80,36 +69,23 @@ namespace features::esp::player {
 
 		if ( is_dead )
 		{
-			if ( is_local )
+			return false;
+		}
+
+		if ( is_local )
+		{
+			if ( settings::g_misc.m_camera.thirdperson.value )
 			{
-				target = &cfg.local_ragdoll;
+				target = &cfg.local;
 			}
-			else if ( is_other_team )
-			{
-				target = &cfg.enemy_ragdoll;
-			}
-			else
-			{
-				target = &cfg.team_ragdoll;
-			}
+		}
+		else if ( is_other_team )
+		{
+			target = &cfg.enemy;
 		}
 		else
 		{
-			if ( is_local )
-			{
-				if ( settings::g_misc.m_camera.thirdperson.value )
-				{
-					target = &cfg.local;
-				}
-			}
-			else if ( is_other_team )
-			{
-				target = &cfg.enemy;
-			}
-			else
-			{
-				target = &cfg.team;
-			}
+			target = &cfg.team;
 		}
 
 		if ( !target || !target->enabled.value )
@@ -125,4 +101,4 @@ namespace features::esp::player {
 		return true;
 	}
 
-} // namespace features::esp::player
+} 

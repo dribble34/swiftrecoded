@@ -26,13 +26,13 @@ namespace addresses {
 		inline std::uintptr_t file_system_stdio{};
 		inline std::uintptr_t vphysics2{};
 
-	} // namespace modules
+	} 
 
 	namespace globals {
 
 		bool initialize( );
 
-		// interfaces
+		
 		inline std::uintptr_t source2client{};
 		inline std::uintptr_t panorama{};
 		inline std::uintptr_t source2engine_to_client{};
@@ -49,7 +49,7 @@ namespace addresses {
 		inline std::uintptr_t mesh_system{};
 		inline std::uintptr_t file_system{};
 
-		// normal
+		
 		inline std::uintptr_t csgo_input{};
 		inline std::uintptr_t entity_list{};
 		inline std::uintptr_t local_player_controller{};
@@ -66,6 +66,7 @@ namespace addresses {
 		inline std::uintptr_t game_entity_system{};
 		inline std::uintptr_t weapon_recoil_data{};
 		inline std::uintptr_t hud{};
+		inline std::uintptr_t main_menu_panel{};
 		inline std::uintptr_t prediction_seed{};
 		inline std::uintptr_t simulation_player{};
 		inline std::uintptr_t prediction_player{};
@@ -75,17 +76,17 @@ namespace addresses {
 		inline std::uintptr_t frame_input_ring_base{};
 		inline std::uintptr_t prediction_state{};
 
-	} // namespace globals
+	} 
 
 	namespace functions {
 
 		bool initialize( );
 
 
-		// cheat hooks
+		
 		inline std::uintptr_t present{};
 		inline std::uintptr_t resize_buffers{};
 
-	} // namespace functions
+	} 
 
-} // namespace addresses
+} 

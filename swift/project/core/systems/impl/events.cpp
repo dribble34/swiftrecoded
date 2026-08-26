@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <core/features/features.hpp>
@@ -19,7 +20,7 @@ namespace systems {
 			return false;
 		}
 
-		if ( !register_listener( xs( "round_start" ), [ ]( void* event ) { features::misc::g_other.on_round_start( ); } ) )
+		if ( !register_listener( xs( "round_start" ), [ ]( void* /*event*/ ) { features::misc::g_other.on_round_start( ); } ) )
 		{
 			return false;
 		}
@@ -118,4 +119,4 @@ namespace systems {
 		return current_listener->debug_id;
 	}
 
-} // namespace systems
+} 

@@ -1,8 +1,5 @@
-﻿#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
-#include <utilities/logging/logging.hpp>
-#include <utilities/tls/dynamic_tls.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
 #include <core/settings.hpp>
@@ -10,16 +7,85 @@
 
 namespace features::combat {
 
+	void shared::update( )
+	{
+		this->m_ctx = {};
+
+		const auto local = systems::g_local.get( );
+		if ( !local.pawn )
+		{
+			return;
+		}
+
+		const auto global_vars = memory::read<std::uintptr_t>( addresses::globals::global_vars );
+		const auto movement_services = memory::read<std::uintptr_t>( local.pawn + SCHEMA( "C_BasePlayerPawn", "m_pMovementServices"_hash ) );
+
+		if ( !global_vars || !movement_services )
+		{
+			return;
+		}
+
+		this->m_ctx.current_tick = memory::read<int>( global_vars + 0x44 );
+		this->m_ctx.current_time = memory::read<float>( global_vars + 0x30 );
+		this->m_ctx.is_scoped = memory::read<bool>( local.pawn + SCHEMA( "C_CSPlayerPawn", "m_bIsScoped"_hash ) );
+		this->m_ctx.ticks_since_land = this->m_ctx.current_tick - memory::read<int>( movement_services + SCHEMA( "CCSPlayer_MovementServices", "m_ModernJump"_hash ) + SCHEMA( "CCSPlayerModernJump", "m_nLastLandedTick"_hash ) );
+		this->m_ctx.weapon_services = memory::read<std::uintptr_t>( local.pawn + SCHEMA( "C_BasePlayerPawn", "m_pWeaponServices"_hash ) );
+
+		if ( !this->m_ctx.weapon_services )
+		{
+			return;
+		}
+
+		const auto weapon_handle = memory::read<std::uint32_t>( this->m_ctx.weapon_services + SCHEMA( "CPlayer_WeaponServices", "m_hActiveWeapon"_hash ) );
+		if ( !weapon_handle )
+		{
+			return;
+		}
+
+		this->m_ctx.weapon = systems::g_entities.lookup( weapon_handle );
+		if ( !this->m_ctx.weapon )
+		{
+			return;
+		}
+
+		this->m_ctx.weapon_vdata = memory::read<std::uintptr_t>( this->m_ctx.weapon + SCHEMA( "C_BaseEntity", "m_nSubclassID"_hash ) + 0x8 );
+		if ( !this->m_ctx.weapon_vdata )
+		{
+			return;
+		}
+
+		this->m_ctx.range = memory::read<float>( this->m_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flRange"_hash ) );
+		this->m_ctx.weapon_type = memory::read<std::uint32_t>( this->m_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_WeaponType"_hash ) );
+		this->m_ctx.item_def_idx = memory::read<std::uint16_t>( this->m_ctx.weapon + SCHEMA( "C_EconEntity", "m_AttributeManager"_hash ) + SCHEMA( "C_AttributeContainer", "m_Item"_hash ) + SCHEMA( "C_EconItemView", "m_iItemDefinitionIndex"_hash ) );
+		this->m_ctx.num_bullets = memory::read<int>( this->m_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_nNumBullets"_hash ) );
+		this->m_ctx.recoil_index = memory::read<float>( this->m_ctx.weapon + SCHEMA( "C_CSWeaponBase", "m_flRecoilIndex"_hash ) );
+		this->m_ctx.weapon_max_speed = memory::read<float>( this->m_ctx.weapon_vdata + SCHEMA( "CCSWeaponBaseVData", "m_flMaxSpeed"_hash ) );
+		this->m_ctx.is_jump_scouting = ( systems::g_prediction.pre( ).flags & cstypes::entity_flags::on_ground ) == 0 && this->m_ctx.item_def_idx == cstypes::item_definition_index::weapon_ssg_08 && this->m_ctx.is_scoped;
+		this->m_ctx.valid = true;
+
+		this->m_pen.prepare( this->m_ctx.weapon_vdata, this->m_ctx.weapon );
+	}
+
+	void shared::invalidate_if_needed( )
+	{
+		const auto local = systems::g_local.get( );
+		if ( !local.is_alive || !local.pawn || !local.controller )
+		{
+			this->m_ctx = {};
+			this->m_last_shoot_tick = 0;
+		}
+	}
+
 	std::uint32_t shared::get_spread_seed( const math::vector3& angles, int tick ) const
 	{
-		return memory::call<std::uint32_t>(PATTERN (patterns::get_tick_view_angles), nullptr, &angles, tick );
+		return memory::call<std::uint32_t>( PATTERN( patterns::get_tick_view_angles ), nullptr, &angles, tick );
 	}
 
 	math::vector2 shared::calculate_spread( int seed, float accuracy, float spread, float recoil_index, int item_def_idx, int num_bullets ) const
 	{
 		math::vector2 out{};
 
-		memory::call<void>(PATTERN (patterns::weapon_calculate_spread), static_cast< std::int16_t >( item_def_idx ), num_bullets, 0, static_cast< std::uint32_t >( seed + 1 ), accuracy, spread, recoil_index, &out.x, &out.y );
+		memory::call<void>( PATTERN( patterns::weapon_calculate_spread ), static_cast< std::int16_t >( item_def_idx ), num_bullets, 0, static_cast< std::uint32_t >( seed + 1 ), accuracy, spread, recoil_index, &out.x, &out.y );
 
 		return out;
 	}
@@ -28,12 +94,12 @@ namespace features::combat {
 	{
 		math::vector3 out{};
 
-		memory::call<void>(PATTERN (patterns::get_aim_punch), memory::read<std::uintptr_t>( local_pawn + SCHEMA( "C_CSPlayerPawn", "m_pAimPunchServices"_hash ) ), &out, 0u );
+		memory::call<void>( PATTERN( patterns::get_aim_punch ), memory::read<std::uintptr_t>( local_pawn + SCHEMA( "C_CSPlayerPawn", "m_pAimPunchServices"_hash ) ), &out, 0u );
 
 		return out;
 	}
 
-	float shared::calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples ) const
+	float shared::calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples, float needed ) const
 	{
 		const auto total = spread + inaccuracy;
 		if ( total < 0.0001f )
@@ -100,8 +166,7 @@ namespace features::combat {
 			std::array<math::vector2, 256> values{};
 		};
 
-		static tls::dynamic_tls<spread_cache> cache_slot{};
-		auto& cache = cache_slot.get( );
+		thread_local spread_cache cache{};
 		if ( !cache.initialized || cache.inaccuracy != inaccuracy || cache.spread != spread ||
 			cache.recoil_index != this->m_ctx.recoil_index || cache.item_def_idx != this->m_ctx.item_def_idx ||
 			cache.num_bullets != this->m_ctx.num_bullets )
@@ -123,6 +188,9 @@ namespace features::combat {
 		cache.count = std::max( cache.count, cached_samples );
 
 		auto hits{ 0 };
+		const auto needed_hits = needed > 0.0f
+			? static_cast< int >( std::ceil( std::clamp( needed, 0.0f, 1.0f ) * static_cast< float >( samples ) ) )
+			: 0;
 
 		for ( auto i = 0; i < samples; ++i )
 		{
@@ -146,6 +214,19 @@ namespace features::combat {
 			if ( hit )
 			{
 				++hits;
+			}
+
+			if ( needed_hits > 0 )
+			{
+				if ( hits >= needed_hits )
+				{
+					return static_cast< float >( hits ) / static_cast< float >( i + 1 );
+				}
+
+				if ( hits + ( samples - i - 1 ) < needed_hits )
+				{
+					return static_cast< float >( hits ) / static_cast< float >( samples );
+				}
 			}
 		}
 
@@ -211,7 +292,7 @@ namespace features::combat {
 			return this->get_shoot_position( );
 		}
 
-		const auto interp = memory::call<float>(PATTERN (patterns::get_interp_amount), local_pawn );
+		const auto interp = memory::call<float>( PATTERN( patterns::get_interp_amount ), local_pawn );
 		const auto newest_idx = ( head + count - 1 ) % 32;
 		const auto newest_off = ws + 232 + 20ull * newest_idx;
 		const auto newest_tick = memory::read<int>( newest_off );
@@ -267,9 +348,9 @@ namespace features::combat {
 		vel.z = 0.0f;
 
 		auto ticks{ 0 };
-		const auto sv_friction = CONVAR ("sv_friction")->get<float>( );
-		const auto sv_stopspeed = CONVAR ("sv_stopspeed")->get<float>( );
-		const auto sv_accelerate = CONVAR ("sv_accelerate")->get<float>( );
+		const auto sv_friction = CONVAR( "sv_friction" )->get<float>( );
+		const auto sv_stopspeed = CONVAR( "sv_stopspeed" )->get<float>( );
+		const auto sv_accelerate = CONVAR( "sv_accelerate" )->get<float>( );
 		const auto surface_friction = systems::g_prediction.pre( ).surface_friction;
 		const auto accurate_threshold = max_speed * 0.34f;
 
@@ -342,12 +423,12 @@ namespace features::combat {
 			return 0.0f;
 		}
 
-		std::vector<std::uint8_t> backup( accuracy_state_size );
+		std::array<std::uint8_t, 0x100> backup{};
 		std::memcpy( backup.data( ), reinterpret_cast< const void* >( this->m_ctx.weapon + accuracy_state_begin ), accuracy_state_size );
 
 		if ( update_accuracy_penalty )
 		{
-			memory::call<void>(PATTERN (patterns::weapon_update_accuracy), this->m_ctx.weapon );
+			memory::call<void>( PATTERN( patterns::weapon_update_accuracy ), this->m_ctx.weapon );
 		}
 
 		static const auto get_inaccuracy = PATTERN( patterns::get_inaccuracy );
@@ -375,7 +456,7 @@ namespace features::combat {
 			return 0.0f;
 		}
 
-		std::vector<std::uint8_t> backup( accuracy_state_size );
+		std::array<std::uint8_t, 0x100> backup{};
 		std::memcpy( backup.data( ), reinterpret_cast< const void* >( this->m_ctx.weapon + accuracy_state_begin ), accuracy_state_size );
 
 		const auto old_velocity = memory::read<math::vector3>( local_pawn + SCHEMA( "C_BaseEntity", "m_vecAbsVelocity"_hash ) );
@@ -384,7 +465,7 @@ namespace features::combat {
 		memory::write( local_pawn + SCHEMA( "C_BaseEntity", "m_iEFlags"_hash ), old_eflags & ~0x1000u );
 		memory::write( local_pawn + SCHEMA( "C_BaseEntity", "m_vecAbsVelocity"_hash ), velocity );
 
-		memory::call<void>(PATTERN (patterns::weapon_update_accuracy), this->m_ctx.weapon );
+		memory::call<void>( PATTERN( patterns::weapon_update_accuracy ), this->m_ctx.weapon );
 
 		static const auto get_inaccuracy = PATTERN( patterns::get_inaccuracy );
 		const auto inaccuracy = memory::call<float>(
@@ -402,59 +483,8 @@ namespace features::combat {
 	float shared::get_air_inaccuracy( float vertical_speed, float jump_initial, float jump_apex ) const
 	{
 		constexpr auto sqrt_threshold{ 17.37795666f };
-		if ( !std::isfinite(vertical_speed) || !std::isfinite(jump_initial) || !std::isfinite(jump_apex) )
-			return jump_apex;
 		const auto val = ( ( std::sqrtf( std::fabsf( vertical_speed ) ) - sqrt_threshold * 0.25f ) * ( jump_initial - jump_apex ) ) / ( sqrt_threshold * 0.75f ) + jump_apex;
-		return std::clamp( val, 0.0f, jump_initial * 2.2f );
-	}
-
-	float shared::get_inaccuracy_for_rate( float base_inaccuracy, float velocity_2d, bool on_ground, bool ducking, bool scoped ) const
-	{
-		float v = base_inaccuracy;
-		if ( !std::isfinite(v) )
-			v = 0.0f;
-		v = std::clamp(v, 0.0f, 2.0f);
-		float vel_factor = velocity_2d * 0.0018f;
-		if ( !on_ground )
-			vel_factor *= 1.85f;
-		if ( ducking && on_ground )
-			vel_factor *= 0.72f;
-		if ( scoped && on_ground )
-			vel_factor *= 0.65f;
-		float out = v + vel_factor;
-		if ( !on_ground )
-		{
-			float air = this->get_air_inaccuracy( 0.0f, v + 0.25f, v );
-			out = std::max(out, air);
-		}
-		return std::clamp(out, 0.0f, 2.0f);
-	}
-
-	float shared::get_spread_for_rate( float base_spread, int recoil_idx ) const
-	{
-		float s = base_spread;
-		if ( !std::isfinite(s) )
-			s = 0.0f;
-		s = std::clamp(s, 0.0f, 1.0f);
-		if ( recoil_idx > 0 )
-		{
-			float recoil_factor = std::clamp((float)recoil_idx * 0.008f, 0.0f, 0.12f);
-			s += recoil_factor;
-		}
-		return std::clamp(s, 0.0f, 1.0f);
-	}
-
-	int shared::get_rate_tick_compensation( int tick_base, int next_tick ) const
-	{
-		int delta = next_tick - tick_base;
-		if ( delta <= 0 )
-			return 0;
-		if ( delta > 8 )
-			return delta;
-		const auto sv_maxusrcmd = CONVAR("sv_maxusrcmdprocessticks")->get<int>();
-		if ( sv_maxusrcmd > 0 && delta > sv_maxusrcmd )
-			return delta;
-		return delta;
+		return std::clamp( val, 0.0f, jump_initial * 2.0f );
 	}
 
 	bool shared::can_shoot( systems::input::usercmd* cmd, std::uintptr_t local_controller, bool check_next_attack ) const
@@ -485,10 +515,10 @@ namespace features::combat {
 		if ( this->m_ctx.weapon_type == cstypes::weapon_type::knife )
 		{
 			const auto next_secondary = memory::read<int>( this->m_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_nNextSecondaryAttackTick"_hash ) );
-			return tick_base >= this->m_last_shoot_tick + 1 && ( client_tick >= next_primary || client_tick >= next_secondary );
+			return client_tick >= next_primary || client_tick >= next_secondary;
 		}
 
-		return tick_base >= this->m_last_shoot_tick + 1 && client_tick >= next_primary;
+		return client_tick >= next_primary;
 	}
 
 	bool shared::is_max_accuracy( float inaccuracy ) const
@@ -552,24 +582,24 @@ namespace features::combat {
 		math::vector3 punch_vel{};
 
 		auto hybrid_decay = [ ]( math::vector3& v, float exp, float lin, float dt )
-			{
-				v *= std::expf( -exp * dt );
+		{
+			v *= std::expf( -exp * dt );
 
-				const auto mag = v.length( );
-				if ( mag > lin * dt )
-				{
-					v *= ( 1.0f - ( lin * dt ) / mag );
-				}
-				else
-				{
-					v = {};
-				}
-			};
+			const auto mag = v.length( );
+			if ( mag > lin * dt )
+			{
+				v *= ( 1.0f - ( lin * dt ) / mag );
+			}
+			else
+			{
+				v = {};
+			}
+		};
 
 		for ( auto i = 0; i < recoil_index; ++i )
 		{
 			float angle{}, magnitude{};
-			memory::call<void>(PATTERN (patterns::weapon_get_recoil_offset), addresses::globals::weapon_recoil_data, this->m_ctx.weapon, weapon_mode, i, &angle, &magnitude );
+			memory::call<void>( PATTERN( patterns::weapon_get_recoil_offset ), addresses::globals::weapon_recoil_data, this->m_ctx.weapon, weapon_mode, i, &angle, &magnitude );
 
 			math::vector3 offset{};
 			offset.x = std::cosf( math::helpers::deg_to_rad( angle ) ) * magnitude;
@@ -596,4 +626,156 @@ namespace features::combat {
 		return punch * recoil_scale;
 	}
 
-} // namespace features::combat
+	void shared::write_history_entry( proto::input_history_entry* entry, const math::vector3& angles, bool set_z, int render_tick, const shoot_history::eye_candidate* source_eye )
+	{
+		if ( const auto view_angles = entry->mutable_view_angles( ) )
+		{
+			view_angles->set_x( angles.x );
+			view_angles->set_y( angles.y );
+
+			if ( set_z )
+			{
+				view_angles->set_z( angles.z );
+			}
+		}
+
+		entry->set_render_tick_count( render_tick );
+		entry->set_render_tick_fraction( 0.0f );
+
+		if ( source_eye && !source_eye->is_uninterpolated )
+		{
+			auto frac = source_eye->player_frac + source_eye->lerp_ticks_frac;
+			const auto carry = static_cast< int >( std::floor( frac ) );
+			frac -= static_cast< float >( carry );
+
+			entry->set_player_tick_count( source_eye->player_tick + source_eye->lerp_ticks_int + carry );
+			entry->set_player_tick_fraction( frac );
+		}
+
+		if ( entry->has_sv_interp0( ) )
+		{
+			const auto interp = entry->mutable_sv_interp0( );
+			interp->set_src_tick( -1 );
+			interp->set_dst_tick( -1 );
+			interp->set_frac( 0.0f );
+		}
+
+		if ( entry->has_sv_interp1( ) )
+		{
+			const auto interp = entry->mutable_sv_interp1( );
+			interp->set_src_tick( -1 );
+			interp->set_dst_tick( -1 );
+			interp->set_frac( 0.0f );
+		}
+
+		if ( entry->has_cl_interp( ) )
+		{
+			const auto interp = entry->mutable_cl_interp( );
+			interp->set_frac( 0.0f );
+		}
+	}
+
+	bool shared::ray_vs_capsule( const math::vector3& ray_origin, const math::vector3& ray_dir, const math::vector3& capsule_a, const math::vector3& capsule_b, float radius, float& out_fraction ) const
+	{
+		const auto ab = capsule_b - capsule_a;
+		const auto ab_sq = ab.dot( ab );
+		const auto oc = ray_origin - capsule_a;
+		const auto dir_sq = ray_dir.dot( ray_dir );
+
+		if ( dir_sq < 1e-8f )
+		{
+			return false;
+		}
+
+		auto best_t{ 1.0f };
+		auto hit{ false };
+
+		if ( ab_sq > 1e-8f )
+		{
+			const float m = ab.dot( ray_dir ) / ab_sq;
+			const float n = ab.dot( oc ) / ab_sq;
+
+			const auto d_perp = ray_dir - ab * m;
+			const auto oc_perp = oc - ab * n;
+
+			const auto a = d_perp.dot( d_perp );
+			const auto half_b = d_perp.dot( oc_perp );
+			const auto c = oc_perp.dot( oc_perp ) - radius * radius;
+
+			if ( a > 1e-8f )
+			{
+				const auto disc = half_b * half_b - a * c;
+				if ( disc >= 0.0f )
+				{
+					const auto sqrt_disc = std::sqrt( disc );
+
+					for ( int r = 0; r < 2; r++ )
+					{
+						const auto t = ( -half_b + ( r == 0 ? -sqrt_disc : sqrt_disc ) ) / a;
+						if ( t < 0.0f || t >= best_t )
+						{
+							continue;
+						}
+
+						const auto s = m * t + n;
+						if ( s >= 0.0f && s <= 1.0f )
+						{
+							best_t = t;
+							hit = true;
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		const math::vector3 caps[ ]{ capsule_a, capsule_b };
+
+		for ( int i = 0; i < 2; i++ )
+		{
+			const auto co = ray_origin - caps[ i ];
+			const auto half_b = co.dot( ray_dir );
+			const auto c = co.dot( co ) - radius * radius;
+			const auto disc = half_b * half_b - dir_sq * c;
+
+			if ( disc < 0.0f )
+			{
+				continue;
+			}
+
+			const auto sqrt_disc = std::sqrt( disc );
+
+			for ( int r = 0; r < 2; r++ )
+			{
+				const auto t = ( -half_b + ( r == 0 ? -sqrt_disc : sqrt_disc ) ) / dir_sq;
+				if ( t < 0.0f || t >= best_t )
+				{
+					continue;
+				}
+
+				if ( ab_sq > 1e-8f )
+				{
+					const auto hit_point = ray_origin + ray_dir * t - caps[ i ];
+					const auto sign = i == 0 ? -1.0f : 1.0f;
+
+					if ( sign * ab.dot( hit_point ) < 0.0f )
+					{
+						continue;
+					}
+				}
+
+				best_t = t;
+				hit = true;
+				break;
+			}
+		}
+
+		if ( hit )
+		{
+			out_fraction = best_t;
+		}
+
+		return hit;
+	}
+
+}

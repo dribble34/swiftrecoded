@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <cmath>
+
 #include "math.hpp"
 
 namespace math {
@@ -174,7 +175,7 @@ namespace math {
 		return vec;
 	}
 
-	// -------------------------------- //
+	
 
 	quaternion::quaternion( ) noexcept : x( 0.0f ), y( 0.0f ), z( 0.0f ), w( 1.0f ) {}
 	constexpr quaternion::quaternion( float x, float y, float z, float w ) noexcept : x( x ), y( y ), z( z ), w( w ) {}
@@ -213,7 +214,7 @@ namespace math {
 		return v + uv + uuv;
 	}
 
-	// -------------------------------- //
+	
 
 	const float* matrix3x4::operator[]( int i ) const noexcept
 	{
@@ -235,7 +236,7 @@ namespace math {
 		return mat[ index ];
 	}
 
-	// -------------------------------- //
+	
 
 	namespace helpers {
 
@@ -348,29 +349,6 @@ namespace math {
 			return yaw;
 		}
 
-		vector3 predict_position( const vector3& origin, const vector3& velocity, float tick_count )
-		{
-			const auto tick_interval = cstypes::tick_interval;
-			const auto predicted_origin = origin + velocity * ( tick_count * tick_interval );
-			return predicted_origin;
-		}
+	} 
 
-		float estimate_inaccuracy_penalty( float base_inaccuracy, float velocity, bool on_ground )
-		{
-			if ( on_ground )
-			{
-				// Ground movement inaccuracy penalty based on speed
-				const auto speed_factor = velocity * 0.01f;
-				return base_inaccuracy + std::max( speed_factor, 0.001f );
-			}
-			else
-			{
-				// Airborne inaccuracy is typically higher
-				const auto air_factor = velocity * 0.02f;
-				return base_inaccuracy + std::max( air_factor, 0.005f );
-			}
-		}
-
-	} // namespace helpers
-
-} // namespace math
+} 

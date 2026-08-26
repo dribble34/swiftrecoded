@@ -1,34 +1,15 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <filesystem>
+#include <mutex>
+#include <span>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include <core/systems/systems.hpp>
-#include <utilities/memory/memory.hpp>
-#include <protection/patterns.hpp>
-
-struct Model_t
-{
-	std::string strModelName;
-	std::string strModelPath;
-};
-
-class CModelChanger
-{
-public:
-	std::vector<Model_t> vecPlayerModels;
-	std::vector<Model_t> vecWeaponModels;
-	std::vector<Model_t> vecCustomAgentModels;
-	unsigned long long nSelectedPlayerModel = ~1U;
-	uint32_t uLastPlayerModelHash;
-
-	bool bPlayerModelChanger{ false };
-
-	void UpdateWeaponModels();
-	void UpdatePlayerModels();
-	void UpdateCustomAgentModels();
-	bool SetPlayerModel();
-};
-
-inline CModelChanger* ModelChanger = new CModelChanger();
 
 namespace features::changer {
 
@@ -107,7 +88,6 @@ namespace features::changer {
 		[[nodiscard]] bool initialize( );
 
 		[[nodiscard]] const std::vector<paint_kit>& paint_kits( ) const { return this->m_paint_kits; }
-		[[nodiscard]] const std::vector<item_def>& item_defs( ) const { return this->m_item_defs; }
 
 		[[nodiscard]] const std::vector<const item_def*>& knives( ) const { return this->m_knives; }
 		[[nodiscard]] const std::vector<const item_def*>& gloves( ) const { return this->m_gloves; }
@@ -196,15 +176,11 @@ namespace features::changer {
 
 	private:
 		void cycle_weapon_owners( std::uintptr_t pawn );
-		void rebuild_animation_graph( std::uintptr_t pawn );
-		void set_custom_hands( std::uintptr_t pawn, const std::string& path );
-		void restore_custom_hands( std::uintptr_t pawn );
 
 		std::string m_original_model{};
-		std::string m_original_arms_model{};
 		std::uintptr_t m_tracked_pawn{};
 		std::uintptr_t m_applied_handle{};
-		std::string m_applied_path{};
+		std::int16_t m_applied_def{};
 		bool m_overridden{};
 		int m_tracked_team{};
 	};
@@ -309,35 +285,4 @@ namespace features::changer {
 		std::chrono::steady_clock::time_point m_hud_clear_time{};
 	};
 
-	class model_changer
-	{
-	public:
-		void on_frame_stage_notify( );
-		void reset_cache( );
-
-		[[nodiscard]] bool precache( const std::string& path );
-
-	private:
-		struct model_entry
-		{
-			std::string path{};
-			bool precached{};
-		};
-
-		[[nodiscard]] bool ensure_initialized( );
-		[[nodiscard]] bool precache_model( const std::string& path );
-		[[nodiscard]] bool set_model( std::uintptr_t pawn, const std::string& path );
-		void apply_model( std::uintptr_t pawn, int team );
-		void restore_model( std::uintptr_t pawn, int team );
-
-		std::unordered_map<int, model_entry> m_ct_models{};
-		std::unordered_map<int, model_entry> m_t_models{};
-		std::unordered_map<std::uintptr_t, std::string> m_original_models{};
-		std::uintptr_t m_resource_system{};
-		void* m_precache_fn{};
-		void* m_set_model_fn{};
-		void* m_cbuffer_insert_fn{};
-		bool m_initialized{};
-	};
-
-} // namespace features::changer
+} 

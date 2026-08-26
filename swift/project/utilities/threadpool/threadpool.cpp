@@ -1,4 +1,7 @@
-#include <pch/pch.hpp>
+#include <thread>
+
+#include <external/xorstr.hpp>
+
 #include <utilities/memory/memory.hpp>
 #include <protection/game_addresses.hpp>
 #include "threadpool.hpp"
@@ -21,7 +24,7 @@ namespace threadpool {
 			constexpr std::size_t sbo_buffer {0x50};
 			constexpr std::size_t callable_impl {0x88};
 
-		} // namespace offsets
+		} 
 
 		constexpr std::size_t k_job_alloc_size {144};
 		constexpr std::size_t k_name_buffer_len {31};
@@ -31,7 +34,7 @@ namespace threadpool {
 		inline std::uintptr_t std_function_job_vtable {0};
 		inline pool g_pool {};
 
-	} // namespace detail
+	} 
 
 	job::job (std::uintptr_t ptr, bool add_reference) : m_ptr (ptr) {
 		if (this->m_ptr && add_reference) {
@@ -113,13 +116,8 @@ namespace threadpool {
 			return;
 		}
 
-		auto spins {0};
 		while (!this->complete ()) {
-			if (++spins < 4000) {
-				_mm_pause ();
-			} else {
-				SwitchToThread ();
-			}
+			_mm_pause ();
 		}
 	}
 
@@ -285,4 +283,4 @@ namespace threadpool {
 		}
 	}
 
-} // namespace threadpool
+} 

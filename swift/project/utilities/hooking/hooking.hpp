@@ -33,10 +33,6 @@ namespace hooking {
 		explicit operator bool( ) const { return this->is_valid( ); }
 		bool is_valid( ) const { return this->m_target && this->m_trampoline; }
 		bool is_enabled( ) const { return this->m_enabled; }
-		void* get_target( ) const { return this->m_target; }
-		void* get_trampoline( ) const { return this->m_trampoline; }
-		const std::uint8_t* get_original_bytes( ) const { return this->m_original_bytes; }
-		std::size_t get_original_length( ) const { return this->m_original_length; }
 
 	private:
 		void* m_target{};
@@ -54,7 +50,7 @@ namespace hooking {
 		void* allocate( std::size_t size, void* near_ );
 		void free( void* address );
 
-	} // namespace allocator
+	} 
 
 	namespace manager {
 
@@ -68,6 +64,6 @@ namespace hooking {
 
 		bool create( const std::initializer_list<entry>& entries );
 
-	} // namespace manager
+	} 
 
-} // namespace hooking
+} 

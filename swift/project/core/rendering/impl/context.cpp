@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
 
@@ -41,7 +40,6 @@ namespace rendering {
 		this->create_rtv( swap_chain );
 		this->setup_zdraw( this->m_window );
 
-		g_menu.initialize_graphics( );
 		this->try_bind_ui_assets( );
 
 		this->m_initialized = true;
@@ -95,7 +93,6 @@ namespace rendering {
 			{
 				features::misc::g_impacts.on_render_early( dl );
 				features::combat::g_misc.antiaim( ).on_render( dl );
-				features::movement::g_edgebug.on_render( dl );
 				features::esp::item::g_overlay.on_render( dl );
 				features::esp::projectile::g_overlay.on_render( dl, xdraw::get( xdraw::layer::middle ) );
 				features::esp::player::g_overlay.on_render( dl );
@@ -166,4 +163,4 @@ namespace rendering {
 		xui::initialize( window );
 	}
 
-} // namespace rendering
+} 

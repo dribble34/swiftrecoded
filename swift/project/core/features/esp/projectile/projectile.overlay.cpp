@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <numbers>
+
 #include <utilities/memory/memory.hpp>
 #include <core/rendering/rendering.hpp>
 #include <core/settings.hpp>
@@ -46,7 +47,7 @@ namespace features::esp::projectile {
 		constexpr auto fade_speed{ 3.0f };
 		constexpr auto anchor_world_offset_z{ 80.0f };
 
-	} // namespace detail
+	} 
 
 	void overlay::on_render( xdraw::draw_list& draw_list, xdraw::draw_list& middle_draw_list )
 	{
@@ -696,7 +697,7 @@ namespace features::esp::projectile {
 
 		if ( show_text )
 		{
-			xdraw::push_font( rendering::g_fonts.smallest_pixel7[ rendering::fonts::size::normal ] );
+			xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 
 			const auto name = k_names[ info.group_id ];
 			const auto [w, h] = xdraw::measure_text( name );
@@ -759,4 +760,4 @@ namespace features::esp::projectile {
 		}
 	}
 
-} // namespace features::esp::projectile
+} 

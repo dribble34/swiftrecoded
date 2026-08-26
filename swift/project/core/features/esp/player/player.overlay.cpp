@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <numbers>
+
 #include <utilities/memory/memory.hpp>
 #include <core/rendering/rendering.hpp>
 #include <core/settings.hpp>
@@ -18,8 +19,6 @@ namespace features::esp::player {
 		{
 			return;
 		}
-
-		this->add_local_spread( draw_list, local );
 
 		auto players = systems::g_entities.get_by_type( systems::entities::type::player );
 		{
@@ -503,7 +502,7 @@ namespace features::esp::player {
 
 		if ( cfg.show_value && clamped_health < 100 )
 		{
-			xdraw::push_font( rendering::g_fonts.smallest_pixel7[ rendering::fonts::size::normal ] );
+			xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 
 			const auto text = std::to_string( clamped_health );
 			const auto [text_w, text_h] = xdraw::measure_text( text );
@@ -630,7 +629,7 @@ namespace features::esp::player {
 
 		if ( cfg.show_value )
 		{
-			xdraw::push_font( rendering::g_fonts.smallest_pixel7[ rendering::fonts::size::normal ] );
+			xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 
 			const auto text = std::format( "{}/{}", clamped_ammo, info.weapon.max_ammo );
 			const auto [text_w, text_h] = xdraw::measure_text( text );
@@ -650,16 +649,34 @@ namespace features::esp::player {
 
 	void overlay::add_name( xdraw::draw_list& draw_list, const systems::bounds::data& bounds, const info& info, const settings::esp::player::overlay::name& cfg, draw_offsets& offsets )
 	{
-		//xdraw::push_font( rendering::g_fonts.inter_medium[ rendering::fonts::size::normal ] );
+		xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 
 		const auto [text_w, text_h] = xdraw::measure_text( info.name );
 		const auto text_x = std::floorf( bounds.min.x + ( bounds.width( ) * 0.5f ) - ( text_w * 0.5f ) );
-		const auto text_y = std::floorf( bounds.min.y - text_h - 2.0f - offsets.top );
+		const auto text_y = std::floorf( bounds.min.y - text_h - offsets.top );
 
-		draw_list.text( text_x, text_y, info.name, cfg.color );
-		offsets.top += text_h + 2.0f;
+		if ( cfg.glow )
+		{
+			auto& glow = xdraw::get_glow( );
+			const auto gc = cfg.glow_color.value;
+			const auto glow_a = static_cast< std::uint8_t >( static_cast< float >( gc.a ) * cfg.glow_strength );
+			const auto glow_col = xdraw::color{ gc.r, gc.g, gc.b, glow_a };
+			
+			glow.text( text_x, text_y, info.name, glow_col );
+		}
 
-		//xdraw::pop_font( );
+		if ( cfg.outline )
+		{
+			draw_list.text( text_x, text_y, info.name, cfg.color, xdraw::text_style::outlined );
+		}
+		else
+		{
+			draw_list.text( text_x, text_y, info.name, cfg.color );
+		}
+		
+		offsets.top += text_h;
+
+		xdraw::pop_font( );
 	}
 
 	void overlay::add_weapon( xdraw::draw_list& draw_list, const systems::bounds::data& bounds, const info& info, const settings::esp::player::overlay::weapon& cfg, draw_offsets& offsets )
@@ -693,7 +710,7 @@ namespace features::esp::player {
 
 		if ( show_text )
 		{
-			xdraw::push_font( rendering::g_fonts.smallest_pixel7[ rendering::fonts::size::normal ] );
+			xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 
 			const auto [text_w, text_h] = xdraw::measure_text( info.weapon.name );
 			const auto text_x = std::floorf( bounds.min.x + ( bounds.width( ) * 0.5f ) - ( text_w * 0.5f ) );
@@ -710,7 +727,8 @@ namespace features::esp::player {
 
 	void overlay::add_flags( xdraw::draw_list& draw_list, const systems::bounds::data& bounds, const info& info, const settings::esp::player::overlay::info_flags& cfg, draw_offsets& offsets )
 	{
-		xdraw::push_font( rendering::g_fonts.smallest_pixel7[ rendering::fonts::size::normal ] );
+		(void)offsets;
+		xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 
 		const auto x = std::floorf( bounds.max.x + 4.0f );
 		auto y = std::floorf( bounds.min.y );
@@ -812,8 +830,8 @@ namespace features::esp::player {
 			return;
 		}
 
-		// Match the live input yaw and player origins used by the reference OOF implementation.
-		// The view system's cached origin/angles describe a different render structure.
+		
+		
 		const auto target_yaw = std::atan2f( to_target.y, to_target.x );
 		const auto view_yaw = math::helpers::deg_to_rad( systems::g_input.get_view_angles( ).y );
 		const auto angle = view_yaw - target_yaw - std::numbers::pi_v<float> *0.5f;
@@ -896,8 +914,8 @@ namespace features::esp::player {
 			return info;
 		}
 
-		// m_bDormant is ambiguous across the current schema scopes and can
-		// resolve to unrelated data. Keep the last known transform, as chams do.
+		
+		
 
 		auto& cache = this->m_player_cache[ info.controller ];
 
@@ -907,7 +925,7 @@ namespace features::esp::player {
 			if ( name_ptr )
 			{
 				info.name = memory::read_string( name_ptr, 128 );
-				std::ranges::transform( info.name, info.name.begin( ), [ ]( unsigned char c ) { return std::tolower( c ); } );
+				std::ranges::transform( info.name, info.name.begin( ), [ ]( unsigned char c ) { return static_cast<char>( std::tolower( c ) ); } );
 
 				if ( !info.name.empty( ) )
 				{
@@ -943,9 +961,9 @@ namespace features::esp::player {
 		info.is_flashed = memory::read<float>( info.pawn + SCHEMA( "C_CSPlayerPawnBase", "m_flFlashBangTime"_hash ) ) > 0.0f;
 		info.bones = systems::g_bones.get_skeleton( info.pawn );
 
-		// Visibility is refreshed at server tick cadence only (via m_nTickBase).
-		// Running trace_ray from the render thread every frame is the largest
-		// FPS killer when the server is populated - it can cost 20+ ms/frame.
+		
+		
+		
 		const auto tick_base = memory::read<int>( info.controller + SCHEMA( "CBasePlayerController", "m_nTickBase"_hash ) );
 		if ( tick_base > 0 && tick_base != cache.last_traced_tick )
 		{
@@ -991,63 +1009,4 @@ namespace features::esp::player {
 		return info;
 	}
 
-	void overlay::add_local_spread( xdraw::draw_list& draw_list, const systems::local::snapshot& local )
-	{
-		const auto& cfg = settings::g_esp.m_local_spread;
-		if ( !cfg.enabled.value || !local.is_alive )
-		{
-			return;
-		}
-
-		const auto is_scoped = memory::read<bool>( local.pawn + SCHEMA( "C_CSPlayerPawn", "m_bIsScoped"_hash ) );
-		if ( cfg.only_scoped.value && !is_scoped )
-		{
-			return;
-		}
-
-		const auto& shared_ctx = combat::g_shared.ctx( );
-		if ( !shared_ctx.valid || !shared_ctx.weapon )
-		{
-			return;
-		}
-
-		const auto inaccuracy = std::fminf( 1.0f, combat::g_shared.get_inaccuracy( false ) );
-		const auto spread = combat::g_shared.get_spread( );
-
-		const auto [screen_w, screen_h] = xdraw::viewport_size( );
-		const auto cx = static_cast< float >( screen_w ) * 0.5f;
-		const auto cy = static_cast< float >( screen_h ) * 0.5f;
-
-		const auto velocity = memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseEntity", "m_vecAbsVelocity"_hash ) );
-		const auto speed_2d = velocity.length_2d( );
-		const auto velocity_factor = ( speed_2d < 5.0f ) ? 1.0f : ( speed_2d / 250.0f );
-
-		const auto target_radius = ( inaccuracy + spread ) * velocity_factor * ( static_cast< float >( screen_h ) / 2.0f / 2.0f );
-		this->m_local_spread_radius += ( target_radius - this->m_local_spread_radius ) * std::min( 0.15f, xdraw::delta_time( ) * 10.0f );
-		const auto radius = std::max( 1.0f, this->m_local_spread_radius );
-
-		const auto& inner = cfg.color.value;
-		const auto& outer = cfg.color_outer.value;
-		const auto inner_col = xdraw::color{ inner.r, inner.g, inner.b, inner.a };
-		const auto outer_col = xdraw::color{ outer.r, outer.g, outer.b, outer.a };
-
-		constexpr auto segments{ 200 };
-		constexpr auto step = 2.0f * std::numbers::pi_v<float> / segments;
-
-		draw_list.ensure_cmd( nullptr );
-		const auto center_ix = draw_list.emit_vtx( cx, cy, 0, 0, inner_col );
-		const auto base_ix = center_ix + 1;
-
-		for ( auto i = 0; i < segments; ++i )
-		{
-			const auto a = static_cast< float >( i ) * step;
-			draw_list.emit_vtx( cx + std::cos( a ) * radius, cy + std::sin( a ) * radius, 0, 0, outer_col );
-		}
-
-		for ( auto i = 0; i < segments; ++i )
-		{
-			draw_list.emit_idx( center_ix, base_ix + i, base_ix + ( ( i + 1 ) % segments ) );
-		}
-	}
-
-} // namespace features::esp::player
+} 

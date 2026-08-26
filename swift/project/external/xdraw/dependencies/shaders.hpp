@@ -976,4 +976,4 @@ namespace shaders {
 		  0,   0,   0,   0
 	};
 
-} // namespace shaders
+} 

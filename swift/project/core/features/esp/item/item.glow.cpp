@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <core/systems/systems.hpp>
 #include <core/settings.hpp>
@@ -36,7 +35,7 @@ namespace features::esp::item {
 			}
 		}
 
-		return glow_cfg.get_group( group_id ).enabled.value;
+		return true;
 	}
 
 	bool glow::on_get_glow_color( std::uintptr_t owner_entity, std::uint32_t owner_hash, float* color ) const
@@ -69,16 +68,10 @@ namespace features::esp::item {
 			}
 		}
 
-		const auto& cfg = glow_cfg.get_group( group_id );
-		if ( !cfg.enabled.value )
-		{
-			return false;
-		}
-
-		color[ 0 ] = cfg.color.value.r / 255.0f;
-		color[ 1 ] = cfg.color.value.g / 255.0f;
-		color[ 2 ] = cfg.color.value.b / 255.0f;
-		color[ 3 ] = cfg.color.value.a / 255.0f;
+		color[ 0 ] = glow_cfg.cfg.color.value.r / 255.0f;
+		color[ 1 ] = glow_cfg.cfg.color.value.g / 255.0f;
+		color[ 2 ] = glow_cfg.cfg.color.value.b / 255.0f;
+		color[ 3 ] = glow_cfg.cfg.color.value.a / 255.0f;
 
 		return true;
 	}
@@ -148,4 +141,4 @@ namespace features::esp::item {
 		}
 	}
 
-} // namespace features::esp::item
+} 

@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 
@@ -150,4 +149,4 @@ namespace systems {
 		this->m_is_in_time_freeze.store( false );
 	}
 
-} // namespace systems
+} 

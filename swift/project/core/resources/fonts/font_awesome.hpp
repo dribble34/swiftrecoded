@@ -35515,4 +35515,4 @@ namespace resources::fonts::font_awesome {
 		0x61, 0x76, 0x61, 0x6E,
 	};
 
-} // namespace resources::fonts::font_awesome
+} 

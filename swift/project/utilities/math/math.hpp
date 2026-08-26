@@ -1,5 +1,7 @@
 #pragma once
 
+#include <numbers>
+
 namespace math {
 
 	class vector2
@@ -114,13 +116,11 @@ namespace math {
 
 		[[nodiscard]] vector3 vector_to_angle( const vector3& forward );
 		[[nodiscard]] vector3 calculate_angle( const vector3& src, const vector3& dst );
-[[nodiscard]] float angle_distance( const vector3& from, const vector3& to );
-[[nodiscard]] float deg_to_rad( float degrees );
-[[nodiscard]] float rad_to_deg( float radians );
-[[nodiscard]] float normalize_yaw( float yaw );
-[[nodiscard]] vector3 predict_position( const vector3& origin, const vector3& velocity, float tick_count );
-[[nodiscard]] float estimate_inaccuracy_penalty( float base_inaccuracy, float velocity, bool on_ground );
+		[[nodiscard]] float angle_distance( const vector3& from, const vector3& to );
+		[[nodiscard]] float deg_to_rad( float degrees );
+		[[nodiscard]] float rad_to_deg( float radians );
+		[[nodiscard]] float normalize_yaw( float yaw );
 
-	} // namespace helpers
+	} 
 
-} // namespace math
+} 

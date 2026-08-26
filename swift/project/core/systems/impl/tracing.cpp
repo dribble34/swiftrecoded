@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <protection/game_addresses.hpp>
@@ -158,4 +157,4 @@ namespace systems {
 		memory::call<void>(PATTERN (patterns::trace_bullet_update), trace_data, hit, unknown_float, unknown );
 	}
 
-} // namespace systems
+} 

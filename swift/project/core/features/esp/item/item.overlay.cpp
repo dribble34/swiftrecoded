@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <core/rendering/rendering.hpp>
 #include <core/settings.hpp>
@@ -23,13 +22,17 @@ namespace features::esp::item {
 			}
 
 			const auto group_id = this->get_item_group( info.schema_hash );
-
-			if ( !overlay_cfg.is_active( group_id ) || info.distance > overlay_cfg.get_group( group_id ).max_distance )
+			if ( group_id == UINT32_MAX )
 			{
 				continue;
 			}
 
-			this->add_label( draw_list, info, overlay_cfg.get_group( group_id ) );
+			if ( info.distance > overlay_cfg.cfg.max_distance )
+			{
+				continue;
+			}
+
+			this->add_label( draw_list, info, overlay_cfg.cfg );
 		}
 	}
 
@@ -69,7 +72,7 @@ namespace features::esp::item {
 
 		if ( show_text )
 		{
-			xdraw::push_font( rendering::g_fonts.smallest_pixel7[ rendering::fonts::size::normal ] );
+			xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 
 			const auto [w, h] = xdraw::measure_text( info.name );
 			draw_list.text( std::floorf( screen.x - w * 0.5f ), std::floorf( y ), info.name, cfg.text_color, xdraw::text_style::outlined );
@@ -196,4 +199,4 @@ namespace features::esp::item {
 		}
 	}
 
-} // namespace features::esp::item
+} 

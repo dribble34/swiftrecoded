@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <core/systems/systems.hpp>
@@ -18,7 +17,7 @@ namespace features::changer {
 			"set item texture wear"
 		};
 
-		// Current C_EconItemView local-attribute vector layout, mirrored from Artisan.
+		
 		constexpr std::ptrdiff_t item_view_attribute_count_offset{ 0x210 };
 		constexpr std::ptrdiff_t item_view_attribute_data_offset{ 0x218 };
 		constexpr std::ptrdiff_t item_attribute_stride{ 0x48 };
@@ -36,7 +35,7 @@ namespace features::changer {
 			return result;
 		}
 
-	} // namespace detail
+	} 
 
 	void gloves::on_frame_stage_notify( )
 	{
@@ -233,7 +232,7 @@ namespace features::changer {
 		memory::write<bool>( item_view + SCHEMA( "C_EconItemView", "m_bInitialized"_hash ), true );
 		memory::write<bool>( item_view + SCHEMA( "C_EconItemView", "m_bDisallowSOC"_hash ), true );
 
-		// Definitions 6/7/8 are semantic floats; bit-casting the paint kit makes the composite invalid.
+		
 		memory::call<void>( set_attribute, item_view, detail::glove_attribute_names[ 0 ], static_cast< float >( skin.paint_kit_id ) );
 		memory::call<void>( set_attribute, item_view, detail::glove_attribute_names[ 1 ], static_cast< float >( skin.seed ) );
 		memory::call<void>( set_attribute, item_view, detail::glove_attribute_names[ 2 ], skin.wear );
@@ -291,4 +290,4 @@ namespace features::changer {
 		this->m_overridden = false;
 	}
 
-} // namespace features::changer
+} 

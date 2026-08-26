@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <numbers>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/logging/logging.hpp>
@@ -6,7 +7,6 @@
 #include <core/features/features.hpp>
 #include <protection/game_addresses.hpp>
 namespace features::combat {
-
 	void misc::antiaim::on_create_move( systems::input::usercmd* cmd )
 	{
 		this->m_antiaim_active = false;
@@ -52,7 +52,7 @@ namespace features::combat {
 
 		if ( ctx.weapon_type == cstypes::weapon_type::grenade )
 		{
-			if ( memory::read<float>( ctx.weapon + SCHEMA( "C_BaseCSGrenade", "m_fThrowTime"_hash ) ) > 0.0f )  // bail regardless of pin state
+			if ( memory::read<float>( ctx.weapon + SCHEMA( "C_BaseCSGrenade", "m_fThrowTime"_hash ) ) > 0.0f )  
 			{
 				return;
 			}
@@ -392,8 +392,8 @@ namespace features::combat {
 					const auto fov = math::helpers::angle_distance( view_angles, angle_to_enemy );
 					const auto distance = eye_pos.distance( enemy_eye_pos );
 
-					// Match Requiem's threat order: crosshair first, then proximity, whether
-					// the enemy is looking at us, and finally whether they are visible.
+					
+					
 					auto threat_score = fov * 4.0f + distance * 0.01f;
 
 					math::vector3 enemy_forward{};
@@ -448,13 +448,14 @@ namespace features::combat {
 		}
 
 		if (settings::g_combat.m_antiaim.auto_yaw_adjust.value)
-			yaw += 33.0f;
+			yaw += 33.0f; 
 
 		return yaw;
 	}
 
 	void misc::antiaim::correct_movement (systems::input::usercmd* cmd) {
 		if (!this->m_should_correct) {
+			this->m_quantizer = {};
 			return;
 		}
 
@@ -465,6 +466,7 @@ namespace features::combat {
 		const auto side_move = base->leftmove ();
 
 		if (forward_move == 0.0f && side_move == 0.0f) {
+			this->m_quantizer = {};
 			return;
 		}
 
@@ -489,8 +491,36 @@ namespace features::combat {
 		}
 
 		const auto intent_dir = intent / intent_len;
-		const auto corrected_forward = new_forward.dot (intent_dir) * intent_len;
-		const auto corrected_side = -new_left.dot (intent_dir) * intent_len;
+
+		const auto wanted_forward = new_forward.dot( intent_dir ) * intent_len;
+		const auto wanted_side = -new_left.dot( intent_dir ) * intent_len;
+
+		float corrected_forward = 0.0f;
+		float corrected_side = 0.0f;
+
+		if ( CONVAR ("sv_quantize_movement_input")->get<bool>( ) )
+		{
+			
+			
+			
+			
+			const auto snapped_forward = wanted_forward + this->m_quantizer.forward_error;
+			const auto snapped_side = wanted_side + this->m_quantizer.side_error;
+
+			const auto quant_forward = snapped_forward >= 0.5f ? 1 : ( snapped_forward <= -0.5f ? -1 : 0 );
+			const auto quant_side = snapped_side >= 0.5f ? 1 : ( snapped_side <= -0.5f ? -1 : 0 );
+
+			this->m_quantizer.forward_error = snapped_forward - static_cast< float >( quant_forward );
+			this->m_quantizer.side_error = snapped_side - static_cast< float >( quant_side );
+
+			corrected_forward = static_cast< float >( quant_forward );
+			corrected_side = static_cast< float >( quant_side );
+		}
+		else
+		{
+			corrected_forward = wanted_forward;
+			corrected_side = wanted_side;
+		}
 
 		base->set_forwardmove (std::clamp (corrected_forward, -1.0f, 1.0f));
 		base->set_leftmove (std::clamp (corrected_side, -1.0f, 1.0f));
@@ -517,10 +547,8 @@ namespace features::combat {
 
 	bool misc::antiaim::is_near_ladder( std::uintptr_t local_pawn ) const
 	{
-		// Ladders are already handled in on_create_move via m_nActualMoveType.
-		// Reading m_vecLadderNormal here can return garbage and falsely disable
-		// anti-aim, so keep this a no-op to match the proven-working behavior.
-		return false;
+		(void)local_pawn;
+		return false; 
 	}
 
 	namespace {
@@ -541,7 +569,7 @@ namespace features::combat {
 			return out;
 		}
 
-	} // namespace
+	} 
 
 	void misc::duckpeek::on_create_move( systems::input::usercmd* cmd )
 	{
@@ -843,16 +871,33 @@ namespace features::combat {
 		const auto& prestate = systems::g_prediction.pre( );
 		const auto& ctx = g_shared.ctx( );
 
-		if ( !( prestate.flags & cstypes::entity_flags::on_ground ) )
-		{
-			return;
-		}
+		const auto& config = settings::g_combat.m_ragebot.get_group( ctx.weapon_type );
+		const auto on_ground = ( prestate.flags & cstypes::entity_flags::on_ground ) != 0;
 
 		auto velocity = prestate.networked_velocity;
 		auto speed = velocity.length_2d( );
 
 		if ( speed <= 1.0f )
 		{
+			return;
+		}
+
+		if ( !on_ground )
+		{
+			
+			
+			
+			
+			
+			if ( CONVAR ("sv_quantize_movement_input")->get<bool>( ) )
+			{
+				const auto inv_speed = 1.0f / speed;
+				this->apply_counter_strafe( cmd, -velocity.x * inv_speed, -velocity.y * inv_speed, 1.0f );
+			}
+			else
+			{
+				cmd->buttons.value |= static_cast< std::uintptr_t >( cstypes::command_buttons::in_sprint );
+			}
 			return;
 		}
 
@@ -906,7 +951,22 @@ namespace features::combat {
 		velocity.x += wish_x * accel_speed;
 		velocity.y += wish_y * accel_speed;
 
-		const auto move_magnitude = std::clamp( speed / ctx.weapon_max_speed, 0.0f, 1.0f );
+		
+		
+		auto move_magnitude = std::clamp( speed / ctx.weapon_max_speed, 0.0f, 1.0f );
+		if ( config.autostop_early.value )
+		{
+			move_magnitude = std::clamp( move_magnitude, 0.35f, 1.0f );
+		}
+
+		this->apply_counter_strafe( cmd, wish_x, wish_y, move_magnitude );
+	}
+
+	void misc::autostop::apply_counter_strafe( systems::input::usercmd* cmd, float wish_x, float wish_y, float move_magnitude )
+	{
+		const auto base = cmd->csgo_user_cmd.mutable_base( );
+		const auto& prestate = systems::g_prediction.pre( );
+
 		const auto yaw_rad = base->viewangles( )->y( ) * ( std::numbers::pi_v<float> / 180.0f );
 		const auto sy = std::sinf( yaw_rad );
 		const auto cy = std::cosf( yaw_rad );
@@ -950,7 +1010,7 @@ namespace features::combat {
 		}
 	}
 
-	float misc::autostop::get_effective_accel_base( std::uintptr_t local_pawn, std::uintptr_t movement_services, std::uint32_t flags, float max_weapon_speed ) const
+	float misc::autostop::get_effective_accel_base( std::uintptr_t /*local_pawn*/, std::uintptr_t movement_services, std::uint32_t flags, float max_weapon_speed ) const
 	{
 		const auto max_speed_base = memory::read<float>( movement_services + SCHEMA( "CPlayer_MovementServices", "m_flMaxspeed"_hash ) );
 		const auto is_ducked = ( flags & 4 ) != 0;
@@ -986,4 +1046,4 @@ namespace features::combat {
 		return accel_base;
 	}
 
-} // namespace features::combat
+} 

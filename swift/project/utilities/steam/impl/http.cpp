@@ -1,4 +1,6 @@
-#include <pch/pch.hpp>
+#include <chrono>
+#include <thread>
+
 #include <utilities/memory/memory.hpp>
 #include <protection/game_addresses.hpp>
 #include "../steam.hpp"
@@ -49,7 +51,7 @@ namespace steam {
 			}
 		}
 
-	} // namespace detail
+	} 
 
 	bool http::initialize () {
 		detail::http = memory::call<std::uintptr_t> (MODULE_EXPORT ("steam_api64.dll:SteamAPI_SteamHTTP_v003"));
@@ -118,4 +120,4 @@ namespace steam {
 		memory::call<bool> (MODULE_EXPORT ("steam_api64.dll:SteamAPI_ISteamHTTP_ReleaseHTTPRequest"), detail::http, req);
 	}
 
-} // namespace steam
+} 

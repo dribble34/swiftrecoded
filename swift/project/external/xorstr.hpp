@@ -1,22 +1,5 @@
-/*
- * Copyright 2017 - 2021 Justas Masiulis
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #ifndef JM_XORSTR_HPP
 #define JM_XORSTR_HPP
-
 #if defined(_M_ARM64) || defined(__aarch64__) || defined(_M_ARM) || defined(__arm__)
 #include <arm_neon.h>
 #elif defined(_M_X64) || defined(__amd64__) || defined(_M_IX86) || defined(__i386__)
@@ -24,7 +7,6 @@
 #else
 #error Unsupported platform
 #endif
-
 #include <cstdint>
 #include <cstddef>
 #include <utility>
@@ -66,7 +48,7 @@ namespace jm {
             return ( static_cast< std::uint64_t >( first_part ) << 32 ) | second_part;
         }
 
-        // loads up to 8 characters of string into uint64 and xors it with the key
+        
         template<std::size_t N, class CharT>
         XORSTR_FORCEINLINE constexpr std::uint64_t
             load_xored_str8( std::uint64_t key, std::size_t idx, const CharT* str ) noexcept
@@ -84,7 +66,7 @@ namespace jm {
             return value;
         }
 
-        // forces compiler to use registers instead of stuffing constants in rdata
+        
         XORSTR_FORCEINLINE std::uint64_t load_from_reg( std::uint64_t value ) noexcept
         {
 #if defined(__clang__) || defined(__GNUC__)
@@ -96,7 +78,7 @@ namespace jm {
 #endif
         }
 
-    } // namespace detail
+    } 
 
     template<class CharT, std::size_t Size, class Keys, class Indices>
     class xor_string;
@@ -129,7 +111,7 @@ namespace jm {
 
         XORSTR_FORCEINLINE void crypt( ) noexcept
         {
-            // everything is inlined by hand because a certain compiler with a certain linker is _very_ slow
+            
 #if defined(__clang__)
             alignas( alignment )
                 std::uint64_t arr[ ]{ ::jm::detail::load_from_reg( Keys )... };
@@ -146,7 +128,7 @@ namespace jm {
                 veorq_u64( __builtin_neon_vld1q_v( reinterpret_cast< const uint64_t* >( _storage ) + Indices * 2, 51 ),
                     __builtin_neon_vld1q_v( reinterpret_cast< const uint64_t* >( keys ) + Indices * 2, 51 ) ),
                 51 ) ), ... );
-#else // GCC, MSVC
+#else 
             ( ( Indices >= sizeof( _storage ) / 16 ? static_cast< void >( 0 ) : vst1q_u64(
                 reinterpret_cast< uint64_t* >( _storage ) + Indices * 2,
                 veorq_u64( vld1q_u64( reinterpret_cast< const uint64_t* >( _storage ) + Indices * 2 ),
@@ -184,7 +166,7 @@ namespace jm {
 
         XORSTR_FORCEINLINE pointer crypt_get( ) noexcept
         {
-            // crypt() is inlined by hand because a certain compiler with a certain linker is _very_ slow
+            
 #if defined(__clang__)
             alignas( alignment )
                 std::uint64_t arr[ ]{ ::jm::detail::load_from_reg( Keys )... };
@@ -201,7 +183,7 @@ namespace jm {
                 veorq_u64( __builtin_neon_vld1q_v( reinterpret_cast< const uint64_t* >( _storage ) + Indices * 2, 51 ),
                     __builtin_neon_vld1q_v( reinterpret_cast< const uint64_t* >( keys ) + Indices * 2, 51 ) ),
                 51 ) ), ... );
-#else // GCC, MSVC
+#else 
             ( ( Indices >= sizeof( _storage ) / 16 ? static_cast< void >( 0 ) : vst1q_u64(
                 reinterpret_cast< uint64_t* >( _storage ) + Indices * 2,
                 veorq_u64( vld1q_u64( reinterpret_cast< const uint64_t* >( _storage ) + Indices * 2 ),
@@ -237,6 +219,6 @@ namespace jm {
         std::integer_sequence<std::uint64_t, detail::key8<Indices>( )...>,
         std::index_sequence<Indices...>>;
 
-} // namespace jm
+} 
 
-#endif // include guard
+#endif 

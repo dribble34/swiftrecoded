@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/diag.hpp>
@@ -34,9 +33,9 @@ namespace systems {
 		}
 
 		auto has_move_subticks = [] (proto::base_usercmd_pb* base_cmd) {
-			// just use protobufs atp
+			
 			for (size_t i = 0; i < base_cmd->subtick_moves_size (); i++) {
-				proto::subtick_move_step* step = base_cmd->mutable_subtick_moves (i);
+				proto::subtick_move_step* step = base_cmd->mutable_subtick_moves (static_cast<int>( i ));
 				if (step->m_has_bits.test (0x8) || step->m_has_bits.test (0x10))
 					return true;
 
@@ -47,7 +46,7 @@ namespace systems {
 			return false;
 		};
 
-		// fix movement for ag2
+		
 		diag::set_exception_phase( "input apply: subtick movement" );
 		if (!has_move_subticks (base)) {
 			if (const auto step = systems::g_input.acquire_subtick_step (base->mutable_subtick_moves ())) {
@@ -419,4 +418,4 @@ namespace systems {
 		return true;
 	}
 
-} // namespace systems
+} 

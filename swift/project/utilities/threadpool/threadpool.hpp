@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstdint>
+#include <functional>
+#include <span>
+
 namespace threadpool {
 
 	enum class job_priority : std::uint8_t
@@ -69,4 +73,4 @@ namespace threadpool {
 	void parallel_for( int begin, int end, const std::function<void( int, int )>& body, int min_chunk_size = 1, job_priority priority = job_priority::normal );
 	void run_batch( std::span<std::function<void( )>> tasks, job_priority priority = job_priority::normal );
 
-} // namespace threadpool
+} 

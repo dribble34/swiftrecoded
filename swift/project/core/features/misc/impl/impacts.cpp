@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+
 #include <ShlObj.h>
 #include <filesystem>
 
@@ -11,113 +12,13 @@
 #include <core/features/features.hpp>
 #include <protection/game_addresses.hpp>
 
-#include <core/resources/sounds/embedded_hit_sound.hpp>
-#include <core/resources/sounds/embedded_bubble_sound.hpp>
-#include <core/resources/sounds/embedded_metal_sound.hpp>
-#include <core/resources/sounds/embedded_neverlose_sound.hpp>
-#include <core/resources/sounds/embedded_rust_headshot_sound.hpp>
-#include <core/resources/sounds/embedded_agpa2_sound.hpp>
-
 namespace features::misc {
 
 	namespace detail {
 
 		constexpr std::uint32_t invalid_particle_effect{ static_cast<std::uint32_t>( -1 ) };
-		constexpr std::uint8_t k_periwinkle_start_r{ 130 };
-		constexpr std::uint8_t k_periwinkle_start_g{ 160 };
-		constexpr std::uint8_t k_periwinkle_start_b{ 240 };
-		constexpr std::uint8_t k_periwinkle_end_r{ 200 };
-		constexpr std::uint8_t k_periwinkle_end_g{ 220 };
-		constexpr std::uint8_t k_periwinkle_end_b{ 255 };
 
-		[[nodiscard]] std::string chat_white( std::string_view text )
-		{
-			return std::format( "<font color='#FFFFFF'>{}</font>", text );
-		}
-
-		[[nodiscard]] std::string chat_dim( std::string_view text )
-		{
-			return std::format( "<font color='#CCCCCC'>{}</font>", text );
-		}
-
-		[[nodiscard]] std::string format_hit_chat_message( const std::string& name, int damage, const std::string& hitgroup, int health, const std::string& reason = {} )
-		{
-			const auto damage_str = std::to_string( damage );
-
-			if ( !reason.empty( ) )
-			{
-				return chat_dim( "hit " ) + chat_white( name ) + chat_dim( " for " ) + chat_white( damage_str ) + chat_dim( " in " ) + chat_white( hitgroup ) + chat_dim( std::format( ", {} ({} remaining)", reason, health ) );
-			}
-
-			return chat_dim( "hit " ) + chat_white( name ) + chat_dim( " for " ) + chat_white( damage_str ) + chat_dim( " in " ) + chat_white( hitgroup ) + chat_dim( std::format( " ({} remaining)", health ) );
-		}
-
-		[[nodiscard]] std::string format_knife_chat_message( const std::string& name, int damage, int health )
-		{
-			return chat_dim( "knifed " ) + chat_white( name ) + chat_dim( " for " ) + chat_white( std::to_string( damage ) ) + chat_dim( std::format( " ({} remaining)", health ) );
-		}
-
-		[[nodiscard]] std::string format_taser_chat_message( const std::string& name )
-		{
-			return chat_dim( "zapped the fuck out of " ) + chat_white( name );
-		}
-
-		[[nodiscard]] std::string make_gradient_label( const char* text, std::uint8_t sr, std::uint8_t sg, std::uint8_t sb, std::uint8_t er, std::uint8_t eg, std::uint8_t eb )
-		{
-			const auto len = std::strlen( text );
-			if ( len == 0 )
-			{
-				return {};
-			}
-
-			std::string result{};
-			result.reserve( len * 40 );
-
-			for ( auto i = 0ull; i < len; ++i )
-			{
-				const auto t = len > 1 ? static_cast< float >( i ) / static_cast< float >( len - 1 ) : 0.0f;
-				const auto r = static_cast< std::uint8_t >( sr + ( er - sr ) * t );
-				const auto g = static_cast< std::uint8_t >( sg + ( eg - sg ) * t );
-				const auto b = static_cast< std::uint8_t >( sb + ( eb - sb ) * t );
-
-				char tag[ 48 ];
-				std::snprintf( tag, sizeof( tag ), "<font color='#%02X%02X%02X'>%c</font>", r, g, b, text[ i ] );
-				result += tag;
-			}
-
-			return result;
-		}
-
-		void chat_print( const char* label_text, std::uint8_t sr, std::uint8_t sg, std::uint8_t sb, std::uint8_t er, std::uint8_t eg, std::uint8_t eb, const char* msg )
-		{
-			const auto local = systems::g_local.get( );
-			if ( !local.is_valid( ) || !local.is_alive || systems::g_local.is_in_cinematic( ) || !local.pawn )
-			{
-				return;
-			}
-
-			const auto hud_element = memory::call<std::uintptr_t>( PATTERN (patterns::find_hud_element), xs( "CCSGO_HudVoiceStatus" ) );
-			if ( !hud_element )
-			{
-				return;
-			}
-
-			const auto voice = hud_element - 32;
-			const auto label = make_gradient_label( label_text, sr, sg, sb, er, eg, eb );
-
-			char buf[ 1024 ];
-			std::snprintf( buf, sizeof( buf ), "%s <font color='#CCCCCC'>- </font>%s", label.c_str( ), msg );
-
-			std::uint8_t flags[ 2 ]{ 1, 0 };
-			memory::call<void>( PATTERN (patterns::set_voice_data), voice, buf, 0xFFFFFFFF, flags );
-		}
-
-		void chat_print_velocity( const char* msg )
-		{
-			chat_print( "[velocity]", k_periwinkle_start_r, k_periwinkle_start_g, k_periwinkle_start_b, k_periwinkle_end_r, k_periwinkle_end_g, k_periwinkle_end_b, msg );
-		}
-
-	} // namespace detail
+	} 
 
 	void impacts::on_render_early( xdraw::draw_list& draw_list )
 	{
@@ -130,7 +31,7 @@ namespace features::misc {
 
 	void impacts::on_frame_stage_notify( )
 	{
-		// Frame-stage updates can overlap Present, which renders the same impact vectors.
+		
 		std::unique_lock lock( this->m_mtx );
 
 		if ( this->m_buffered_impact_time > 0.0f )
@@ -210,6 +111,21 @@ namespace features::misc {
 			return;
 		}
 
+		{
+			std::unique_lock lock( this->m_mtx );
+
+			const auto global_vars_hurt = memory::read<std::uintptr_t>( addresses::globals::global_vars );
+			const auto current_time_hurt = memory::read<float>( global_vars_hurt + 0x30 );
+
+			this->m_recent_hurts.push_back( { data.victim_pawn, current_time_hurt } );
+
+			std::erase_if( this->m_recent_hurts, [ & ]( const auto& entry ) { return current_time_hurt - entry.time > 1.5f; } );
+			if ( this->m_recent_hurts.size( ) > 32 )
+			{
+				this->m_recent_hurts.erase( this->m_recent_hurts.begin( ), this->m_recent_hurts.begin( ) + ( this->m_recent_hurts.size( ) - 32 ) );
+			}
+		}
+
 		const auto& cfg = settings::g_misc.m_impacts;
 		const auto is_kill = data.health <= 0;
 
@@ -220,9 +136,9 @@ namespace features::misc {
 			auto position = math::vector3{};
 			auto has_position{ false };
 
-			// Report-hit contains the most accurate contact point, but it is not
-			// guaranteed to arrive before player_hurt. Use it when available and
-			// fall back to the confirmed shot impact or the victim's position.
+			
+			
+			
 			const auto game_scene_node = memory::read<std::uintptr_t>( data.victim_pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
 			if ( game_scene_node )
 			{
@@ -333,9 +249,9 @@ namespace features::misc {
 			shot_record* matched_shot{};
 			auto best_score{ -FLT_MAX };
 
-			// Server shot callbacks and bullet-impact events preserve command order.
-			// Match the oldest shot that does not have an impact before considering
-			// extra impacts from an already matched shot.
+			
+			
+			
 			for ( auto& shot : this->m_pending_shots )
 			{
 				if ( shot.resolved || shot.impact_confirmed )
@@ -424,14 +340,14 @@ namespace features::misc {
 
 				if ( cfg.bullet_tracers.value || show_overlay )
 				{
-					const auto global_vars = memory::read<std::uintptr_t>( addresses::globals::global_vars );
-					const auto current_time = memory::read<float>( global_vars + 0x30 );
+					const auto global_vars_impact = memory::read<std::uintptr_t>( addresses::globals::global_vars );
+					const auto current_time_impact = memory::read<float>( global_vars_impact + 0x30 );
 
-					if ( current_time != this->m_buffered_impact_time )
+					if ( current_time_impact != this->m_buffered_impact_time )
 					{
 						this->flush_buffered_impacts( );
 
-						this->m_buffered_impact_time = current_time;
+						this->m_buffered_impact_time = current_time_impact;
 						this->m_buffered_impacts.clear( );
 
 						const auto local_pawn = systems::g_local.get( ).pawn;
@@ -514,14 +430,41 @@ namespace features::misc {
 		}
 	}
 
-	void impacts::on_boom( std::uintptr_t victim_pawn, int hitgroup, float damage, float hitchance, float inaccuracy, float spread, const math::vector3& aim_angle, const math::vector3& shoot_position, int tick, const std::array<systems::bones::data, 27>& skeleton, bool forced )
+	void impacts::on_boom( std::uintptr_t victim_pawn, int hitgroup, float damage, float hitchance, float inaccuracy, float spread, const math::vector3& aim_angle, const math::vector3& aim_punch, const math::vector3& shoot_position, int tick, int seed_tick, int tick_base, const math::vector3& local_velocity, const std::array<systems::bones::data, 27>& skeleton )
 	{
 		const auto global_vars = memory::read<std::uintptr_t>( addresses::globals::global_vars );
 		const auto current_time = memory::read<float>( global_vars + 0x30 );
 
 		std::unique_lock lock( this->m_mtx );
 
+		// the same shot can occasionally be registered twice (e.g. the same command
+		// being processed again for the same tick at low fps) — keep a single
+		// record per fired tick so one bullet can never produce two miss logs
+		for ( const auto& existing : this->m_pending_shots )
+		{
+			if ( !existing.resolved && existing.victim_pawn == victim_pawn && existing.tick_base == tick_base )
+			{
+				return;
+			}
+		}
+
 		const auto target_velocity = memory::read<math::vector3>( victim_pawn + SCHEMA( "C_BaseEntity", "m_vecVelocity"_hash ) );
+
+		const auto local_pawn = systems::g_local.get( ).pawn;
+		float real_inaccuracy = 0.0f;
+		if ( local_pawn && features::combat::g_shared.ctx( ).weapon )
+		{
+			auto real_vel = local_velocity;
+			real_vel.z = 0.0f;
+			real_inaccuracy = features::combat::g_shared.get_inaccuracy_at_velocity( local_pawn, real_vel );
+		}
+
+		math::vector3 target_now{};
+		const auto target_scene = memory::read<std::uintptr_t>( victim_pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+		if ( target_scene )
+		{
+			target_now = memory::read<math::vector3>( target_scene + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+		}
 
 		this->m_pending_shots.push_back(
 			{
@@ -532,16 +475,21 @@ namespace features::misc {
 				.predicted_inaccuracy = inaccuracy,
 				.predicted_spread = spread,
 				.server_inaccuracy = 0.0f,
+				.real_inaccuracy = real_inaccuracy,
 				.aim_angle = aim_angle,
+				.aim_punch = aim_punch,
 				.shoot_position = shoot_position,
+				.target_now = target_now,
 				.tick = tick,
+				.seed_tick = seed_tick,
+				.tick_base = tick_base,
+				.local_velocity = local_velocity,
 				.time = current_time,
 				.skeleton = skeleton,
 				.resolved = false,
 				.server_confirmed = false,
 				.impact_confirmed = false,
 				.target_velocity = target_velocity,
-				.forced = forced,
 				.weapon_type = features::combat::g_shared.ctx( ).weapon_type,
 			} );
 
@@ -552,87 +500,141 @@ namespace features::misc {
 	}
 
 	const char* impacts::classify_shot_deviation( const shot_record& shot ) const
+{
+	const auto inaccuracy = shot.server_confirmed ? shot.server_inaccuracy : shot.predicted_inaccuracy;
+
+	math::vector3 ideal_forward{};
+	math::helpers::angle_vectors_left( shot.aim_angle, &ideal_forward );
+
+	const auto shoot_position = shot.server_shoot_position_confirmed ? shot.server_shoot_position : shot.shoot_position;
+
+	const auto to_impact = shot.impact_position - shoot_position;
+	const auto impact_dist = to_impact.length( );
+
+	auto impact_dir = ideal_forward;
+	if ( impact_dist > 0.1f )
 	{
-		if ( !shot.impact_confirmed )
-		{
-			return "death";
-		}
-
-		if ( shot.server_confirmed && std::fabsf( shot.server_inaccuracy - shot.predicted_inaccuracy ) > 0.003f )
-		{
-			return "prediction error";
-		}
-
-		if ( shot.server_shoot_position_confirmed && ( shot.server_shoot_position - shot.shoot_position ).length_sqr( ) > 1.0f )
-		{
-			return "shoot position mismatch";
-		}
-
-		const auto shoot_position = shot.server_shoot_position_confirmed ? shot.server_shoot_position : shot.shoot_position;
-
-		math::vector3 ideal_forward{};
-		math::helpers::angle_vectors_left( shot.aim_angle, &ideal_forward );
-
-		const auto to_impact = shot.impact_position - shoot_position;
-		const auto impact_dist = to_impact.length( );
-
-		if ( impact_dist <= 0.1f )
-		{
-			return "impact too close to origin (likely penetration)";
-		}
-
-		const auto impact_dir = to_impact * ( 1.0f / impact_dist );
-		const auto dot = ideal_forward.dot( impact_dir );
-		const auto angular_deviation = std::acosf( std::clamp( dot, -1.0f, 1.0f ) );
-
-		const auto inaccuracy = shot.server_confirmed ? shot.server_inaccuracy : shot.predicted_inaccuracy;
-		const auto max_spread_angle = std::atanf( std::max( inaccuracy, 0.0f ) + std::max( shot.predicted_spread, 0.0f ) );
-		const auto impact_mismatch_angle = std::max( max_spread_angle * 3.0f, math::helpers::deg_to_rad( 2.0f ) );
-
-		const auto hitbox_dist = this->distance_to_nearest_hitbox( shot );
-		const auto ray_dist = this->ray_distance_to_nearest_hitbox( shot, impact_dir );
-		const auto ideal_ray_dist = this->ray_distance_to_nearest_hitbox( shot, ideal_forward );
-		const auto target_dist = ( shot.skeleton[ 0 ].position - shoot_position ).length( );
-
-		// The scalar cone is only an estimate of the server's shot state. Reserve
-		// this label for an impact that clearly belongs to another direction;
-		// smaller deviations are classified from their hitbox geometry below.
-		if ( angular_deviation > impact_mismatch_angle )
-		{
-			return "impact mismatch";
-		}
-
-		if ( ideal_ray_dist <= 1.0f && impact_dist < target_dist * 0.85f )
-		{
-			return "occlusion";
-		}
-
-		// If the server impact ray misses the saved hitboxes, weapon spread is
-		// already sufficient to explain the miss. Do not blame lag compensation
-		// merely because it passed within several units of the target.
-		if ( ray_dist > 1.0f )
-		{
-			return "spread";
-		}
-
-		if ( impact_dist > target_dist * 1.05f )
-		{
-			if ( shot.target_velocity.length_2d( ) < 5.0f )
-			{
-				return "server discrepancy";
-			}
-
-			return "lag compensation";
-		}
-
-		if ( hitbox_dist > 16.0f )
-		{
-			return "spread";
-		}
-
-		return "server discrepancy";
+		impact_dir = to_impact * ( 1.0f / impact_dist );
 	}
 
+	const auto dot = ideal_forward.dot( impact_dir );
+	const auto angular_deviation = std::acosf( std::clamp( dot, -1.0f, 1.0f ) );
+
+	// angular size of the spread cone the bullet was expected to land in:
+	// a deviation inside it is ordinary spread, far beyond it means the aim
+	// or the no-spread correction itself was off
+	const auto spread_cone = std::atanf( std::max( inaccuracy, 0.0f ) + std::max( shot.predicted_spread, 0.0f ) );
+
+	const auto hitbox_dist = this->distance_to_nearest_hitbox( shot );
+	const auto ray_dist = this->ray_distance_to_nearest_hitbox( shot, impact_dir );
+	const auto ideal_ray_dist = this->ray_distance_to_nearest_hitbox( shot, ideal_forward );
+	const auto ideal_hit_dist = this->ray_distance_to_first_hitbox( shot, ideal_forward );
+	const auto target_dist = ( shot.skeleton[ 0 ].position - shoot_position ).length( );
+	const auto target_now_dist = ( shot.target_now - shoot_position ).length( );
+	const auto victim_delta = ( shot.target_now - shot.skeleton[ 0 ].position ).length( );
+
+	// whether the aim ray actually crosses a target hitbox
+	const auto aim_hits_target = ideal_hit_dist < FLT_MAX;
+
+	// where the bullet was supposed to connect: the first hitbox the aim ray
+	// crosses, or the target's position when the aim ray misses entirely
+	const auto hit_distance = aim_hits_target ? ideal_hit_dist : target_dist;
+
+	// signed reach — how far the bullet travelled relative to that point:
+	// negative = it stopped short (wall/cover), positive = it went past
+	const auto reach = impact_dist - hit_distance;
+
+	// how far off the target the bullet may stop before we call it an
+	// obstacle hit rather than a lucky dodge
+	const auto reach_margin = std::max( 20.0f, hit_distance * 0.05f );
+
+	// the bullet's path grazed or passed through a target hitbox
+	const auto bullet_on_target = ray_dist < 1.0f;
+
+	const char* reason = "unknown";
+
+	if ( bullet_on_target && reach < -reach_margin )
+	{
+		// the bullet was flying at the target but stopped well before it — a
+		// wall/prop swallowed it, i.e. the shot was not actually clear (or the
+		// penetration sim overestimated what the bullet could get through)
+		reason = "wall";
+	}
+	else if ( bullet_on_target && reach > reach_margin )
+	{
+		// the bullet flew through where the target's hitboxes were without
+		// connecting — the target was not there on the server (desync, a wrong
+		// record pose, or a mismatched impact event)
+		reason = "past";
+	}
+	else if ( !bullet_on_target )
+	{
+		// the bullet's path missed the target's hitboxes entirely. if the
+		// deviation exceeds the spread cone, the aim/correction was off,
+		// otherwise it was ordinary spread
+		reason = angular_deviation > spread_cone * 1.5f ? "aim" : "spread";
+	}
+
+		const auto eye_offset = shot.server_shoot_position_confirmed ? ( shot.server_shoot_position - shot.shoot_position ).length( ) : 0.0f;
+
+		logging::console::print(
+			xs( "[impacts] MISS={} tick={} tick_base={} seed_tick={} dt={} srv_confirmed={} time={:.3f} inacc_pred={:.4f} inacc_srv={:.4f} real_inacc={:.4f} spread_pred={:.4f}\n"
+				"    eye_pred=({:.2f},{:.2f},{:.2f}) eye_srv=({:.2f},{:.2f},{:.2f}) eye_offset={:.3f}\n"
+				"    impact=({:.2f},{:.2f},{:.2f}) impact_dist={:.3f} reach={:.3f} target_dist={:.3f} target_now_dist={:.3f} victim_delta={:.3f}\n"
+				"    local_vel=({:.2f},{:.2f},{:.2f}) local_speed={:.2f} target_vel=({:.2f},{:.2f},{:.2f}) target_speed={:.2f}\n"
+				"    ang_dev={:.4f}rad spread_cone={:.4f}rad hitbox_dist={:.3f} ray_dist={:.3f} ideal_ray={:.3f} ideal_hit={:.3f} aim_hit={}\n"
+				"    punch=({:.3f},{:.3f},{:.3f}) punch_mag={:.3f}deg punch_dev={:.4f}rad\n" ),
+			reason,
+			shot.tick,
+			shot.tick_base,
+			shot.seed_tick,
+			shot.tick_base - shot.tick,
+			shot.server_confirmed,
+			shot.time,
+			shot.predicted_inaccuracy,
+			shot.server_inaccuracy,
+			shot.real_inaccuracy,
+			shot.predicted_spread,
+			shot.shoot_position.x,
+			shot.shoot_position.y,
+			shot.shoot_position.z,
+			shot.server_shoot_position.x,
+			shot.server_shoot_position.y,
+			shot.server_shoot_position.z,
+			eye_offset,
+			shot.impact_position.x,
+			shot.impact_position.y,
+			shot.impact_position.z,
+			impact_dist,
+			reach,
+			target_dist,
+			target_now_dist,
+			victim_delta,
+			shot.local_velocity.x,
+			shot.local_velocity.y,
+			shot.local_velocity.z,
+			shot.local_velocity.length( ),
+			shot.target_velocity.x,
+			shot.target_velocity.y,
+			shot.target_velocity.z,
+			shot.target_velocity.length( ),
+			angular_deviation,
+			spread_cone,
+			hitbox_dist,
+			ray_dist,
+			ideal_ray_dist,
+			ideal_hit_dist,
+			aim_hits_target,
+			shot.aim_punch.x,
+			shot.aim_punch.y,
+			shot.aim_punch.z,
+			math::helpers::rad_to_deg( shot.aim_punch.length( ) ),
+			std::fabsf( angular_deviation - shot.aim_punch.length( ) ) );
+
+	return reason;
+}
+
+	
 	impacts::hit_data impacts::parse_event( std::uintptr_t event )
 	{
 		const auto attacker_key = cstypes::event_hash{ 0, "attacker" };
@@ -668,15 +670,9 @@ namespace features::misc {
 		auto was_aimbot{ false };
 		auto weapon_type{ 0u };
 		std::string mismatch_reason{};
-		math::vector3 impact_pos{};
 
 		{
 			std::unique_lock lock( this->m_mtx );
-
-			if ( !this->m_pending_hits.empty( ) )
-			{
-				impact_pos = this->m_pending_hits.back( ).position;
-			}
 
 			auto matched_shot = this->m_pending_shots.end( );
 			for ( auto it = this->m_pending_shots.begin( ); it != this->m_pending_shots.end( ); ++it )
@@ -686,8 +682,30 @@ namespace features::misc {
 					continue;
 				}
 
-				if ( matched_shot == this->m_pending_shots.end( ) ||
-					( it->impact_confirmed && ( !matched_shot->impact_confirmed || it->impact_time > matched_shot->impact_time ) ) )
+				if ( matched_shot == this->m_pending_shots.end( ) )
+				{
+					matched_shot = it;
+					continue;
+				}
+
+				const auto current_has_impact = it->impact_confirmed;
+				const auto best_has_impact = matched_shot->impact_confirmed;
+
+				if ( current_has_impact != best_has_impact )
+				{
+					if ( current_has_impact )
+					{
+						matched_shot = it;
+					}
+				}
+				else if ( current_has_impact )
+				{
+					if ( it->impact_time > matched_shot->impact_time )
+					{
+						matched_shot = it;
+					}
+				}
+				else if ( it->hitgroup == hitgroup && matched_shot->hitgroup != hitgroup )
 				{
 					matched_shot = it;
 				}
@@ -700,11 +718,6 @@ namespace features::misc {
 				weapon_type = matched_shot->weapon_type;
 				expected_damage = matched_shot->damage;
 				matched_shot->resolved = true;
-
-				if ( expected_hitgroup > 0 && hitgroup != expected_hitgroup )
-				{
-					mismatch_reason = this->classify_shot_deviation( *matched_shot );
-				}
 			}
 		}
 
@@ -756,7 +769,7 @@ namespace features::misc {
 
 		auto name = memory::read_string( name_ptr, 64 );
 
-		std::transform( name.begin( ), name.end( ), name.begin( ), ::tolower );
+		std::transform( name.begin( ), name.end( ), name.begin( ), [ ]( unsigned char c ) { return static_cast<char>( ::tolower( c ) ); } );
 
 		return name;
 	}
@@ -838,6 +851,93 @@ namespace features::misc {
 					std::clamp( local.z, entry.mins.z, entry.maxs.z )
 				};
 				dist = ( local - closest ).length( );
+			}
+
+			if ( dist < best_dist )
+			{
+				best_dist = dist;
+			}
+		}
+
+		return best_dist;
+	}
+
+	float impacts::ray_distance_to_first_hitbox( const shot_record& shot, const math::vector3& direction ) const
+	{
+		const auto game_scene_node = memory::read<std::uintptr_t>( shot.victim_pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+		if ( !game_scene_node )
+		{
+			return FLT_MAX;
+		}
+
+		const auto hitbox_set = systems::g_hitboxes.query( game_scene_node );
+		if ( hitbox_set.count <= 0 )
+		{
+			return FLT_MAX;
+		}
+
+		auto best_dist{ FLT_MAX };
+		const auto shoot_position = shot.server_shoot_position_confirmed ? shot.server_shoot_position : shot.shoot_position;
+		const auto trace_delta = direction.normalized( ) * 8192.0f;
+
+		for ( const auto& entry : hitbox_set )
+		{
+			if ( entry.bone < 0 || entry.bone >= static_cast< int >( shot.skeleton.size( ) ) )
+			{
+				continue;
+			}
+
+			const auto& bone = shot.skeleton[ entry.bone ];
+			if ( bone.position.length_sqr( ) < 1.0f )
+			{
+				continue;
+			}
+
+			auto dist{ FLT_MAX };
+			if ( entry.radius > 0.001f )
+			{
+				const auto capsule_start = bone.rotation.rotate_vector( entry.mins ) + bone.position;
+				const auto capsule_end = bone.rotation.rotate_vector( entry.maxs ) + bone.position;
+				auto fraction{ 1.0f };
+
+				if ( features::combat::g_shared.ray_vs_capsule( shoot_position, trace_delta, capsule_start, capsule_end, entry.radius, fraction ) )
+				{
+					dist = fraction * trace_delta.length( );
+				}
+			}
+			else
+			{
+				auto inverse = bone.rotation;
+				inverse.x = -inverse.x;
+				inverse.y = -inverse.y;
+				inverse.z = -inverse.z;
+
+				const auto local_origin = inverse.rotate_vector( shoot_position - bone.position );
+				const auto local_delta = inverse.rotate_vector( trace_delta );
+				auto entry_t{ 0.0f };
+				auto exit_t{ 1.0f };
+
+				const auto intersect_axis = [ & ]( float origin, float delta, float minimum, float maximum )
+				{
+					if ( std::fabs( delta ) < 1.0e-8f )
+					{
+						return origin >= minimum && origin <= maximum;
+					}
+
+					auto first = ( minimum - origin ) / delta;
+					auto second = ( maximum - origin ) / delta;
+					if ( first > second ) std::swap( first, second );
+					entry_t = std::max( entry_t, first );
+					exit_t = std::min( exit_t, second );
+					return entry_t <= exit_t;
+				};
+
+				if ( intersect_axis( local_origin.x, local_delta.x, entry.mins.x, entry.maxs.x ) &&
+					intersect_axis( local_origin.y, local_delta.y, entry.mins.y, entry.maxs.y ) &&
+					intersect_axis( local_origin.z, local_delta.z, entry.mins.z, entry.maxs.z ) )
+				{
+					dist = std::max( entry_t, 0.0f ) * trace_delta.length( );
+				}
 			}
 
 			if ( dist < best_dist )
@@ -965,6 +1065,11 @@ namespace features::misc {
 		const auto current_time = memory::read<float>( global_vars + 0x30 );
 		const auto& cfg = settings::g_misc.m_impacts;
 
+		if ( !cfg.hit_log.value )
+		{
+			return;
+		}
+
 		std::unique_lock lock( this->m_mtx );
 
 		log entry{};
@@ -982,63 +1087,12 @@ namespace features::misc {
 		entry.hitgroup = systems::g_hitboxes.hitgroup_to_name( data.hitgroup );
 		entry.weapon_type = data.weapon_type;
 
-		if ( data.was_aimbot && !data.mismatch_reason.empty( ) )
+		this->m_logs.insert( this->m_logs.begin( ), std::move( entry ) );
+
+		if ( this->m_logs.size( ) > 5 )
 		{
-			const auto expected_name = systems::g_hitboxes.hitgroup_to_name( data.expected_hitgroup );
-			entry.reason = std::format( "{} was expected ({})", expected_name, data.mismatch_reason );
+			this->m_logs.pop_back( );
 		}
-		else if ( data.was_aimbot && data.health > 0 && data.expected_damage > 0.0f && static_cast< float >( data.damage ) < data.expected_damage )
-		{
-			entry.reason = std::format( "expected {:.0f} damage, dealt {}", data.expected_damage, data.damage );
-		}
-
-		if ( cfg.console_log.value || cfg.chat_log.value )
-		{
-			std::string plain_msg{};
-			std::string chat_msg{};
-
-			if ( data.weapon_type == cstypes::weapon_type::taser )
-			{
-				plain_msg = std::format( "zapped the fuck out of {}", entry.name );
-				chat_msg = detail::format_taser_chat_message( entry.name );
-			}
-			else if ( data.weapon_type == cstypes::weapon_type::knife )
-			{
-				plain_msg = std::format( "knifed {} for {} ({} remaining)", entry.name, entry.damage, entry.health );
-				chat_msg = detail::format_knife_chat_message( entry.name, entry.damage, entry.health );
-			}
-			else if ( !entry.reason.empty( ) )
-			{
-				plain_msg = std::format( "hit {} for {} in {}, {} ({} remaining)", entry.name, entry.damage, entry.hitgroup, entry.reason, entry.health );
-				chat_msg = detail::format_hit_chat_message( entry.name, entry.damage, entry.hitgroup, entry.health, entry.reason );
-			}
-			else
-			{
-				plain_msg = std::format( "hit {} for {} in {} ({} remaining)", entry.name, entry.damage, entry.hitgroup, entry.health );
-				chat_msg = detail::format_hit_chat_message( entry.name, entry.damage, entry.hitgroup, entry.health );
-			}
-
-			if ( cfg.console_log.value )
-			{
-				logging::console::print( xs( "{}" ), plain_msg );
-			}
-
-			if ( cfg.chat_log.value )
-			{
-				detail::chat_print_velocity( chat_msg.c_str( ) );
-			}
-		}
-
-		if ( cfg.hit_log.value )
-		{
-			this->m_logs.insert( this->m_logs.begin( ), std::move( entry ) );
-
-			if ( this->m_logs.size( ) > 5 )
-			{
-				this->m_logs.pop_back( );
-			}
-		}
-
 	}
 
 	void impacts::add_miss_log( const shot_record& shot, const char* reason )
@@ -1047,67 +1101,16 @@ namespace features::misc {
 		const auto current_time = memory::read<float>( global_vars + 0x30 );
 		const auto& cfg = settings::g_misc.m_impacts;
 
-		const auto name = this->get_player_name_from_pawn( shot.victim_pawn );
-		const auto group = systems::g_hitboxes.hitgroup_to_name( shot.hitgroup );
-
-		if ( cfg.console_log.value || cfg.chat_log.value )
-		{
-			std::string plain_msg{};
-			std::string chat_msg{};
-
-			if ( shot.weapon_type == cstypes::weapon_type::knife || shot.weapon_type == cstypes::weapon_type::taser )
-			{
-				if ( shot.weapon_type == cstypes::weapon_type::knife )
-				{
-					plain_msg = std::format( "missed knife on {} due to latency", name );
-					chat_msg = detail::chat_dim( "missed knife on " ) + detail::chat_white( name ) + detail::chat_dim( " due to latency" );
-				}
-				else
-				{
-					plain_msg = std::format( "missed zeus on {} due to idk ill improve the zeusbot later jeez.", name );
-					chat_msg = detail::chat_dim( "missed zeus on " ) + detail::chat_white( name ) + detail::chat_dim( " due to idk ill improve the zeusbot later jeez." );
-				}
-			}
-			else if ( shot.forced )
-			{
-				plain_msg = std::format( "missed {} (forced shot, {:.0f}% hitchance)", name, shot.hitchance * 100.0f );
-				chat_msg = detail::chat_dim( "missed " ) + detail::chat_white( name ) + detail::chat_dim( std::format( " (forced shot, {:.0f}% hitchance)", shot.hitchance * 100.0f ) );
-			}
-			else
-			{
-				plain_msg = std::format( "missed {}, targeted {} (hc={:.0f}%, dmg={:.0f}, reason={})", name, group, shot.hitchance * 100.0f, shot.damage, reason );
-				chat_msg = detail::chat_dim( "missed " ) + detail::chat_white( name ) + detail::chat_dim( ", targeted " ) + detail::chat_white( group ) + detail::chat_dim( std::format( " (hc={:.0f}%, dmg={:.0f}, reason={})", shot.hitchance * 100.0f, shot.damage, reason ) );
-			}
-
-			if ( cfg.console_log.value )
-			{
-				logging::console::print( xs( "{}" ), plain_msg );
-			}
-
-			if ( cfg.chat_log.value )
-			{
-				detail::chat_print_velocity( chat_msg.c_str( ) );
-			}
-		}
-
 		if ( !cfg.miss_log.value )
 		{
 			return;
 		}
 
+		const auto name = this->get_player_name_from_pawn( shot.victim_pawn );
+
 		log entry{};
 		entry.name = name;
-
-		if ( shot.forced )
-		{
-			entry.reason = "forced shot";
-			entry.hitgroup = std::format( "({:.0f}% hitchance)", shot.hitchance * 100.0f );
-		}
-		else
-		{
-			entry.reason = reason;
-		}
-
+		entry.reason = reason;
 		entry.damage = 0;
 		entry.health = -1;
 		entry.time = current_time;
@@ -1127,16 +1130,16 @@ namespace features::misc {
 		{
 			this->m_logs.pop_back( );
 		}
-
 	}
 
 	void impacts::check_misses( )
 	{
 		const auto global_vars = memory::read<std::uintptr_t>( addresses::globals::global_vars );
 		const auto current_time = memory::read<float>( global_vars + 0x30 );
+		const auto local = systems::g_local.get( );
 
-		constexpr auto hurt_grace_period{ 0.35f };
-		constexpr auto absolute_timeout{ 1.0f };
+		constexpr auto hurt_grace_period{ 0.6f };
+		constexpr auto absolute_timeout{ 1.5f };
 
 		const auto& cfg = settings::g_misc.m_impacts;
 
@@ -1155,35 +1158,57 @@ namespace features::misc {
 
 			if ( is_stale || is_expired )
 			{
-				// A predicted trigger command is not necessarily a shot (notably
-				// while cocking the R8). Discard it unless the server fire path or
-				// a bullet impact confirms that a round was emitted.
-				if ( !it->server_confirmed && !it->impact_confirmed )
-				{
-					it = this->m_pending_shots.erase( it );
-					continue;
-				}
-
 				it->resolved = true;
 
-				if ( cfg.miss_log.value )
-				{
-					const char* reason;
+				
+				const auto victim_recently_hurt = std::any_of( this->m_recent_hurts.begin( ), this->m_recent_hurts.end( ), [ & ]( const auto& entry )
+					{
+						return entry.victim_pawn == it->victim_pawn && entry.time >= it->time - 0.2f;
+					} );
 
-					if ( it->forced )
+				if ( cfg.miss_log.value && !victim_recently_hurt )
+				{
+					const char* reason = nullptr;
+
+					if ( !it->impact_confirmed )
 					{
-						reason = "forced";
+						// the bullet never registered an impact — the shot never happened
+						// server-side. if we are dead, we were killed before it fired
+						if ( !local.is_alive )
+						{
+							reason = "death";
+						}
+						else
+						{
+							// a duplicate record of a shot that already registered an impact
+							// (e.g. the same command processed twice) — skip it so one bullet
+							// can never produce two miss logs
+							const auto has_impacted_sibling = std::any_of( this->m_pending_shots.begin( ), this->m_pending_shots.end( ), [ & ]( const auto& other )
+								{
+									return &other != &( *it ) && other.victim_pawn == it->victim_pawn
+										&& other.impact_confirmed && std::fabsf( other.time - it->time ) < 0.3f;
+								} );
+
+							if ( !has_impacted_sibling )
+							{
+								reason = "unknown";
+							}
+						}
 					}
-					else if ( !it->impact_confirmed )
+					else if ( it->victim_pawn && memory::read<int>( it->victim_pawn + SCHEMA( "C_BaseEntity", "m_iHealth"_hash ) ) <= 0 )
 					{
-						reason = "death";
+						// the bullet impacted, but the target was already dead
+						reason = "target death";
 					}
 					else
 					{
 						reason = this->classify_shot_deviation( *it );
 					}
 
-					this->add_miss_log( *it, reason );
+					if ( reason )
+					{
+						this->add_miss_log( *it, reason );
+					}
 				}
 
 				it = this->m_pending_shots.erase( it );
@@ -1330,7 +1355,6 @@ namespace features::misc {
 	{
 		std::unique_lock lock( this->m_mtx );
 
-		const auto& cfg = settings::g_misc.m_impacts;
 		const auto& s = xui::ctx( ).style;
 
 		constexpr auto fade_ratio{ 0.8f };
@@ -1338,23 +1362,14 @@ namespace features::misc {
 		constexpr auto base_x{ 15.0f };
 		constexpr auto base_y{ 15.0f };
 
-		constexpr auto h{ 24.0f };
+		constexpr auto h{ 30.0f };
 		constexpr auto r{ 8.0f };
 		constexpr auto inner_r{ 6.0f };
 		constexpr auto inner_pad{ 2.0f };
 		constexpr auto text_pad_x{ 8.0f };
 		constexpr auto text_nudge{ 0.5f };
-		constexpr auto icon_size{ 20.0f };
-		constexpr auto icon_inner_pad{ 4.0f };
 
-		static const auto miss_accent = xdraw::color{ 255, 100, 100, 255 };
-		static const auto miss_dim = xdraw::color{ 255, 100, 100, 82 };
-
-		static auto hit_icon_w = 0, hit_icon_h = 0;
-		static const auto hit_icon = xdraw::load_svg( R"(<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 6C1.5 6.59095 1.6164 7.17611 1.84254 7.72208C2.06869 8.26804 2.40016 8.76412 2.81802 9.18198C3.23588 9.59984 3.73196 9.93131 4.27792 10.1575C4.82389 10.3836 5.40905 10.5 6 10.5C6.59095 10.5 7.17611 10.3836 7.72208 10.1575C8.26804 9.93131 8.76412 9.59984 9.18198 9.18198C9.59984 8.76412 9.93131 8.26804 10.1575 7.72208C10.3836 7.17611 10.5 6.59095 10.5 6C10.5 4.80653 10.0259 3.66193 9.18198 2.81802C8.33807 1.97411 7.19347 1.5 6 1.5C4.80653 1.5 3.66193 1.97411 2.81802 2.81802C1.97411 3.66193 1.5 4.80653 1.5 6Z" stroke="#111111" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 7H7.5C7.5 7.39782 7.34196 7.77936 7.06066 8.06066C6.77936 8.34196 6.39782 8.5 6 8.5C5.60218 8.5 5.22064 8.34196 4.93934 8.06066C4.65804 7.77936 4.5 7.39782 4.5 7Z" stroke="#111111" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 4L7.5 5.5" stroke="#111111" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 5.5L7.5 4" stroke="#111111" stroke-linecap="round" stroke-linejoin="round"/></svg>)", 1.0f, &hit_icon_w, &hit_icon_h );
-
-		static auto miss_icon_w = 0, miss_icon_h = 0;
-		static const auto miss_icon = xdraw::load_svg( R"(<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 6C1.5 6.59095 1.6164 7.17611 1.84254 7.72208C2.06869 8.26804 2.40016 8.76412 2.81802 9.18198C3.23588 9.59984 3.73196 9.93131 4.27792 10.1575C4.82389 10.3836 5.40905 10.5 6 10.5C6.59095 10.5 7.17611 10.3836 7.72208 10.1575C8.26804 9.93131 8.76412 9.59984 9.18198 9.18198C9.59984 8.76412 9.93131 8.26804 10.1575 7.72208C10.3836 7.17611 10.5 6.59095 10.5 6C10.5 5.40905 10.3836 4.82389 10.1575 4.27792C9.93131 3.73196 9.59984 3.23588 9.18198 2.81802C8.76412 2.40016 8.26804 2.06869 7.72208 1.84254C7.17611 1.6164 6.59095 1.5 6 1.5C5.40905 1.5 4.82389 1.6164 4.27792 1.84254C3.73196 2.06869 3.23588 2.40016 2.81802 2.81802C2.40016 3.23588 2.06869 3.73196 1.84254 4.27792C1.6164 4.82389 1.5 5.40905 1.5 6Z" stroke="#111111" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.25 8.02525C7.08706 7.85896 6.89258 7.72684 6.67794 7.63665C6.4633 7.54646 6.23282 7.5 6 7.5C5.76718 7.5 5.5367 7.54646 5.32206 7.63665C5.10742 7.72684 4.91294 7.85896 4.75 8.02525" stroke="#111111" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 4.625C4.75 5.125 3.75 5.125 3.5 4.625" stroke="#111111" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.5 4.625C8.25 5.125 7.25 5.125 7 4.625" stroke="#111111" stroke-linecap="round" stroke-linejoin="round"/></svg>)", 1.0f, &miss_icon_w, &miss_icon_h );
+		static const auto miss_color = xdraw::color{ 255, 100, 100, 255 };
 
 		const auto inner_h = h - inner_pad * 2.0f;
 		auto y_offset{ 0.0f };
@@ -1391,11 +1406,22 @@ namespace features::misc {
 			if ( alpha > 0.01f )
 			{
 				const auto scale_alpha = [ & ]( xdraw::color c ) -> xdraw::color { return c.alpha( static_cast< std::uint8_t >( ( c.a / 255.0f ) * alpha * 255.0f ) ); };
-				const auto& icon_color = it->is_miss ? miss_accent : s.accent;
-				const auto& accent_base = it->is_miss ? miss_accent : s.accent;
-				const auto& dim_base = it->is_miss ? miss_dim : s.text_dim;
-				const auto accent_col = scale_alpha( accent_base );
-				const auto dim_col = scale_alpha( dim_base );
+				
+				xdraw::color accent_col;
+				xdraw::color dim_col;
+				
+				if ( it->is_miss )
+				{
+					
+					accent_col = scale_alpha( miss_color );
+					dim_col = scale_alpha( miss_color );
+				}
+				else
+				{
+					
+					accent_col = scale_alpha( s.accent );
+					dim_col = scale_alpha( s.text_dim );
+				}
 
 				struct text_span
 				{
@@ -1452,56 +1478,21 @@ namespace features::misc {
 				{
 					if ( it->weapon_type == cstypes::weapon_type::knife )
 					{
-						const auto damage_text = std::to_string( it->damage );
-
-						const auto [a_w, a_h] = xdraw::measure_text( "knifed " );
-						const auto [b_w, b_h] = xdraw::measure_text( it->name );
-						const auto [c_w, c_h] = xdraw::measure_text( " for " );
-						const auto [d_w, d_h] = xdraw::measure_text( damage_text );
-
-						spans.push_back( { "knifed ", false, a_w, a_h } );
-						spans.push_back( { it->name, true, b_w, b_h } );
-						spans.push_back( { " for ", false, c_w, c_h } );
-						spans.push_back( { damage_text, true, d_w, d_h } );
-
-						const auto remaining_text = std::format( " ({} remaining)", it->health );
-						const auto [e_w, e_h] = xdraw::measure_text( remaining_text );
-						spans.push_back( { remaining_text, false, e_w, e_h } );
+						const auto full_text = std::format( "knifed {} for {} hp ({} hp remaining)", it->name, it->damage, it->health );
+						const auto [text_w, text_h] = xdraw::measure_text( full_text );
+						spans.push_back( { full_text, true, text_w, text_h } );
 					}
 					else if ( it->weapon_type == cstypes::weapon_type::taser )
 					{
-						const auto [a_w, a_h] = xdraw::measure_text( "zapped the fuck out of " );
-						const auto [b_w, b_h] = xdraw::measure_text( it->name );
-
-						spans.push_back( { "zapped the fuck out of ", false, a_w, a_h } );
-						spans.push_back( { it->name, true, b_w, b_h } );
+						const auto full_text = std::format( "tased {}", it->name );
+						const auto [text_w, text_h] = xdraw::measure_text( full_text );
+						spans.push_back( { full_text, true, text_w, text_h } );
 					}
 					else
 					{
-						const auto damage_text = std::to_string( it->damage );
-
-						const auto [a_w, a_h] = xdraw::measure_text( "hit " );
-						const auto [b_w, b_h] = xdraw::measure_text( it->name );
-						const auto [c_w, c_h] = xdraw::measure_text( " for " );
-						const auto [d_w, d_h] = xdraw::measure_text( damage_text );
-						const auto [e_w, e_h] = xdraw::measure_text( " in " );
-						const auto [f_w, f_h] = xdraw::measure_text( it->hitgroup );
-
-						spans.push_back( { "hit ", false, a_w, a_h } );
-						spans.push_back( { it->name, true, b_w, b_h } );
-						spans.push_back( { " for ", false, c_w, c_h } );
-						spans.push_back( { damage_text, true, d_w, d_h } );
-						spans.push_back( { " in ", false, e_w, e_h } );
-						spans.push_back( { it->hitgroup, true, f_w, f_h } );
-
-						if ( !it->reason.empty( ) )
-						{
-							const auto [g_w, g_h] = xdraw::measure_text( ", " );
-							const auto [h_w, h_h] = xdraw::measure_text( it->reason );
-
-							spans.push_back( { ", ", false, g_w, g_h } );
-							spans.push_back( { it->reason, false, h_w, h_h } );
-						}
+						const auto full_text = std::format( "hit {} for {} hp in {} ({} hp remaining)", it->name, it->damage, it->hitgroup, it->health );
+						const auto [text_w, text_h] = xdraw::measure_text( full_text );
+						spans.push_back( { full_text, true, text_w, text_h } );
 					}
 				}
 
@@ -1515,29 +1506,14 @@ namespace features::misc {
 				}
 
 				const auto text_pill_w = text_total_w + text_pad_x * 2.0f;
-				const auto total_w = inner_pad + icon_size + inner_pad + text_pill_w + inner_pad;
+				const auto total_w = inner_pad + text_pill_w + inner_pad;
 
 				const auto x = base_x + slide_x;
 				const auto y = base_y + y_offset;
 
-				if ( elapsed <= fade_start )
-				{
-					draw_list.rect_filled_blurred( x, y, total_w, h, xdraw::corner_radius{ r } );
-				}
-
 				draw_list.rect_filled( x, y, total_w, h, scale_alpha( s.window_bg ), xdraw::corner_radius{ r } );
-				draw_list.rect_filled( x + inner_pad, y + inner_pad, icon_size, inner_h, scale_alpha( icon_color ), xdraw::corner_radius{ inner_r } );
 
-				const auto& icon = it->is_miss ? miss_icon : hit_icon;
-				if ( icon )
-				{
-					const auto icon_draw = icon_size - icon_inner_pad * 2.0f;
-					const auto ix = std::floor( x + inner_pad + icon_inner_pad );
-					const auto iy = std::floor( y + inner_pad + ( inner_h - icon_draw ) * 0.5f );
-					draw_list.image( ix, iy, icon_draw, icon_draw, icon.Get( ), scale_alpha( s.checkbox_mark_icon ) );
-				}
-
-				const auto tp_x = x + inner_pad + icon_size + inner_pad;
+				const auto tp_x = x + inner_pad;
 				draw_list.rect_filled( tp_x, y + inner_pad, text_pill_w, inner_h, scale_alpha( s.child_bg ), xdraw::corner_radius{ inner_r } );
 
 				auto tx = tp_x + text_pad_x;
@@ -1633,7 +1609,7 @@ namespace features::misc {
 		std::unique_lock lock( this->m_mtx );
 
 		const auto duration = cfg.bullet_impact_effect_duration.value;
-		const auto half_size = cfg.bullet_impact_effect_size.value;
+		constexpr auto half_size{ 1.75f };
 
 		for ( auto it = this->m_bullet_impacts.begin( ); it != this->m_bullet_impacts.end( ); )
 		{
@@ -1773,7 +1749,7 @@ namespace features::misc {
 				return {};
 			}
 
-			const auto root = std::wstring( app_data ) + L"\\velocity";
+			const auto root = std::wstring( app_data ) + L"\\swift.fly";
 			const auto sounds = root + L"\\sounds";
 
 			CreateDirectoryW( root.c_str( ), nullptr );
@@ -1808,7 +1784,7 @@ namespace features::misc {
 			return _strnicmp( name.data( ) + name.size( ) - ext.size( ), ext.data( ), ext.size( ) ) == 0;
 		}
 
-void play_engine_path( const char* sound_path, float volume )
+		void play_engine_path( const char* sound_path, float volume )
 		{
 			struct
 			{
@@ -1853,44 +1829,11 @@ void play_engine_path( const char* sound_path, float volume )
 			{
 				const auto level = static_cast<WORD>( std::clamp( volume / 100.0f, 0.0f, 1.0f ) * 0xFFFFu );
 				const DWORD vol = static_cast<DWORD>( level ) | ( static_cast<DWORD>( level ) << 16 );
-				set_vol_fn( static_cast<UINT_PTR>( static_cast<UINT>( -1 ) ), vol ); // WAVE_MAPPER
+				set_vol_fn( static_cast<UINT_PTR>( static_cast<UINT>( -1 ) ), vol ); 
 			}
 
-			// SND_FILENAME(0x20000) | SND_ASYNC(0x1) | SND_NODEFAULT(0x2)
+			
 			play_fn( path.c_str( ), nullptr, 0x00020003u );
-		}
-
-		void play_embedded_wav( const unsigned char* data, std::uint64_t size, float volume )
-		{
-			using PlaySoundA_t = BOOL( WINAPI* )( LPCSTR, HMODULE, DWORD );
-			using waveOutSetVolume_t = UINT( WINAPI* )( UINT_PTR, DWORD );
-
-			static const auto winmm = []() -> HMODULE {
-				HMODULE mod = GetModuleHandleW( L"winmm.dll" );
-				return mod ? mod : LoadLibraryW( L"winmm.dll" );
-			}();
-
-			if ( !winmm || !data || size == 0 )
-			{
-				return;
-			}
-
-			static const auto play_fn = reinterpret_cast<PlaySoundA_t>( GetProcAddress( winmm, "PlaySoundA" ) );
-			if ( !play_fn )
-			{
-				return;
-			}
-
-			static const auto set_vol_fn = reinterpret_cast<waveOutSetVolume_t>( GetProcAddress( winmm, "waveOutSetVolume" ) );
-			if ( set_vol_fn )
-			{
-				const auto level = static_cast<WORD>( std::clamp( volume / 100.0f, 0.0f, 1.0f ) * 0xFFFFu );
-				const DWORD vol = static_cast<DWORD>( level ) | ( static_cast<DWORD>( level ) << 16 );
-				set_vol_fn( static_cast<UINT_PTR>( static_cast<UINT>( -1 ) ), vol ); // WAVE_MAPPER
-			}
-
-			// SND_MEMORY(0x4) | SND_ASYNC(0x1) | SND_NODEFAULT(0x2)
-			play_fn( reinterpret_cast<LPCSTR>( data ), nullptr, 0x00020007u );
 		}
 
 		[[nodiscard]] std::wstring resolve_sound_path( std::string_view filename )
@@ -1919,7 +1862,7 @@ void play_engine_path( const char* sound_path, float volume )
 		}
 
 
-} // namespace custom_sound_detail
+} 
 
 	std::string impacts::custom_sounds_directory_narrow( )
 	{
@@ -2026,24 +1969,6 @@ void play_engine_path( const char* sound_path, float volume )
 		case settings::misc::impacts::sound_type::key_press:
 			sound_path = "sounds/weapons/c4/key_press7";
 			break;
-		case settings::misc::impacts::sound_type::hit:
-			custom_sound_detail::play_embedded_wav( hitsound::g_hit_wav_data, hitsound::g_hit_wav_size, volume );
-			return;
-		case settings::misc::impacts::sound_type::bubble:
-			custom_sound_detail::play_embedded_wav( hitsound::g_bubble_wav_data, hitsound::g_bubble_wav_size, volume );
-			return;
-		case settings::misc::impacts::sound_type::metal:
-			custom_sound_detail::play_embedded_wav( hitsound::g_metal_wav_data, hitsound::g_metal_wav_size, volume );
-			return;
-		case settings::misc::impacts::sound_type::neverlose:
-			custom_sound_detail::play_embedded_wav( hitsound::g_neverlose_wav_data, hitsound::g_neverlose_wav_size, volume );
-			return;
-		case settings::misc::impacts::sound_type::rust_headshot:
-			custom_sound_detail::play_embedded_wav( hitsound::g_rust_headshot_wav_data, hitsound::g_rust_headshot_wav_size, volume );
-			return;
-		case settings::misc::impacts::sound_type::agpa2:
-			custom_sound_detail::play_embedded_wav( hitsound::g_agpa2_wav_data, hitsound::g_agpa2_wav_size, volume );
-			return;
 		default:
 			return;
 		}
@@ -2053,6 +1978,7 @@ void play_engine_path( const char* sound_path, float volume )
 
 	void impacts::play_hit_effect( std::uintptr_t victim_pawn )
 	{
+		(void)victim_pawn;
 		const auto global_vars = memory::read<std::uintptr_t>( addresses::globals::global_vars );
 		const auto current_time = memory::read<float>( global_vars + 0x30 );
 
@@ -2061,15 +1987,18 @@ void play_engine_path( const char* sound_path, float volume )
 
 	void impacts::play_death_effect( std::uintptr_t victim_pawn )
 	{
+		const auto& cfg = settings::g_misc.m_impacts;
+		const auto is_sparks = cfg.death_effect_style.value == settings::misc::impacts::death_effect_type::sparks;
+		const auto particle_path = is_sparks ? "particles/embedded/sparks.vpcf" : "particles/embedded/fade.vpcf";
+		auto& loaded = is_sparks ? this->m_death_sparks_loaded : this->m_death_effect_loaded;
+
 		const auto particle_manager = memory::read<std::uintptr_t>( addresses::globals::particle_manager );
 		if ( !particle_manager )
 		{
 			return;
 		}
 
-		constexpr auto particle_path{ "particles/embedded/fade.vpcf" };
-
-		if ( !this->m_death_effect_loaded )
+		if ( !loaded )
 		{
 			struct buffer_string
 			{
@@ -2092,7 +2021,7 @@ void play_engine_path( const char* sound_path, float volume )
 
 			memory::call<void>(PATTERN (patterns::resource_system_precache), addresses::globals::resource_system, &buffer, "" );
 
-			this->m_death_effect_loaded = true;
+			loaded = true;
 		}
 
 		auto effect_index{ detail::invalid_particle_effect };
@@ -2103,7 +2032,23 @@ void play_engine_path( const char* sound_path, float volume )
 			return;
 		}
 
-		const math::vector3 color{ static_cast< float >( settings::g_misc.m_impacts.death_effect_color.value.r ), static_cast< float >( settings::g_misc.m_impacts.death_effect_color.value.g ), static_cast< float >( settings::g_misc.m_impacts.death_effect_color.value.b ) };
+		const math::vector3 color{ static_cast< float >( cfg.death_effect_color.value.r ), static_cast< float >( cfg.death_effect_color.value.g ), static_cast< float >( cfg.death_effect_color.value.b ) };
+
+		if ( is_sparks )
+		{
+			const auto game_scene_node = memory::read<std::uintptr_t>( victim_pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+			if ( !game_scene_node )
+			{
+				return;
+			}
+
+			const auto position = memory::read<math::vector3>( game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+
+			memory::call<bool>(PATTERN (patterns::particle_set_control_point), particle_manager, effect_index, 0, &position, 0 );
+			memory::call<bool>(PATTERN (patterns::particle_set_control_point), particle_manager, effect_index, 1, &color, 0 );
+			return;
+		}
+
 		memory::call<bool>(PATTERN (patterns::particle_set_control_point), particle_manager, effect_index, 2, &color, 0 );
 
 		struct
@@ -2270,4 +2215,4 @@ void play_engine_path( const char* sound_path, float volume )
 		}
 	}
 
-} // namespace features::misc
+} 

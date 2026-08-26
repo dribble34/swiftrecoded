@@ -43,4 +43,4 @@ namespace steam {
 		static bool get_image_rgba( int image, std::uint8_t* dest, int dest_size );
 	};
 
-} // namespace steam
+} 

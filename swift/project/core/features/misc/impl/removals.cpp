@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <core/settings.hpp>
@@ -56,4 +55,4 @@ namespace features::misc {
 		memory::write<math::vector3>( view_setup + 0x4b8, systems::g_input.get_view_angles( ) );
 	}
 
-} // namespace features::misc
+} 

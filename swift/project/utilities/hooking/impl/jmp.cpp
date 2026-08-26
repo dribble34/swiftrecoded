@@ -1,6 +1,6 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <protection/game_addresses.hpp>
+#include <external/zydis/zydis.h>
 #include "../hooking.hpp"
 
 namespace hooking {
@@ -143,7 +143,7 @@ namespace hooking {
 			return reinterpret_cast<LONG (__stdcall*)(HANDLE, PVOID, int, PVOID, SIZE_T, PSIZE_T)>(MODULE_EXPORT ("ntdll.dll:NtQueryVirtualMemory"))( process, address, info_class, buffer, length, return_length );
 		}
 
-	} // namespace detail
+	} 
 
 	bool jmp::create( void* target, void* hook_function )
 	{
@@ -330,4 +330,4 @@ namespace hooking {
 		std::memset( this->m_hook_bytes, 0, sizeof( this->m_hook_bytes ) );
 	}
 
-} // namespace hooking
+} 

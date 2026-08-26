@@ -1,5 +1,13 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include <utilities/animation.hpp>
+
 namespace features::esp {
 
 	namespace player {
@@ -10,67 +18,14 @@ namespace features::esp {
 			bool on_generate_primitives( std::uintptr_t owner_entity, std::uint32_t owner_hash, std::uintptr_t scene_object, std::uintptr_t primitive_buffer, void( __fastcall* original_fn )( std::uintptr_t, std::uintptr_t, std::uintptr_t, std::uintptr_t ), std::uintptr_t a1, std::uintptr_t scene_view );
 			void on_sort_primitives( std::uintptr_t entries, std::uint32_t count );
 
-			class backtrack
-			{
-			public:
-				void update( );
-				void shutdown( );
-
-				[[nodiscard]] bool is_active( std::uintptr_t scene_object ) const;
-				[[nodiscard]] bool has_active( std::uintptr_t pawn ) const;
-				[[nodiscard]] std::uintptr_t get_scene_object( std::uintptr_t pawn ) const;
-
-				struct object {
-					std::uintptr_t scene_object {};
-					std::uintptr_t pawn {};
-					bool active {};
-					float spawn_time {};
-
-					void create (std::uintptr_t pawn);
-					void destroy ();
-					void setup_bones (systems::bones::data* bones, int count) const;
-				};
-
-			private:
-
-				std::unordered_map<std::uintptr_t, object> m_objects{};
-			};
-
-			class onshot {
-			public:
-				void push (std::uintptr_t pawn, const systems::bones::data* bones, int bone_count);
-				void update ();
-				void shutdown ();
-
-				[[nodiscard]] bool has_active (std::uintptr_t pawn) const;
-				[[nodiscard]] bool is_active (std::uintptr_t scene_object) const;
-				[[nodiscard]] std::uintptr_t get_scene_object (std::uintptr_t pawn) const;
-				[[nodiscard]] float get_alpha (std::uintptr_t pawn) const;
-
-			private:
-				struct pending_entry {
-					std::array<systems::bones::data, 27> bones {};
-					int bone_count {};
-				};
-
-				// Scene objects must be created from the frame-stage callback, not CreateMove.
-				std::unordered_map<std::uintptr_t, pending_entry> m_pending {};
-				std::unordered_map<std::uintptr_t, backtrack::object> m_entries {};
-			};
-
-			[[nodiscard]] onshot& os () { return this->m_onshot; }
-			[[nodiscard]] backtrack& bt( ) { return this->m_backtrack; }
-
-		private:
 			void apply_layer( std::uintptr_t primitive_buffer, void( __fastcall* original_fn )( std::uintptr_t, std::uintptr_t, std::uintptr_t, std::uintptr_t ), std::uintptr_t a1, std::uintptr_t scene_object, std::uintptr_t scene_view, const xdraw::color& color, settings::esp::cham_ids material_id );
 			void apply_overlay( std::uintptr_t primitive_buffer, void( __fastcall* original_fn )( std::uintptr_t, std::uintptr_t, std::uintptr_t, std::uintptr_t ), std::uintptr_t a1, std::uintptr_t scene_object, std::uintptr_t scene_view, const xdraw::color& color, settings::esp::cham_ids material_id );
+
+		private:
 			void apply_clone( std::uintptr_t primitive_buffer, void( __fastcall* original_fn )( std::uintptr_t, std::uintptr_t, std::uintptr_t, std::uintptr_t ), std::uintptr_t a1, std::uintptr_t scene_object, std::uintptr_t scene_view, systems::materials::clone_type type );
 
 			bool is_overlay_material( std::uintptr_t mat ) const;
 			void add_overlay_material( std::uintptr_t mat );
-
-			backtrack m_backtrack{};
-			onshot m_onshot {};
 
 			static constexpr auto k_max_overlay_materials{ 16 };
 			std::array<std::atomic<std::uintptr_t>, k_max_overlay_materials> m_overlay_materials{};
@@ -141,7 +96,6 @@ namespace features::esp {
 			void add_weapon( xdraw::draw_list& draw_list, const systems::bounds::data& bounds, const info& info, const settings::esp::player::overlay::weapon& cfg, draw_offsets& offsets );
 			void add_flags( xdraw::draw_list& draw_list, const systems::bounds::data& bounds, const info& info, const settings::esp::player::overlay::info_flags& cfg, draw_offsets& offsets );
 			void add_oof_arrow( xdraw::draw_list& draw_list, const info& info, const settings::esp::player::overlay::oof_arrow& cfg );
-			void add_local_spread( xdraw::draw_list& draw_list, const systems::local::snapshot& local );
 			[[nodiscard]] info get_info( const systems::entities::cached& player, const systems::local::snapshot& local );
 
 			struct animation_data
@@ -152,12 +106,11 @@ namespace features::esp {
 			};
 
 			std::unordered_map<std::uintptr_t, animation_data> m_animations{};
-			float m_local_spread_radius{ 0.0f };
 
-			// Cached per-controller data that is expensive to fetch every frame.
-			// Engine raycasts on the render thread (is_visible) and strlen-like
-			// walks (read_string) are by far the largest contributors to FPS
-			// hitches when many players are spawned.
+			
+			
+			
+			
 			struct player_cache
 			{
 				bool is_visible{ false };
@@ -169,7 +122,7 @@ namespace features::esp {
 			std::unordered_map<std::uintptr_t, player_cache> m_player_cache{};
 		};
 
-	} // namespace player
+	} 
 
 	namespace item {
 
@@ -217,7 +170,7 @@ namespace features::esp {
 			[[nodiscard]] std::uint32_t get_item_group( std::uint32_t schema_hash );
 		};
 
-	} // namespace item
+	} 
 
 	namespace projectile {
 
@@ -270,13 +223,7 @@ namespace features::esp {
 			std::unordered_map<std::uintptr_t, indicator_state> m_indicator_states{};
 		};
 
-		class tracers
-		{
-		public:
-
-		};
-
-	} // namespace projectile
+	} 
 
 	namespace other {
 
@@ -290,6 +237,6 @@ namespace features::esp {
 			void add_spectators( xdraw::draw_list& draw_list );
 		};
 
-	} // namespace other
+	} 
 
-} // namespace features::esp
+} 

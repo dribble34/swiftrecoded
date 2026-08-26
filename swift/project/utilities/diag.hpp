@@ -1,10 +1,18 @@
 #pragma once
 
-#include <utilities/tls/dynamic_tls.hpp>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
-// Lightweight diagnostics used before the rest of the project is initialized.
-// The logger deliberately uses Win32 file I/O so it remains usable from SEH
-// handlers and does not depend on the state of iostreams.
+#include <windows.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+
+
+
+
 namespace diag {
 
 	enum class level
@@ -23,16 +31,12 @@ namespace diag {
 	inline HANDLE g_log_file{};
 	inline HMODULE g_module{};
 	inline std::uintptr_t g_module_end{};
-	inline tls::dynamic_tls<std::uint32_t> g_exception_scope_depth{};
-	inline tls::dynamic_tls<std::uint32_t> g_probe_scope_depth{};
-	// Per-thread default is nullptr rather than "none": every read site
-	// only dereferences this while g_exception_scope_depth is nonzero,
-	// which is only true once exception_scope's constructor has already
-	// assigned a real phase string on this thread.
-	inline tls::dynamic_tls<const char*> g_exception_phase{};
+	inline thread_local std::uint32_t g_exception_scope_depth{};
+	inline thread_local std::uint32_t g_probe_scope_depth{};
+	inline thread_local const char* g_exception_phase{ "none" };
 
 #if defined( DEV )
-	// DbgHelp declares this structure under 4-byte packing, including on x64.
+	
 #pragma pack( push, 4 )
 	struct minidump_exception_information
 	{
@@ -54,7 +58,7 @@ namespace diag {
 
 	inline minidump_write_fn g_minidump_write{};
 	inline volatile LONG g_crash_claimed{};
-	inline tls::dynamic_tls<bool> g_writing_minidump{};
+	inline thread_local bool g_writing_minidump{};
 
 	struct crash_report_request
 	{
@@ -67,8 +71,8 @@ namespace diag {
 
 	inline crash_report_request g_crash_request{};
 
-	// MINIDUMP_TYPE flags from dbghelp.h. Keeping the ABI-compatible values
-	// local avoids adding a static dbghelp dependency to the injected DLL.
+	
+	
 	inline constexpr unsigned long minidump_with_unloaded_modules = 0x20;
 	inline constexpr unsigned long minidump_with_indirectly_referenced_memory = 0x40;
 	inline constexpr unsigned long minidump_with_thread_info = 0x1000;
@@ -152,7 +156,7 @@ namespace diag {
 		GetLocalTime( &time );
 
 		char line[ 4096 ]{};
-		const int length = _snprintf_s(
+		_snprintf_s(
 			line,
 			sizeof( line ),
 			_TRUNCATE,
@@ -186,7 +190,40 @@ namespace diag {
 			}
 		}
 
+#if defined( DEV )
 		OutputDebugStringA( line );
+
+		
+		static HANDLE console_handle = GetStdHandle( STD_OUTPUT_HANDLE );
+		if ( console_handle && console_handle != INVALID_HANDLE_VALUE )
+		{
+			WORD color_attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE; 
+
+			switch ( severity )
+			{
+			case level::debug:
+				color_attr = FOREGROUND_INTENSITY; 
+				break;
+			case level::info:
+				color_attr = FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY; 
+				break;
+			case level::warning:
+				color_attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY; 
+				break;
+			case level::error:
+				color_attr = FOREGROUND_RED | FOREGROUND_INTENSITY; 
+				break;
+			case level::fatal:
+				color_attr = FOREGROUND_RED | FOREGROUND_INTENSITY | BACKGROUND_RED; 
+				break;
+			}
+
+			SetConsoleTextAttribute( console_handle, color_attr );
+			DWORD written{};
+			WriteConsoleA( console_handle, line, bytes, &written, nullptr );
+			SetConsoleTextAttribute( console_handle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE ); 
+		}
+#endif
 	}
 
 	template <typename... args_t>
@@ -206,64 +243,34 @@ namespace diag {
 	{
 		g_module = module_handle;
 
-		// Parse the module's own headers unconditionally and first: under
-		// a generic manual map the module has no entry in the loader's
-		// module list, so GetModuleFileNameW below can fail, and
-		// everything that depends on g_module_end (is_module_address, the
-		// VEH's own-module check) must keep working regardless.
-		const auto* dos_header =
-			reinterpret_cast<const IMAGE_DOS_HEADER*>( module_handle );
-		if ( dos_header->e_magic == IMAGE_DOS_SIGNATURE )
-		{
-			const auto* nt_headers =
-				reinterpret_cast<const IMAGE_NT_HEADERS*>(
-					reinterpret_cast<std::uintptr_t>( module_handle ) +
-					dos_header->e_lfanew );
-			if ( nt_headers->Signature == IMAGE_NT_SIGNATURE )
-			{
-				g_module_end =
-					reinterpret_cast<std::uintptr_t>( module_handle ) +
-					nt_headers->OptionalHeader.SizeOfImage;
-			}
-		}
-
 		wchar_t directory[ MAX_PATH ]{};
 		const DWORD path_length =
 			GetModuleFileNameW( module_handle, directory, MAX_PATH );
 		if ( !path_length || path_length >= MAX_PATH )
 		{
-			// Not registered with the loader (manual map). Fall back to
-			// the current directory so logging still works instead of
-			// silently staying disabled.
-			const DWORD cwd_length =
-				GetCurrentDirectoryW( MAX_PATH, directory );
-			if ( !cwd_length || cwd_length >= MAX_PATH )
-			{
-				return;
-			}
+			return;
 		}
-		else
+
+		for ( DWORD i = path_length; i > 0; --i )
 		{
-			for ( DWORD i = path_length; i > 0; --i )
+			if ( directory[ i - 1 ] == L'\\' || directory[ i - 1 ] == L'/' )
 			{
-				if ( directory[ i - 1 ] == L'\\' || directory[ i - 1 ] == L'/' )
-				{
-					directory[ i ] = L'\0';
-					break;
-				}
+				directory[ i ] = L'\0';
+				break;
 			}
 		}
 
+#if defined( DEV )
 		make_artifact_path(
 			g_log_path,
 			MAX_PATH,
 			directory,
-			L"velocity_init.log" );
+			L"backtrack.raw_init.log" );
 		make_artifact_path(
 			g_previous_log_path,
 			MAX_PATH,
 			directory,
-			L"velocity_init.previous.log" );
+			L"backtrack.raw_init.previous.log" );
 
 		MoveFileExW(
 			g_log_path,
@@ -282,18 +289,35 @@ namespace diag {
 		{
 			g_log_file = nullptr;
 		}
+#endif
+
+		const auto* dos_header =
+			reinterpret_cast<const IMAGE_DOS_HEADER*>( module_handle );
+		if ( dos_header->e_magic == IMAGE_DOS_SIGNATURE )
+		{
+			const auto* nt_headers =
+				reinterpret_cast<const IMAGE_NT_HEADERS*>(
+					reinterpret_cast<std::uintptr_t>( module_handle ) +
+					dos_header->e_lfanew );
+			if ( nt_headers->Signature == IMAGE_NT_SIGNATURE )
+			{
+				g_module_end =
+					reinterpret_cast<std::uintptr_t>( module_handle ) +
+					nt_headers->OptionalHeader.SizeOfImage;
+			}
+		}
 
 #if defined( DEV )
 		make_artifact_path(
 			g_dump_path,
 			MAX_PATH,
 			directory,
-			L"velocity_crash.dmp" );
+			L"backtrack.raw_crash.dmp" );
 		make_artifact_path(
 			g_previous_dump_path,
 			MAX_PATH,
 			directory,
-			L"velocity_crash.previous.dmp" );
+			L"backtrack.raw_crash.previous.dmp" );
 		MoveFileExW(
 			g_dump_path,
 			g_previous_dump_path,
@@ -314,7 +338,7 @@ namespace diag {
 	inline void initialize_crash_dumps( )
 	{
 #if defined( DEV )
-		// Resolve outside the loader lock; LoadLibrary is unsafe from DLL attach.
+		
 		if ( const auto dbghelp = LoadLibraryW( L"dbghelp.dll" ) )
 		{
 			g_minidump_write = reinterpret_cast<minidump_write_fn>(
@@ -340,61 +364,53 @@ namespace diag {
 	{
 	public:
 		explicit exception_scope( const char* phase = "feature pipeline" )
-			: m_depth( g_exception_scope_depth.get( ) )
-			, m_phase( g_exception_phase.get( ) )
-			, m_previous_phase( m_phase )
+			: m_previous_phase( g_exception_phase )
 		{
-			++m_depth;
-			m_phase = phase;
+			++g_exception_scope_depth;
+			g_exception_phase = phase;
 		}
 
 		~exception_scope( )
 		{
-			m_phase = m_previous_phase;
-			--m_depth;
+			g_exception_phase = m_previous_phase;
+			--g_exception_scope_depth;
 		}
 
 		exception_scope( const exception_scope& ) = delete;
 		exception_scope& operator=( const exception_scope& ) = delete;
 
 	private:
-		std::uint32_t& m_depth;
-		const char*& m_phase;
 		const char* m_previous_phase;
 	};
 
-	// Suppresses expected first-chance exceptions from an explicit SEH probe.
-	// Construct this in a caller of the function containing __try; MSVC does not
-	// permit unwindable C++ locals in the same function as SEH.
+	
+	
+	
 	class probe_scope
 	{
 	public:
 		probe_scope( )
-			: m_depth( g_probe_scope_depth.get( ) )
 		{
-			++m_depth;
+			++g_probe_scope_depth;
 		}
 
 		~probe_scope( )
 		{
-			--m_depth;
+			--g_probe_scope_depth;
 		}
 
 		probe_scope( const probe_scope& ) = delete;
 		probe_scope& operator=( const probe_scope& ) = delete;
-
-	private:
-		std::uint32_t& m_depth;
 	};
 
 	inline bool probe_active( )
 	{
-		return g_probe_scope_depth.get( ) != 0;
+		return g_probe_scope_depth != 0;
 	}
 
 	inline void set_exception_phase( const char* phase )
 	{
-		g_exception_phase.get( ) = phase;
+		g_exception_phase = phase;
 	}
 
 #if defined( DEV )
@@ -527,7 +543,7 @@ namespace diag {
 		auto write_attempt = [&]( unsigned long dump_type, DWORD& error )
 		{
 			BOOL result{};
-			g_writing_minidump.get( ) = true;
+			g_writing_minidump = true;
 			__try
 			{
 				result = g_minidump_write(
@@ -547,7 +563,7 @@ namespace diag {
 			{
 				error = GetExceptionCode( );
 			}
-			g_writing_minidump.get( ) = false;
+			g_writing_minidump = false;
 			return result != FALSE;
 		};
 
@@ -712,8 +728,8 @@ namespace diag {
 			stage ? stage : "unknown" );
 		g_crash_request.fault_thread_id = fault_thread_id;
 
-		// DbgHelp is not safe to invoke from a faulting thread. Use a clean
-		// stack for every crash, not only stack-overflow exceptions.
+		
+		
 		if ( const auto thread = CreateThread(
 				nullptr,
 				0,
@@ -796,4 +812,4 @@ namespace diag {
 		g_log_file = nullptr;
 	}
 
-} // namespace diag
+} 

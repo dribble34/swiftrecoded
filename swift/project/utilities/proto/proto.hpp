@@ -356,4 +356,4 @@ namespace proto {
 		[[nodiscard]] std::int32_t attack2_start_history_index( ) const;
 	};
 
-} // namespace proto
+} 

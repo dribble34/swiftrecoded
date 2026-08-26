@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <core/systems/systems.hpp>
 #include <core/settings.hpp>
@@ -72,4 +71,4 @@ namespace features::movement {
 		base->mutable_viewangles( )->set_z( 0.0f );
 	}
 
-} // namespace features::movement
+} 

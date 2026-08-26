@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 
 #include "../systems.hpp"
@@ -31,4 +30,4 @@ namespace systems {
 		this->m_valid = false;
 	}
 
-} // namespace systems
+} 

@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <core/systems/systems.hpp>
@@ -56,7 +55,7 @@ namespace features::changer {
 			return murmurhash2_lower( s.c_str( ), static_cast< int >( s.length( ) ), 0x31415926 );
 		}
 
-	} // namespace detail
+	} 
 
 	void knives::on_frame_stage_notify( )
 	{
@@ -365,4 +364,4 @@ namespace features::changer {
 		this->m_pending_hud_iv = 0;
 	}
 
-} // namespace features::changer
+} 

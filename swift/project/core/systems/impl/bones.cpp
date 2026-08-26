@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 
@@ -13,7 +12,7 @@ namespace systems {
 		auto count{ 0 };
 		const auto cache = this->get_bone_cache( entity, &count );
 
-		if ( !cache || bone_id >= count )
+		if ( !cache || bone_id >= static_cast<std::uint32_t>( count ) )
 		{
 			return result;
 		}
@@ -64,7 +63,7 @@ namespace systems {
 
 		for ( const auto bone_id : k_bones )
 		{
-			if ( bone_id >= count )
+			if ( bone_id >= static_cast<std::uint32_t>( count ) )
 			{
 				continue;
 			}
@@ -99,4 +98,4 @@ namespace systems {
 		return bone_cache;
 	}
 
-} // namespace systems
+} 

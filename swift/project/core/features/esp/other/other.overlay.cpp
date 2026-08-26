@@ -1,4 +1,3 @@
-#include <pch/pch.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/steam/steam.hpp>
@@ -149,7 +148,7 @@ namespace features::esp::other {
 			0x0D, 0x0A, 0x3C, 0x2F, 0x73, 0x76, 0x67, 0x3E, 0x0D, 0x0A
 		};
 
-	} // namespace detail
+	} 
 
 	void overlay::on_render( xdraw::draw_list& draw_list )
 	{
@@ -173,156 +172,198 @@ namespace features::esp::other {
 		const auto planted_c4 = memory::read<std::uintptr_t>( addresses::globals::planted_c4 );
 		const auto global_vars = memory::read<std::uintptr_t>( addresses::globals::global_vars );
 
-		// Check if bomb is planted
-		bool bomb_planted = planted_c4 && global_vars;
-		
-		float time_remaining = 0.0f;
-		int bomb_site = 0;
-		bool is_exploding = false;
-		bool bomb_defused = false;
-
-		if ( bomb_planted )
+		if ( !planted_c4 || !global_vars )
 		{
-			const auto current_time = memory::read<float>( global_vars + 0x30 );
-			const auto blow_time = memory::read<float>( planted_c4 + SCHEMA( "C_PlantedC4", "m_flC4Blow"_hash ) );
-			const auto has_exploded = memory::read<bool>( planted_c4 + SCHEMA( "C_PlantedC4", "m_bHasExploded"_hash ) );
-			bomb_defused = memory::read<bool>( planted_c4 + SCHEMA( "C_PlantedC4", "m_bBombDefused"_hash ) );
-
-			if ( bomb_defused || ( has_exploded && ( blow_time - current_time ) < -2.0f ) )
-			{
-				bomb_planted = false;
-			}
-			else
-			{
-				time_remaining = blow_time - current_time;
-				is_exploding = has_exploded || time_remaining <= 0.0f;
-				bomb_site = memory::read<int>( planted_c4 + SCHEMA( "C_PlantedC4", "m_nBombSite"_hash ) );
-			}
+			return;
 		}
+
+		const auto current_time = memory::read<float>( global_vars + 0x30 );
+		const auto blow_time = memory::read<float>( planted_c4 + SCHEMA( "C_PlantedC4", "m_flC4Blow"_hash ) );
+		const auto has_exploded = memory::read<bool>( planted_c4 + SCHEMA( "C_PlantedC4", "m_bHasExploded"_hash ) );
+		const auto bomb_defused = memory::read<bool>( planted_c4 + SCHEMA( "C_PlantedC4", "m_bBombDefused"_hash ) );
+
+		if ( bomb_defused )
+		{
+			return;
+		}
+
+		const auto time_remaining = blow_time - current_time;
+		const auto is_exploding = has_exploded || time_remaining <= 0.0f;
+
+		if ( is_exploding && time_remaining < -2.0f )
+		{
+			return;
+		}
+
+		const auto bomb_site = memory::read<int>( planted_c4 + SCHEMA( "C_PlantedC4", "m_nBombSite"_hash ) );
+		const auto being_defused = memory::read<bool>( planted_c4 + SCHEMA( "C_PlantedC4", "m_bBeingDefused"_hash ) );
+		const auto timer_length = memory::read<float>( planted_c4 + SCHEMA( "C_PlantedC4", "m_flTimerLength"_hash ) );
+
+		const auto calculate_bomb_damage = [ & ]( ) -> float
+			{
+				const auto view_pawn = local.view_pawn( );
+				if ( !view_pawn )
+				{
+					return 0.0f;
+				}
+
+				const auto c4_scene_node = memory::read<std::uintptr_t>( planted_c4 + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+				const auto pawn_scene_node = memory::read<std::uintptr_t>( view_pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+
+				if ( !c4_scene_node || !pawn_scene_node )
+				{
+					return 0.0f;
+				}
+
+				const auto c4_origin = memory::read<math::vector3>( c4_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+				const auto pawn_origin = memory::read<math::vector3>( pawn_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+
+				const auto distance = ( c4_origin - pawn_origin ).length( );
+
+				// m_flBombRadius на C_PlantedC4 хранит урон бомбы текущей карты (напр. 700 на Dust2),
+				// а радиус поражения = урон * 3.5 (напр. 2450). Считываем реальные значения вместо хардкода.
+				constexpr auto fallback_damage{ 650.0f };
+				const auto bomb_damage = memory::safe_read<float>( planted_c4 + SCHEMA( "C_PlantedC4", "m_flBombRadius"_hash ) ).value_or( fallback_damage );
+				const auto effective_damage = bomb_damage > 1.0f ? bomb_damage : fallback_damage;
+				const auto bomb_radius = effective_damage * 3.5f;
+
+				const auto sigma = bomb_radius / 3.0f;
+				auto damage = effective_damage * std::exp( -( distance * distance ) / ( 2.0f * sigma * sigma ) );
+
+				const auto armor = memory::read<int>( view_pawn + SCHEMA( "C_CSPlayerPawn", "m_ArmorValue"_hash ) );
+
+				if ( armor > 0 )
+				{
+					constexpr auto armor_ratio = 0.5f;
+					constexpr auto armor_bonus = 0.5f;
+
+					auto armor_absorbed = damage * armor_ratio;
+					auto armor_cost = ( damage - armor_absorbed ) * armor_bonus;
+
+					if ( armor_cost > static_cast< float >( armor ) )
+					{
+						armor_cost = static_cast< float >( armor ) * ( 1.0f / armor_bonus );
+						armor_absorbed = damage - armor_cost;
+					}
+
+					damage = armor_absorbed;
+				}
+
+				return std::floor( damage );
+			}( );
 
 		const auto [screen_w, screen_h] = xdraw::viewport_size( );
+		const auto& s = xui::ctx( ).style;
 
-		constexpr auto r{ 10.0f };
-		constexpr auto pad_x{ 12.0f };
-		constexpr auto pad_y{ 10.0f };
-		constexpr auto c4_icon_w{ 80.0f };
-		constexpr auto c4_icon_h{ 50.0f };
-		constexpr auto text_spacing{ 12.0f };
+		constexpr auto h{ 24.0f };
+		constexpr auto top_offset{ 175.0f };
+		constexpr auto r{ 8.0f };
+		constexpr auto inner_r{ 6.0f };
+		constexpr auto inner_pad{ 2.0f };
+		constexpr auto text_pad_x{ 8.0f };
+		constexpr auto text_nudge{ 0.5f };
+		constexpr auto section_spacing{ 2.0f };
 
-		// Dragging state
-		static float drag_offset_x{ 0.0f };
-		static float drag_offset_y{ 0.0f };
-		static bool is_dragging{ false };
-		static float widget_x{ static_cast<float>( screen_w ) * 0.5f - 120.0f }; // Center initially
-		static float widget_y{ 200.0f };
+		const auto inner_h = h - inner_pad * 2.0f;
 
+		auto timer_color = [ & ]( ) -> xdraw::color
+			{
+				if ( is_exploding )
+				{
+					return { 255, 100, 100, 255 };
+				}
+
+				const auto frac = timer_length > 0.0f ? time_remaining / timer_length : 1.0f;
+
+				if ( frac > 0.5f )
+				{
+					return s.accent;
+				}
+				else if ( frac > 0.2f )
+				{
+					const auto t = ( frac - 0.2f ) / 0.3f;
+
+					return
+					{
+						static_cast< std::uint8_t >( 255 ),
+						static_cast< std::uint8_t >( 200 + static_cast< int >( ( s.accent.g - 200 ) * t ) ),
+						static_cast< std::uint8_t >( 140 + static_cast< int >( ( s.accent.b - 140 ) * t ) ),
+						255
+					};
+				}
+				else
+				{
+					const auto t = frac / 0.2f;
+
+					return
+					{
+						255,
+						static_cast< std::uint8_t >( 120 + static_cast< int >( 80 * t ) ),
+						static_cast< std::uint8_t >( 100 + static_cast< int >( 40 * t ) ),
+						255
+					};
+				}
+			}( );
+
+		const auto site_label = bomb_site == 0 ? "A plant" : "B plant";
+		const auto [site_tw, site_th] = xdraw::measure_text( site_label );
+		const auto site_pill_w = site_tw + text_pad_x * 2.0f;
+
+		const auto damage = static_cast< int >( calculate_bomb_damage );
 		const auto view_pawn = local.view_pawn( );
-		const auto health = view_pawn ? memory::read<int>( view_pawn + SCHEMA( "C_BaseEntity", "m_iHealth"_hash ) ) : 100;
+		const auto health = view_pawn ? memory::read<int>( view_pawn + SCHEMA( "C_BaseEntity", "m_iHealth"_hash ) ) : 0;
+		const auto will_kill = health <= damage;
 
-		const auto site_label = bomb_planted ? ( bomb_site == 0 ? "A" : "B" ) : "-";
-		
-		char timer_buf[ 32 ]{};
-		if ( !bomb_planted )
+		char health_buf[ 16 ]{};
+		std::snprintf( health_buf, sizeof( health_buf ), "%+d", -damage );
+
+		const auto [health_vw, health_vh] = xdraw::measure_text( health_buf );
+		const auto [health_uw, health_uh] = xdraw::measure_text( " health" );
+		const auto health_pill_w = health_vw + health_uw + text_pad_x * 2.0f;
+		const auto health_col = will_kill ? xdraw::color{ 255, 120, 120, 255 } : xdraw::color{ 160, 210, 140, 255 };
+
+		char timer_buf[ 16 ]{};
+		const char* timer_unit{};
+
+		if ( is_exploding )
 		{
-			std::snprintf( timer_buf, sizeof( timer_buf ), "%s - --.-s", site_label );
-		}
-		else if ( is_exploding )
-		{
-			std::snprintf( timer_buf, sizeof( timer_buf ), "%s - 0.0s", site_label );
+			strncpy_s( timer_buf, sizeof( timer_buf ), "0.0s", _TRUNCATE );
+			timer_unit = " exploding";
 		}
 		else
 		{
-			std::snprintf( timer_buf, sizeof( timer_buf ), "%s - %.1fs", site_label, time_remaining );
+			std::snprintf( timer_buf, sizeof( timer_buf ), "%.1fs", time_remaining );
+			timer_unit = being_defused ? " defusing" : " explosion";
 		}
 
-		char health_buf[ 16 ]{};
-		std::snprintf( health_buf, sizeof( health_buf ), "%d hp", health );
+		const auto [timer_vw, timer_vh] = xdraw::measure_text( timer_buf );
+		const auto [timer_uw, timer_uh] = xdraw::measure_text( timer_unit );
+		const auto timer_pill_w = timer_vw + timer_uw + text_pad_x * 2.0f;
 
-		// Measure text
-		const auto [timer_tw, timer_th] = xdraw::measure_text( timer_buf );
-		const auto [health_tw, health_th] = xdraw::measure_text( health_buf );
-		
-		const auto text_w = std::max( timer_tw, health_tw );
-		const auto total_w = pad_x + c4_icon_w + text_spacing + text_w + pad_x;
-		const auto total_h = pad_y + c4_icon_h + pad_y;
+		const auto total_w = inner_pad + site_pill_w + section_spacing + health_pill_w + section_spacing + timer_pill_w + inner_pad;
+		const auto x = ( static_cast< float >( screen_w ) - total_w ) * 0.5f;
+		const auto y = top_offset;
 
-		// Handle dragging
-		const auto& input = xui::ctx( ).input;
-		const auto widget_rect = xui::rect{ widget_x, widget_y, total_w, total_h };
-		
-		if ( input.in_rect( widget_rect ) && input.mouse_clicked && !is_dragging )
-		{
-			is_dragging = true;
-			drag_offset_x = input.mouse_x - widget_x;
-			drag_offset_y = input.mouse_y - widget_y;
-		}
-		
-		if ( is_dragging )
-		{
-			if ( input.mouse_down )
-			{
-				widget_x = input.mouse_x - drag_offset_x;
-				widget_y = input.mouse_y - drag_offset_y;
-				
-				// Clamp to screen bounds
-				widget_x = std::max( 0.0f, std::min( widget_x, static_cast<float>( screen_w ) - total_w ) );
-				widget_y = std::max( 0.0f, std::min( widget_y, static_cast<float>( screen_h ) - total_h ) );
-			}
-			else
-			{
-				is_dragging = false;
-			}
-		}
+		xdraw::backdrop( x, y, total_w, h, xdraw::corner_radius{ r }, xdraw::color{ 255, 255, 255, 225 } );
+		draw_list.rect_filled( x, y, total_w, h, s.window_bg, xdraw::corner_radius{ r } );
+		draw_list.rect( x, y, total_w, h, xdraw::color{ 255, 255, 255, 32 }, xdraw::corner_radius{ r } );
 
-		// Draw container
-		draw_list.rect_filled_blurred( widget_x, widget_y, total_w, total_h, xdraw::corner_radius{ r } );
-		draw_list.rect_filled( widget_x, widget_y, total_w, total_h, xdraw::color{ 17, 17, 17, 230 }, xdraw::corner_radius{ r } );
+		auto cx = x + inner_pad;
 
-		// Draw C4 bomb icon (realistic CS:GO C4 design)
-		const auto icon_x = widget_x + pad_x;
-		const auto icon_y = widget_y + pad_y;
-		
-		// Background for C4 bomb (beige/tan color like plastic explosive)
-		draw_list.rect_filled( icon_x, icon_y, c4_icon_w, c4_icon_h, xdraw::color{ 200, 185, 170, 255 }, xdraw::corner_radius{ 3.0f } );
-		
-		// Draw large circular button on the LEFT side
-		const auto big_button_x = icon_x + 12.0f;
-		const auto big_button_y = icon_y + c4_icon_h * 0.5f;
-		const auto big_button_radius = 9.0f;
-		draw_list.circle_filled( big_button_x, big_button_y, big_button_radius, xdraw::color{ 60, 55, 50, 255 }, 32 );
-		draw_list.circle_filled( big_button_x, big_button_y, big_button_radius - 1.5f, xdraw::color{ 80, 75, 70, 255 }, 32 );
-		
-		// Draw screen (large dark rectangle) on the RIGHT UPPER part
-		const auto screen_x = icon_x + 32.0f;
-		const auto screen_y = icon_y + 5.0f;
-		const auto bomb_screen_w = 44.0f;
-		const auto bomb_screen_h = 16.0f;
-		draw_list.rect_filled( screen_x, screen_y, bomb_screen_w, bomb_screen_h, xdraw::color{ 25, 28, 22, 255 }, xdraw::corner_radius{ 1.0f } );
-		
-		// Draw keypad buttons BELOW the screen (4 columns x 2 rows = 8 buttons)
-		const auto keypad_start_x = screen_x + 2.0f;
-		const auto keypad_start_y = screen_y + bomb_screen_h + 3.0f;
-		const auto button_w = 8.5f;
-		const auto button_h = 4.0f;
-		const auto button_gap_x = 2.0f;
-		const auto button_gap_y = 2.5f;
-		
-		for ( int row = 0; row < 2; ++row )
-		{
-			for ( int col = 0; col < 4; ++col )
-			{
-				const auto btn_x = keypad_start_x + col * ( button_w + button_gap_x );
-				const auto btn_y = keypad_start_y + row * ( button_h + button_gap_y );
-				draw_list.rect_filled( btn_x, btn_y, button_w, button_h, xdraw::color{ 45, 42, 38, 255 }, xdraw::corner_radius{ 0.8f } );
-			}
-		}
+		draw_list.rect_filled( cx, y + inner_pad, site_pill_w, inner_h, s.child_bg, xdraw::corner_radius{ inner_r } );
+		draw_list.text( cx + text_pad_x, y + ( h - site_th ) * 0.5f + text_nudge, site_label, s.accent );
+		cx += site_pill_w + section_spacing;
 
-		// Draw timer and health info on right
-		const auto text_x = widget_x + pad_x + c4_icon_w + text_spacing;
-		const auto text_y_top = widget_y + pad_y + ( c4_icon_h - timer_th - health_th - 4.0f ) * 0.5f;
-		
-		draw_list.text( text_x, text_y_top, timer_buf, xdraw::color{ 200, 200, 200, 255 } );
-		draw_list.text( text_x, text_y_top + timer_th + 4.0f, health_buf, tokens::col_accent );
+		const auto health_unit_col = xdraw::color{ health_col.r, health_col.g, health_col.b, 120 };
+		draw_list.rect_filled( cx, y + inner_pad, health_pill_w, inner_h, s.child_bg, xdraw::corner_radius{ inner_r } );
+		draw_list.text( cx + text_pad_x, y + ( h - health_vh ) * 0.5f + text_nudge, health_buf, health_col );
+		draw_list.text( cx + text_pad_x + health_vw, y + ( h - health_uh ) * 0.5f + text_nudge, " health", health_unit_col );
+		cx += health_pill_w + section_spacing;
+
+		const auto timer_unit_col = xdraw::color{ timer_color.r, timer_color.g, timer_color.b, 120 };
+		draw_list.rect_filled( cx, y + inner_pad, timer_pill_w, inner_h, s.child_bg, xdraw::corner_radius{ inner_r } );
+		draw_list.text( cx + text_pad_x, y + ( h - timer_vh ) * 0.5f + text_nudge, timer_buf, timer_color );
+		draw_list.text( cx + text_pad_x + timer_vw, y + ( h - timer_uh ) * 0.5f + text_nudge, timer_unit, timer_unit_col );
 	}
 
 	void overlay::add_spectators( xdraw::draw_list& draw_list )
@@ -354,7 +395,6 @@ namespace features::esp::other {
 
 		const auto [screen_w, screen_h] = xdraw::viewport_size( );
 
-		constexpr auto margin{ 10.0f };
 		constexpr auto row_spacing{ 4.0f };
 		constexpr auto row_h{ 28.0f };
 		constexpr auto header_h{ 38.0f };
@@ -365,12 +405,12 @@ namespace features::esp::other {
 		constexpr auto avatar_size{ 20.0f };
 		constexpr auto min_w{ 200.0f };
 
-		// Dragging state
+		
 		static float drag_offset_x{ 0.0f };
 		static float drag_offset_y{ 0.0f };
 		static bool is_dragging{ false };
-		static float widget_x{ static_cast<float>( screen_w ) - 220.0f }; // Initial X position (right side)
-		static float widget_y{ 200.0f }; // Initial Y position
+		static float widget_x{ static_cast<float>( screen_w ) - 220.0f }; 
+		static float widget_y{ 200.0f }; 
 
 		struct spectator_entry
 		{
@@ -430,7 +470,7 @@ namespace features::esp::other {
 			}
 
 			auto name = memory::read_string( name_ptr, 127 );
-			std::ranges::transform( name, name.begin( ), [ ]( unsigned char c ) { return std::tolower( c ); } );
+			std::ranges::transform( name, name.begin( ), [ ]( unsigned char c ) { return static_cast<char>( std::tolower( c ) ); } );
 
 			auto& e = entries[ count++ ];
 			strncpy_s( e.name, name.c_str( ), sizeof( e.name ) - 1 );
@@ -439,16 +479,16 @@ namespace features::esp::other {
 			e.steam_id = memory::read<std::uintptr_t>( player.ptr + SCHEMA( "CBasePlayerController", "m_steamID"_hash ) );
 		}
 
-		// Always show spectator widget even if no spectators
+		
 		static detail::avatar_cache avatars{};
 
-		// Calculate content height and total height
+		
 		const auto content_h = static_cast< float >( count ) * row_h + ( count > 1 ? ( count - 1 ) * row_spacing : 0.0f );
 		const auto total_h = header_h + pad_y + content_h + pad_y;
 
-		// Calculate max width
+		
 		float max_w = min_w;
-		xdraw::push_font( rendering::g_fonts.hurme_black[ rendering::fonts::size::normal ] );
+		xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 		const auto [header_tw, header_th] = xdraw::measure_text( "spectators" );
 		xdraw::pop_font( );
 		
@@ -460,7 +500,7 @@ namespace features::esp::other {
 			if ( row_w > max_w ) max_w = row_w;
 		}
 		
-		// Handle dragging
+		
 		const auto& input = xui::ctx( ).input;
 		const auto header_rect = xui::rect{ widget_x, widget_y, max_w, header_h };
 		
@@ -478,7 +518,7 @@ namespace features::esp::other {
 				widget_x = input.mouse_x - drag_offset_x;
 				widget_y = input.mouse_y - drag_offset_y;
 				
-				// Clamp to screen bounds
+				
 				widget_x = std::max( 0.0f, std::min( widget_x, static_cast<float>( screen_w ) - max_w ) );
 				widget_y = std::max( 0.0f, std::min( widget_y, static_cast<float>( screen_h ) - total_h ) );
 			}
@@ -488,44 +528,50 @@ namespace features::esp::other {
 			}
 		}
 
-		const auto x = widget_x;
+				const auto x = widget_x;
 		const auto base_y = widget_y;
 		const auto w = max_w;
 
-		// Draw container background
-		draw_list.rect_filled_blurred( x, base_y, w, total_h, xdraw::corner_radius{ r } );
-		draw_list.rect_filled( x, base_y, w, total_h, xdraw::color{ 17, 17, 17, 230 }, xdraw::corner_radius{ r } );
+		const auto dark = rendering::g_menu.is_dark( );
 
-		// Draw header with hurme_black font (centered)
-		xdraw::push_font( rendering::g_fonts.hurme_black[ rendering::fonts::size::normal ] );
+		const auto backdrop_col = dark ? tokens::col_dark : xdraw::color{ 245, 246, 252, 210 };
+		const auto fill_col = dark ? tokens::col_card.alpha( 110 ) : xdraw::color{ 255, 255, 255, 120 };
+		const auto border_col = dark ? tokens::col_border.alpha( 35 ) : xdraw::color{ 24, 26, 38, 40 };
+
+		xdraw::backdrop( x, base_y, w, total_h, xdraw::corner_radius{ r }, backdrop_col );
+		draw_list.rect_filled( x, base_y, w, total_h, fill_col, xdraw::corner_radius{ r } );
+		draw_list.rect( x, base_y, w, total_h, border_col, xdraw::corner_radius{ r } );
+
+		
+		xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 		const auto header_text_x = x + ( w - header_tw ) * 0.5f;
 		draw_list.text( header_text_x, base_y + ( header_h - header_th ) * 0.5f, "spectators", tokens::col_accent );
 		xdraw::pop_font( );
 		
-		// Draw gradient underline below header
+		
 		const auto line_y = base_y + header_h - underline_h;
 		const auto transparent = tokens::col_accent.alpha( 0 );
 		const auto bright = tokens::col_accent.alpha( 200 );
 		
-		// Center part (20% width)
+		
 		draw_list.rect_filled_gradient( 
 			x + w * 0.4f, line_y, w * 0.2f, underline_h, 
 			bright, bright, bright, bright
 		);
 		
-		// Left fade gradient (40% width)
+		
 		draw_list.rect_filled_gradient( 
 			x, line_y, w * 0.4f, underline_h, 
 			transparent, bright, bright, transparent
 		);
 		
-		// Right fade gradient (40% width)
+		
 		draw_list.rect_filled_gradient( 
 			x + w * 0.6f, line_y, w * 0.4f, underline_h, 
 			bright, transparent, transparent, bright
 		);
 
-		// Draw entries
+		
 		float current_y = base_y + header_h + pad_y;
 		for ( auto i = 0; i < count; ++i )
 		{
@@ -533,34 +579,34 @@ namespace features::esp::other {
 			const auto [nw, nh] = xdraw::measure_text( e.name );
 			const auto avatar_tex = avatars.get( e.steam_id );
 			
-			// Draw avatar or fallback on left
+			
 			if ( avatar_tex )
 			{
 				draw_list.image( x + pad_x, current_y + ( row_h - avatar_size ) * 0.5f, avatar_size, avatar_size, avatar_tex, xdraw::corner_radius{ 4.0f } );
 			}
 			else
 			{
-				// Draw colored circle background
+				
 				const auto circle_x = x + pad_x + avatar_size * 0.5f;
 				const auto circle_y = current_y + row_h * 0.5f;
 				draw_list.circle_filled( circle_x, circle_y, avatar_size * 0.5f, tokens::col_accent.alpha( 120 ), 32 );
 				
-				// Draw first letter of name as initials
+				
 				if ( e.name[ 0 ] != '\0' )
 				{
 					char initial[ 2 ] = { static_cast<char>( std::toupper( e.name[ 0 ] ) ), '\0' };
-					xdraw::push_font( rendering::g_fonts.inter_bold[ rendering::fonts::size::petite ] );
+					xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::petite ] );
 					const auto [iw, ih] = xdraw::measure_text( initial );
 					draw_list.text( circle_x - iw * 0.5f, circle_y - ih * 0.5f, initial, tokens::col_accent );
 					xdraw::pop_font( );
 				}
 			}
 			
-			// Draw name on right
-			draw_list.text( x + pad_x + avatar_size + pad_x, current_y + ( row_h - nh ) * 0.5f, e.name, xdraw::color{ 200, 200, 200, 255 } );
+			
+			draw_list.text( x + pad_x + avatar_size + pad_x, current_y + ( row_h - nh ) * 0.5f, e.name, tokens::col_text );
 
 			current_y += row_h + row_spacing;
 		}
 	}
 
-} // namespace features::esp::other
+} 

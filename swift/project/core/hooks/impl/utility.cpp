@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/hooking/hooking.hpp>
@@ -49,7 +50,7 @@ namespace {
 		return {};
 	}
 
-} // namespace
+} 
 
 namespace hooks {
 
@@ -125,7 +126,7 @@ namespace hooks {
 
 	std::intptr_t __fastcall utility::log_internal( std::uintptr_t a1, std::uint32_t channel, std::int32_t severity, std::uintptr_t metadata, const char* message, std::intptr_t* args )
 	{
-		if ( settings::g_misc.disable_game_logs && !logging::console::emitting.get( ) )
+		if ( settings::g_misc.disable_game_logs && !logging::console::emitting )
 		{
 			return 0;
 		}
@@ -133,4 +134,4 @@ namespace hooks {
 		return m_log_internal.call<std::intptr_t>( a1, channel, severity, metadata, message, args );
 	}
 
-} // namespace hooks
+} 

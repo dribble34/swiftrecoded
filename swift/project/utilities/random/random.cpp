@@ -1,4 +1,6 @@
-#include <pch/pch.hpp>
+#include <cmath>
+#include <random>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <protection/game_addresses.hpp>
@@ -80,6 +82,6 @@ namespace random {
 			return memory::call<std::int32_t>(MODULE_EXPORT ("tier0.dll:MD5_PseudoRandom"), seed );
 		}
 
-	} // namespace engine
+	} 
 
-} // namespace random
+} 

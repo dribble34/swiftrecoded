@@ -1,10 +1,10 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/diag.hpp>
 #include <utilities/hooking/hooking.hpp>
 #include <utilities/logging/logging.hpp>
-#include <utilities/security/security.hpp>
 #include <core/rendering/rendering.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
@@ -12,6 +12,13 @@
 #include "../hooks.hpp"
 
 namespace hooks {
+
+	// the composition texture handle the preview panel renders into; once the
+	// SRV is captured, every other texture request skips the name inspection
+	namespace
+	{
+		void** s_preview_texture_handle{};
+	}
 
 	bool cheat::initialize () {
 		if (!hooking::manager::create ({
@@ -35,6 +42,7 @@ namespace hooks {
 			{ &m_draw_scene_object, &draw_scene_object, xs ("draw_scene_object"), PATTERN (patterns::draw_scene_object) },
 			{ &m_is_glowing, &is_glowing, xs ("is_glowing"), PATTERN (patterns::is_glowing) },
 			{ &m_get_glow_color, &get_glow_color, xs ("get_glow_color"), PATTERN (patterns::get_glow_color) },
+			{ &m_get_resource_view, &get_resource_view, xs ("get_resource_view"), PATTERN (patterns::get_resource_view) },
 			{ &m_generate_primitives, &generate_primitives, xs ("generate_primitives"), PATTERN (patterns::generate_primitives) },
 			{ &m_parse_report_hit, &parse_report_hit, xs ("parse_report_hit"), PATTERN (patterns::parse_report_hit) },
 			{ &m_setup_fog, &setup_fog, xs ("setup_fog"), PATTERN (patterns::setup_fog) },
@@ -57,7 +65,6 @@ namespace hooks {
 			{ &m_process_input_event, &process_input_event, xs ("process_input_event"), PATTERN (patterns::process_input_event) },
 			{ &m_render_decals, &render_decals, xs ("render_decals"), PATTERN (patterns::render_decals) },
 			{ &m_render_smoke, &render_smoke, xs ("render_smoke"), PATTERN (patterns::render_smoke) },
-			{ &m_calc_viewmodel, &calc_viewmodel, xs ("calc_viewmodel"), PATTERN (patterns::viewmodel_calc) },
 			{ &m_draw_flash_effect, &draw_flash_effect, xs ("draw_flash_effect"), PATTERN (patterns::draw_flash_effect) },
 			{ &m_set_info, &set_info, xs ("set_info"), PATTERN (patterns::set_info) }
 		};
@@ -98,6 +105,7 @@ namespace hooks {
 		m_draw_scene_object.reset( );
 		m_is_glowing.reset( );
 		m_get_glow_color.reset( );
+		m_get_resource_view.reset( );
 		m_generate_primitives.reset( );
 		m_parse_report_hit.reset( );
 		m_setup_fog.reset( );
@@ -120,7 +128,6 @@ namespace hooks {
 		m_process_input_event.reset( );
 		m_render_decals.reset( );
 		m_render_smoke.reset( );
-		m_calc_viewmodel.reset( );
 		m_render_smoke_map.reset( );
 		m_render_smoke_unmap.reset( );
 		m_draw_flash_effect.reset( );
@@ -154,6 +161,11 @@ namespace hooks {
 	HRESULT __fastcall cheat::resize_buffers( IDXGISwapChain* thisptr, UINT buffer_count, UINT width, UINT height, DXGI_FORMAT new_format, UINT swap_chain_flags )
 	{
 		rendering::g_context.on_resize_buffers( );
+
+		// the preview composition texture is recreated on resize; drop the
+		// cached SRV so it gets recaptured from the new render target
+		systems::g_model_preview.clear_texture( );
+		s_preview_texture_handle = nullptr;
 
 		const auto result = m_resize_buffers.call<long>( thisptr, buffer_count, width, height, new_format, swap_chain_flags );
 		if ( SUCCEEDED( result ) )
@@ -227,7 +239,6 @@ namespace hooks {
 			if ( stage == 6 )
 			{
 				features::changer::g_guns.on_frame_stage_notify( );
-				ModelChanger->SetPlayerModel( );
 			}
 
 			if ( stage == 7 )
@@ -257,8 +268,8 @@ namespace hooks {
 			}
 		}
 
-		// Source 2 copies dynamic-light entries into scene objects during this stage.
-		// Publish our entry first, while keeping all manager mutations on the game thread.
+		
+		
 		if ( stage == 6 )
 		{
 			features::misc::g_dlight.on_frame_stage_notify( );
@@ -266,8 +277,8 @@ namespace hooks {
 
 		m_frame_stage_notify.call<void>( thisptr, stage );
 
-		// The current frame's world-to-projection matrix is published by the
-		// engine during render-start stage 12.
+		
+		
 		if ( stage == 12 )
 		{
 			systems::g_view.update_matrix( );
@@ -276,15 +287,20 @@ namespace hooks {
 
 		if (systems::g_local.get ().is_valid () && systems::g_view.has_camera ()) {
 			if (stage == 6) {
-				// Capture lag records only after Source 2 has committed this network update,
-				// so the simulation timestamp, world origin and evaluated bones agree.
+				
+				
 				features::combat::g_shared.lc( ).run( );
-				features::esp::player::g_chams.bt( ).update( );
-				features::esp::player::g_chams.os ().update ();
 
 				features::misc::g_scoreboard_weapons.on_frame_stage_notify ();
 				features::misc::g_other.do_kill_feed_preservation( );
 			}
+		}
+
+		// the preview must also run outside a match: on the main menu the HUD
+		// does not exist, so it is created on the main-menu root instead
+		if ( stage == 6 )
+		{
+			systems::g_model_preview.update( );
 		}
 	}
 
@@ -365,13 +381,10 @@ namespace hooks {
 			{
 				diag::set_exception_phase( "create_move: pre-combat movement" );
 				features::movement::g_slowwalk.on_create_move( current_cmd );
-				features::movement::g_edgebug.on_create_move( current_cmd );
 				features::movement::g_edgejump.on_create_move( current_cmd );
-				features::movement::g_edgestop.on_create_move( current_cmd );
 				features::movement::g_jumpbug.on_create_move( current_cmd );
 				features::movement::g_bhop.on_create_move( current_cmd );
 				features::movement::g_fastladder.on_create_move( current_cmd );
-				features::movement::g_pixelsurf.on_create_move( current_cmd );
 				if ( trace )
 				{
 					diag::step( "create_move: pre-combat movement end" );
@@ -432,7 +445,7 @@ namespace hooks {
 				diag::step( "create_move: final subtick end" );
 			}
 
-			//systems::g_legit_input.on_create_move( current_cmd );
+			
 		}
 		static std::atomic_bool first_input_apply_traced{};
 		const auto trace_apply =
@@ -571,22 +584,111 @@ namespace hooks {
 		m_get_glow_color.call<void>( glow_property, color );
 	}
 
+	ID3D11ShaderResourceView* __fastcall cheat::get_resource_view( void* texture_manager, void** texture, char a3, char a4, const char* a5 )
+	{
+		auto* srv = m_get_resource_view.call< ID3D11ShaderResourceView* >( texture_manager, texture, a3, a4, a5 );
+		if ( !srv || !texture || a4 != 0 )
+		{
+			return srv;
+		}
+
+		// the texture name field is not a valid pointer for every texture type;
+		// reading it can fault, and on a bad pointer strstr() would scan an
+		// unbounded amount of mapped memory before faulting - a seconds-long
+		// freeze on every texture load (inject/connect). validate the pointer
+		// and bound the scan instead; SEH stays as a last-resort backstop
+		__try
+		{
+			const auto current = static_cast< ID3D11ShaderResourceView* >( systems::g_model_preview.texture( ) );
+
+			// fast path: once the preview texture is known, only its own handle
+			// needs any work - every other texture request is one compare
+			if ( texture == s_preview_texture_handle )
+			{
+				if ( current != srv )
+				{
+					srv->AddRef( );
+					if ( current )
+					{
+						current->Release( );
+					}
+
+					systems::g_model_preview.set_preview_texture( srv );
+				}
+
+				return srv;
+			}
+
+			// already captured and this is not the preview handle: nothing to do
+			if ( current )
+			{
+				return srv;
+			}
+
+			// the name lives behind the second pointer slot of the texture object
+			const auto name_field = *( reinterpret_cast< const char*** >( texture ) + 1 );
+			if ( !name_field )
+			{
+				return srv;
+			}
+
+			const auto texture_name = *name_field;
+			if ( !texture_name )
+			{
+				return srv;
+			}
+
+			MEMORY_BASIC_INFORMATION mbi{};
+			if ( !VirtualQuery( texture_name, &mbi, sizeof( mbi ) )
+				|| mbi.State != MEM_COMMIT
+				|| ( mbi.Protect & ( PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_WRITECOPY ) ) == 0 )
+			{
+				return srv;
+			}
+
+			static constexpr const char k_preview_texture_name[ ] = "example_model_preview";
+			constexpr auto k_name_len = sizeof( k_preview_texture_name ) - 1;
+			constexpr auto k_max_scan = 256u;
+
+			// substring scan with a hard byte cap: a bad name can cost at most
+			// a few hundred iterations instead of a multi-gigabyte strstr walk
+			auto match = false;
+			for ( auto i = 0u; i < k_max_scan; ++i )
+			{
+				const auto ch = texture_name[ i ];
+				if ( ch == '\0' )
+				{
+					break;
+				}
+
+				if ( ch == k_preview_texture_name[ 0 ]
+					&& std::memcmp( texture_name + i, k_preview_texture_name, k_name_len ) == 0 )
+				{
+					match = true;
+					break;
+				}
+			}
+
+			if ( match )
+			{
+				s_preview_texture_handle = texture;
+				srv->AddRef( );
+				systems::g_model_preview.set_preview_texture( srv );
+			}
+		}
+		__except ( EXCEPTION_EXECUTE_HANDLER )
+		{
+		}
+
+		return srv;
+	}
+
 	void __fastcall cheat::generate_primitives( std::uintptr_t thisptr, std::uintptr_t scene_object, std::uintptr_t scene_view, std::uintptr_t primitive_buffer )
 	{
 		diag::exception_scope exception_scope{ "chams: generate primitives" };
 
 		if ( scene_object )
 		{
-			if ( features::esp::player::g_chams.bt( ).is_active( scene_object ) )
-			{
-				return;
-			}
-
-			if ( features::esp::player::g_chams.os( ).is_active( scene_object ) ) 
-			{
-				return;
-			}
-
 			const auto owner_handle = memory::read<std::uint32_t>( scene_object + 0xc0 );
 			if ( owner_handle )
 			{
@@ -625,7 +727,7 @@ namespace hooks {
 
 	std::uintptr_t __fastcall cheat::parse_report_hit( std::uintptr_t thisptr, std::uint8_t deleting )
 	{
-		// Capture the protobuf fields before the deleting destructor can free them.
+		
 		features::misc::g_impacts.on_report_hit( thisptr );
 
 		return m_parse_report_hit.call<std::uintptr_t>( thisptr, deleting );
@@ -652,8 +754,8 @@ namespace hooks {
 	{
 		constexpr std::uint32_t dof_ranges{ 0x2ACAB07C };
 
-		// The engine only publishes DofRanges when the active camera enables DOF.
-		// Insert it alongside any post-process vector, matching Artisan's live path.
+		
+		
 		if ( settings::g_world.m_scene.dof.value && hash != dof_ranges )
 		{
 			__m128i* dof_value{};
@@ -672,6 +774,7 @@ namespace hooks {
 	{
 		m_override_view.call<void>( thisptr, view_setup );
 
+		features::combat::g_rage.on_override_view( view_setup );
 		features::misc::g_camera.on_override_view( view_setup );
 		features::misc::g_removals.on_override_view( view_setup );
 		features::combat::g_misc.duckpeek( ).on_override_view( view_setup );
@@ -749,6 +852,14 @@ namespace hooks {
 			return m_get_transforms_for_hitbox_list.call<bool>( a1, a2, a3 );
 		}
 
+		// only ever touch the target's transforms. for anything else (world,
+		// props, other players) the sanity reads below fail and returning
+		// false aborts the whole trace — walls go invisible to autowall
+		if ( a1 != record->pawn && a1 != record->game_scene_node )
+		{
+			return m_get_transforms_for_hitbox_list.call<bool>( a1, a2, a3 );
+		}
+
 		const auto count = memory::safe_read<int>( reinterpret_cast< std::uintptr_t >( a3 ) ).value_or( 0 );
 		const auto shape_array = memory::safe_read<std::uintptr_t>( reinterpret_cast< std::uintptr_t >( a3 ) + 8 ).value_or( 0 );
 		const auto entity_bone_cache = memory::safe_read<std::uintptr_t>( a1 + 0x1c0 ).value_or( 0 );
@@ -766,8 +877,8 @@ namespace hooks {
 			return false;
 		}
 
-		// The client dereferences every resolved transform without checking the
-		// backing cache. Reject a stale scene node instead of faulting in it.
+		
+		
 		for ( auto i = 0; i < count; ++i )
 		{
 			const auto shape_ptr = shape_array + 16ull * i;
@@ -781,23 +892,11 @@ namespace hooks {
 			}
 		}
 
-		const auto target_scene = record->game_scene_node ? record->game_scene_node : memory::read<std::uintptr_t>( record->pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
-		const auto target_bone_cache = target_scene ? memory::safe_read<std::uintptr_t>( target_scene + SCHEMA( "CSkeletonInstance", "m_modelState"_hash ) + 0x80 ).value_or( 0 ) : 0;
 		const auto result = m_get_transforms_for_hitbox_list.call<bool>( a1, a2, a3 );
 
 		if ( !result )
 		{
 			return false;
-		}
-
-		const auto is_plausible = [ ]( std::uintptr_t ptr ) noexcept -> bool
-			{
-				return ptr >= 0x10000ull && ptr < 0x00007FFFFFFFFFFFull;
-			};
-
-		if ( !is_plausible( entity_bone_cache ) || !is_plausible( target_bone_cache ) || entity_bone_cache != target_bone_cache )
-		{
-			return result;
 		}
 
 		const auto output_array = memory::safe_read<std::uintptr_t>( a2 + 16 ).value_or( 0 );
@@ -807,6 +906,8 @@ namespace hooks {
 			return result;
 		}
 
+		
+		
 		for ( auto i = 0; i < count; ++i )
 		{
 			const auto shape_ptr = shape_array + 16ull * i;
@@ -857,8 +958,8 @@ namespace hooks {
 	{
 		const auto result = m_get_interpolated_shoot_position.call<float*>( thisptr, out, tick_frac );
 
-		// Prediction calls this helper while building the next command as well.
-		// Only the call made for an actual rage shot is its authoritative origin.
+		
+		
 		if ( features::combat::g_rage.is_firing_this_tick( ) )
 		{
 			features::misc::g_impacts.on_get_interpolated_shoot_position( thisptr, out );
@@ -879,10 +980,14 @@ namespace hooks {
 			rendering::g_widgets.s_map_name.clear( );
 		}
 
+		// the HUD (and the preview panel created on it) is rebuilt per level;
+		// drop the cached SRV and recreate the panel on the new HUD
+		systems::g_model_preview.reset( );
+		s_preview_texture_handle = nullptr;
+
 		features::world::g_scene.reset_skybox_state( );
 		features::misc::g_impacts.on_level_change( );
 		features::misc::g_scoreboard_weapons.on_level_change( );
-		systems::g_hitboxes.invalidate_cache( );
 
 		return m_level_initialization.call<std::uintptr_t>( a1, new_map );
 	}
@@ -891,13 +996,17 @@ namespace hooks {
 	{
 		rendering::g_widgets.s_map_name.clear();
 
-		// Release feature-owned scene objects before Source 2 tears their parents down.
+		
 		features::misc::g_dlight.on_level_shutdown( );
 		features::esp::player::g_overlay.clear_cache( );
 
-		systems::g_hitboxes.invalidate_cache( );
+		// the HUD (and the preview panel created on it) is destroyed when the
+		// level unloads; drop the cached SRV so the panel gets recreated on the
+		// main-menu root when the game returns to the menu
+		systems::g_model_preview.reset( );
+		s_preview_texture_handle = nullptr;
 
-		// clear all local player data on level shutdown
+		
 		systems::g_local.reset();
 
 		return m_level_shutdown.call<std::uintptr_t>( a1 );
@@ -905,6 +1014,11 @@ namespace hooks {
 
 	void __fastcall cheat::read_frame_input( std::uintptr_t a1, std::uint32_t a2 )
 	{
+		// input is pumped every frame on the main thread in every state,
+		// including the main menu - tick the preview here as well so it can
+		// start outside a match (frame stages are not reliable there)
+		systems::g_model_preview.update( );
+
 		m_read_frame_input.call<void>( a1, a2 );
 	}
 
@@ -951,44 +1065,6 @@ namespace hooks {
 		}
 
 		m_render_smoke.call<void>( a1, a2, a3, a4, a5, a6 );
-	}
-
-	void* __fastcall cheat::calc_viewmodel( float* unk, float* offsets, float* fov )
-	{
-		static const auto original = m_calc_viewmodel.original< void* ( __fastcall* )( float*, float*, float* ) >( );
-
-		auto* _return = original( unk, offsets, fov );
-
-		const auto& cfg = settings::g_misc.m_viewmodel_adjust;
-		if ( !cfg.enabled.value )
-			return _return;
-
-		static float smooth_x = 0.0f, smooth_y = 0.0f, smooth_z = 0.0f, smooth_fov = 68.0f;
-		static auto last_time = std::chrono::steady_clock::now();
-
-		const float target_x = cfg.offset_x.value;
-		const float target_y = cfg.offset_y.value;
-		const float target_z = cfg.offset_z.value;
-		const float target_fov = cfg.fov.value;
-
-		const auto now = std::chrono::steady_clock::now( );
-		const float delta = std::chrono::duration<float>( now - last_time ).count( );
-		last_time = now;
-
-		const float t = 8.0f * std::min( delta, 0.033f );
-
-		smooth_x += ( target_x - smooth_x ) * t;
-		smooth_y += ( target_y - smooth_y ) * t;
-		smooth_z += ( target_z - smooth_z ) * t;
-		smooth_fov += ( target_fov - smooth_fov ) * t;
-
-		offsets[ 0 ] += smooth_x;
-		offsets[ 1 ] += smooth_y;
-		offsets[ 2 ] += smooth_z;
-
-		*fov = smooth_fov;
-
-		return _return;
 	}
 
 	std::uintptr_t __fastcall cheat::render_smoke_map( std::uintptr_t thisptr, std::size_t size, std::uintptr_t* out_ptr )
@@ -1065,4 +1141,4 @@ namespace hooks {
 		}
 	}
 
-} // namespace hooks
+} 

@@ -1,5 +1,6 @@
+#ifndef NOMINMAX
 #define NOMINMAX
-#include <pch/pch.hpp>
+#endif
 #include "xui.hpp"
 #include <algorithm>
 #include <chrono>
@@ -197,11 +198,9 @@ namespace {
 		}
 	}
 
-} // namespace
+} 
 
 namespace xui {
-
-	constexpr float k_checkbox_toggle_w{ 32.0f };
 
 	constexpr rect rect::offset( float dx, float dy ) const noexcept
 	{
@@ -470,7 +469,7 @@ namespace xui {
 		float in_out_cubic( float t ) noexcept { return t < 0.5f ? 4.0f * t * t * t : 1.0f - std::pow( -2.0f * t + 2.0f, 3.0f ) / 2.0f; }
 		float smoothstep( float t ) noexcept { return t * t * ( 3.0f - 2.0f * t ); }
 
-	} // namespace ease
+	} 
 
 	std::span<const wchar_t> input_state::chars( ) const noexcept
 	{
@@ -793,7 +792,7 @@ namespace xui {
 			get_anim_states( ).clear( );
 		}
 
-	} // namespace anim
+	} 
 
 	namespace binds {
 
@@ -813,7 +812,7 @@ namespace xui {
 				return r;
 			}
 
-		} // the bind_registry namespace
+		} 
 
 		void register_setting( setting* s )
 		{
@@ -968,7 +967,7 @@ namespace xui {
 			}
 		}
 
-	} // namespace binds
+	} 
 
 	popup_overlay::popup_overlay( std::uintptr_t id, const rect& anchor, float width ) : overlay{ id, anchor }, m_width{ width } { }
 
@@ -1172,7 +1171,7 @@ namespace xui {
 			get_overlays( ).list.push_back( std::move( ov ) );
 		}
 
-	} // namespace overlays
+	} 
 
 	void push_id( std::uintptr_t id )
 	{
@@ -1238,7 +1237,7 @@ namespace xui {
 			}
 		}
 
-	} // namespace draw
+	} 
 
 	namespace layout {
 
@@ -1319,19 +1318,13 @@ namespace xui {
 			win->line_h = h;
 			win->content_h = std::max( win->content_h, win->cursor_y + h );
 
-			auto result = rect
+			return rect
 			{
 				std::floorf( local.x + win->bounds.x ),
 				std::floorf( local.y + win->bounds.y ),
 				std::floorf( local.w ),
 				std::floorf( local.h )
 			};
-
-			// Clip to the current window's visible bounds so content that is scrolled
-			// out of view (rendered via the child clip) is not interactable.
-			result = result.intersect( win->bounds );
-
-			return result;
 		}
 
 		void same_line( float offset )
@@ -1461,7 +1454,7 @@ namespace xui {
 			return { win->cursor_x, win->cursor_y };
 		}
 
-	} // namespace layout
+	} 
 
 	bool context::overlay_blocking( ) const
 	{
@@ -1596,6 +1589,18 @@ namespace xui {
 	{
 		auto& c = get_ctx( );
 
+		// promote a deferred window drag: the click that started it must not
+		// have been eaten by a widget on the previous frame
+		if ( c.input.mouse_released )
+		{
+			c.pending_window_drag = null_id;
+		}
+		else if ( c.pending_window_drag != null_id && !c.widget_claimed && c.active_window == null_id )
+		{
+			c.active_window = c.pending_window_drag;
+		}
+		c.widget_claimed = false;
+
 		{
 			auto& dc = get_double_click( );
 			c.input.mouse_double_clicked = false;
@@ -1686,7 +1691,7 @@ namespace xui {
 		}
 		else if ( window_hovered && !grip_hovered && input.mouse_clicked&& c.active_window == null_id&& c.active_slider == null_id&& c.active_resize == null_id&& c.active_text_input == null_id&& c.active_child_scroll == null_id&& !c.overlay_blocking( ) )
 		{
-			c.active_window = id;
+			c.pending_window_drag = id;
 		}
 
 		if ( allow_window_drag && c.active_window == id && input.mouse_down&& c.active_slider == null_id&& c.active_resize == null_id&& c.active_text_input == null_id&& c.active_child_scroll == null_id )
@@ -2000,7 +2005,7 @@ namespace xui {
 		const auto dot_area_h = win->last_item.h;
 		const auto row_right = win->last_item.x + win->last_item.w;
 		const auto dot_gap = s.item_spacing_x * 0.5f;
-		const auto dot_local_x = row_right - k_checkbox_toggle_w - dot_gap - dot_area_w;
+		const auto dot_local_x = row_right - s.checkbox_size * 1.6f - dot_gap - dot_area_w;
 		const auto dot_local_y = win->last_item.y;
 		const auto dot_abs = rect{ std::floorf( win->bounds.x + dot_local_x ), std::floorf( win->bounds.y + dot_local_y ), dot_area_w, dot_area_h };
 
@@ -2028,6 +2033,7 @@ namespace xui {
 
 		if ( hovered && input.mouse_clicked )
 		{
+			c.widget_claimed = true;
 			if ( is_open )
 			{
 				overlays::close( id );
@@ -2183,58 +2189,52 @@ namespace xui {
 			const style& st,
 			float alpha_mult = 1.0f )
 		{
-			auto bg = st.checkbox_bg;
-			bg.a = static_cast< std::uint8_t >( bg.a * alpha_mult );
-			dl.rect_filled( x, y, size, size, bg, xdraw::corner_radius{ st.checkbox_rounding } );
+			const auto sw_w = size * 2.0f;
+			const auto radius = size * 0.5f;
+			const auto pad = std::max( 1.5f, size * 0.125f );
+			const auto knob_h = size - pad * 2.0f;
+			const auto knob_w = knob_h * 1.4f;
+			const auto knob_r = knob_h * 0.5f;
 
+			const auto text_lum = 0.299f * static_cast< float >( st.text.r ) + 0.587f * static_cast< float >( st.text.g ) + 0.114f * static_cast< float >( st.text.b );
+			const auto light_theme = text_lum > 140.0f;
+			const auto clear = xdraw::color{ 255, 255, 255, 0 };
+
+			// glass track (same language as the slider): translucent base + top sheen + edge contour
+			auto glass_base = light_theme ? xdraw::color{ 0, 0, 0, 30 } : xdraw::color{ 255, 255, 255, 48 };
+			glass_base.a = static_cast< std::uint8_t >( glass_base.a * alpha_mult );
+			dl.rect_filled( x, y, sw_w, size, glass_base, xdraw::corner_radius{ radius } );
+
+			auto glass_sheen = light_theme ? xdraw::color{ 0, 0, 0, 14 } : xdraw::color{ 255, 255, 255, 66 };
+			glass_sheen.a = static_cast< std::uint8_t >( glass_sheen.a * alpha_mult );
+			dl.rect_filled_gradient( x, y, sw_w, size * 0.6f,
+				glass_sheen, glass_sheen, clear, clear,
+				xdraw::corner_radius::top( radius ) );
+
+			// accent fill - translucent so the enabled track stays glassy instead of solid white
 			if ( t > 0.01f )
 			{
-				auto mark = st.checkbox_mark;
-				mark.a = static_cast< std::uint8_t >( mark.a * t * alpha_mult );
-				dl.rect_filled( x, y, size, size, mark, xdraw::corner_radius{ st.checkbox_rounding } );
+				auto fill = st.checkbox_mark;
+				fill.a = static_cast< std::uint8_t >( std::clamp( fill.a * 0.5f, 0.0f, 255.0f ) * t * alpha_mult );
+				dl.rect_filled( x, y, sw_w, size, fill, xdraw::corner_radius{ radius } );
 			}
-		}
 
-		void draw_toggle_switch(
-			xdraw::draw_list& dl,
-			float x,
-			float y,
-			float w,
-			float h,
-			float t,
-			const style& st,
-			float alpha_mult = 1.0f )
-		{
-			const auto rounding = h * 0.5f; // Round corners
-			
-			// Background track - более контрастные цвета
-			xdraw::color track_color;
-			if ( t > 0.01f )
-			{
-				// Включенное состояние - акцентный цвет
-				track_color = lerp( st.slider_track, st.slider_fill, t );
-			}
-			else
-			{
-				// Выключенное состояние - более видимый серый цвет
-				track_color = st.text_dim; // Используем цвет приглушенного текста для видимости
-			}
-			
-			track_color.a = static_cast< std::uint8_t >( track_color.a * alpha_mult );
-			dl.rect_filled( x, y, w, h, track_color, xdraw::corner_radius{ rounding } );
-			
-			// Toggle circle (thumb) - всегда белый и видимый, БЕЗ ТОЧЕК
-			const auto thumb_size = h - 4.0f; // Slightly smaller than track height
-			const auto thumb_radius = thumb_size * 0.5f;
-			const auto thumb_travel = w - h; // How far the thumb can move
-			const auto thumb_x = x + 2.0f + thumb_travel * t; // 2.0f padding from edge
-			const auto thumb_y = y + 2.0f; // 2.0f padding from edge
-			
-			auto thumb_color = st.checkbox_mark_icon; // Use existing white color
-			thumb_color.a = static_cast< std::uint8_t >( thumb_color.a * alpha_mult );
-			
-			// Чистый переключатель без точек
-			dl.circle_filled( thumb_x + thumb_radius, thumb_y + thumb_radius, thumb_radius, thumb_color );
+			// glass edge contour - lighter and subtle
+			auto track_edge = light_theme ? xdraw::color{ 255, 255, 255, 45 } : xdraw::color{ 255, 255, 255, 80 };
+			track_edge.a = static_cast< std::uint8_t >( track_edge.a * alpha_mult );
+			dl.rect( x, y, sw_w, size, track_edge, xdraw::corner_radius{ radius }, 1.0f );
+
+			// white glass knob -- elongated capsule, same language as the slider thumb
+			const auto knob_cx = x + pad + ( sw_w - pad * 2.0f - knob_w ) * t;
+			const auto knob_cy = y + pad;
+
+			auto knob = xdraw::color{ 255, 255, 255, 245 };
+			knob.a = static_cast< std::uint8_t >( knob.a * alpha_mult );
+			dl.rect_filled( knob_cx, knob_cy, knob_w, knob_h, knob, xdraw::corner_radius{ knob_r } );
+
+			auto knob_edge = light_theme ? xdraw::color{ 0, 0, 0, 50 } : xdraw::color{ 255, 255, 255, 150 };
+			knob_edge.a = static_cast< std::uint8_t >( knob_edge.a * alpha_mult );
+			dl.rect( knob_cx, knob_cy, knob_w, knob_h, knob_edge, xdraw::corner_radius{ knob_r }, 1.0f );
 		}
 
 		void draw_minimal_slider(
@@ -2244,27 +2244,75 @@ namespace xui {
 			float track_w,
 			float track_h,
 			float norm_pos,
+			float hover_anim,
+			bool dragging,
 			const style& st )
 		{
+			const auto text_lum = 0.299f * static_cast< float >( st.text.r ) + 0.587f * static_cast< float >( st.text.g ) + 0.114f * static_cast< float >( st.text.b );
+			const auto light_theme = text_lum > 140.0f;
+
+			// iOS 26 liquid glass slider: glass track + wide rounded-rect thumb (16:10)
+			constexpr auto thumb_w{ 22.0f };
+			constexpr auto thumb_h{ 16.0f };
+			const auto thumb_r = thumb_h * 0.5f;
+
 			const auto track_r = track_h * 0.5f;
-			const auto thumb_r = track_h * 0.8f; // Slightly larger thumb
+			const auto track_h_drawn = std::max( track_h, 6.0f );
+			const auto track_y_drawn = track_y + track_h * 0.5f - track_h_drawn * 0.5f;
+
 			const auto thumb_cx = track_x + std::clamp( norm_pos, 0.0f, 1.0f ) * track_w;
 			const auto thumb_cy = track_y + track_h * 0.5f;
-			const auto fill_w = std::max( thumb_r, thumb_cx - track_x );
+			const auto fill_w = std::max( thumb_w * 0.5f, thumb_cx - track_x );
 
-			// Draw track background
-			dl.rect_filled( track_x, track_y, track_w, track_h, st.slider_track, xdraw::corner_radius{ track_r } );
+			const auto glass_base  = light_theme ? xdraw::color{ 0, 0, 0, 26 } : xdraw::color{ 255, 255, 255, 48 };
+			const auto glass_sheen = light_theme ? xdraw::color{ 0, 0, 0, 14 } : xdraw::color{ 255, 255, 255, 66 };
+			const auto clear = xdraw::color{ 255, 255, 255, 0 };
 
-			// Draw filled portion
+			// glass track
+			dl.rect_filled( track_x, track_y_drawn, track_w, track_h_drawn, glass_base, xdraw::corner_radius{ track_r } );
+			dl.rect_filled_gradient( track_x, track_y_drawn, track_w, track_h_drawn * 0.6f,
+				glass_sheen, glass_sheen, clear, clear,
+				xdraw::corner_radius::top( track_r ) );
+
+			// accent fill
 			if ( fill_w > 0.5f )
 			{
-				dl.rect_filled( track_x, track_y, fill_w, track_h, st.slider_fill, xdraw::corner_radius{ track_r } );
+				dl.rect_filled( track_x, track_y_drawn, fill_w, track_h_drawn, st.slider_fill, xdraw::corner_radius{ track_r } );
+
+				auto fill_sheen = lighten( st.slider_fill, 1.35f );
+				fill_sheen.a = static_cast< std::uint8_t >( 70 );
+				dl.rect_filled_gradient( track_x, track_y_drawn, fill_w, track_h_drawn * 0.5f,
+					fill_sheen, fill_sheen, clear, clear,
+					xdraw::corner_radius::top( track_r ) );
 			}
 
-			// Draw modern circular thumb
-			auto thumb_color = st.text_dim;
-			thumb_color.a = 255;
-			dl.circle_filled( thumb_cx, thumb_cy, thumb_r, thumb_color );
+			// hover / drag halo
+			const auto intensity = std::max( hover_anim, dragging ? 1.0f : 0.0f );
+			if ( intensity > 0.01f )
+			{
+				auto halo = st.slider_fill;
+				halo.a = static_cast< std::uint8_t >( 40.0f * intensity );
+				const auto hw = thumb_w + 12.0f;
+				const auto hh = thumb_h + 12.0f;
+				dl.rect_filled( thumb_cx - hw * 0.5f, thumb_cy - hh * 0.5f, hw, hh, halo, xdraw::corner_radius{ thumb_r + 6.0f } );
+			}
+
+			// glass thumb: wide rounded rectangle with liquid glass sheen
+			const auto grow = 1.5f * intensity;
+			const auto tw = thumb_w + grow;
+			const auto th = thumb_h + grow;
+			const auto tx = thumb_cx - tw * 0.5f;
+			const auto ty = thumb_cy - th * 0.5f;
+
+			const auto thumb_base   = light_theme ? xdraw::color{ 255, 255, 255, 245 } : xdraw::color{ 255, 255, 255, 245 };
+			const auto thumb_shadow = light_theme ? xdraw::color{ 0, 0, 0, 14 } : xdraw::color{ 0, 0, 0, 20 };
+			const auto thumb_edge   = light_theme ? xdraw::color{ 0, 0, 0, 60 } : xdraw::color{ 255, 255, 255, 150 };
+
+			dl.rect_filled( tx, ty, tw, th, thumb_base, xdraw::corner_radius{ thumb_r } );
+			dl.rect_filled_gradient( tx, ty + th * 0.7f, tw, th * 0.3f,
+				clear, clear, thumb_shadow, thumb_shadow,
+				xdraw::corner_radius::bottom( thumb_r ) );
+			dl.rect( tx, ty, tw, th, thumb_edge, xdraw::corner_radius{ thumb_r }, 1.0f );
 		}
 
 		class checkbox_bind_overlay : public overlay
@@ -2519,7 +2567,7 @@ namespace xui {
 			std::array<float, k_item_count> m_item_anims{};
 		};
 
-	} // the checkbox_bind namespace
+	} 
 
 	namespace {
 
@@ -2556,22 +2604,32 @@ namespace xui {
 
 			const auto text_height = std::max( label_h, value_h );
 			const auto track_height = s.slider_h;
-			constexpr auto thumb_r{ 6.0f };
-			const auto thumb_d = thumb_r * 2.0f;
-			const auto slider_area_h = std::max( track_height, thumb_d );
-			const auto spacing = s.item_spacing_y * 0.25f;
-			const auto total_height = text_height + spacing + slider_area_h;
+			constexpr auto thumb_h{ 16.0f };
+			const auto slider_area_h = std::max( track_height, thumb_h );
+			const auto row_height = std::max( text_height, slider_area_h );
 
-			const auto abs = layout::item( slider_width, total_height, text_height );
-			const auto track_y = abs.y + text_height + spacing + ( slider_area_h - track_height ) * 0.5f;
-			const auto track_rect = rect{ abs.x, track_y, slider_width, track_height };
-			const auto slider_hit_rect = rect{ abs.x, abs.y + text_height + spacing, slider_width, slider_area_h };
+			const auto abs = layout::item( slider_width, row_height );
+			const auto row_center_y = abs.y + row_height * 0.5f;
+			const auto text_y = std::floorf( row_center_y - text_height * 0.5f );
+
+			const auto gap = s.item_spacing_x;
+			constexpr auto slider_w{ 110.0f };
+			constexpr auto value_area_w{ 30.0f };
+			const auto value_text_x = abs.x + slider_width - value_w;
+			const auto value_text_rect = rect{ value_text_x, text_y, value_w, text_height };
+			const auto value_area_x = abs.x + slider_width - std::max( value_area_w, value_w );
+
+			const auto slider_x = value_area_x - gap - slider_w;
+			const auto label_slot_w = std::max( 0.0f, slider_x - gap - abs.x );
+			const auto label_text = label_w <= label_slot_w ? display : truncate( display, label_slot_w );
+
+			const auto track_y = std::floorf( row_center_y - track_height * 0.5f );
+			const auto track_rect = rect{ slider_x, track_y, slider_w, track_height };
+			const auto slider_hit_rect = rect{ slider_x, row_center_y - slider_area_h * 0.5f, slider_w, slider_area_h };
 
 			const auto can_interact = !c.overlay_blocking( );
 
 			const auto is_editing = c.active_slider_edit == id;
-			const auto value_text_x = abs.x + slider_width - value_w;
-			const auto value_text_rect = rect{ value_text_x, abs.y, value_w, text_height };
 
 			if ( is_editing )
 			{
@@ -2581,7 +2639,7 @@ namespace xui {
 				const auto [edit_w, edit_h] = xdraw::measure_text( buf.empty( ) ? "0" : buf );
 				const auto edit_box_w = std::max( value_w + 16.0f, edit_w + 12.0f );
 				const auto edit_box_x = std::floorf( abs.x + slider_width - edit_box_w );
-				const auto edit_box_rect = rect{ edit_box_x, abs.y, edit_box_w, text_height };
+				const auto edit_box_rect = rect{ edit_box_x, text_y, edit_box_w, text_height };
 
 				if ( input.mouse_clicked && !input.in_rect( edit_box_rect ) )
 				{
@@ -2718,7 +2776,9 @@ namespace xui {
 				}
 				else if ( hovered && input.mouse_clicked && c.active_slider == null_id )
 				{
+					c.widget_claimed = true;
 					c.active_slider = id;
+					c.active_window = null_id;
 				}
 
 				if ( c.active_slider == id && input.mouse_down && can_interact )
@@ -2771,7 +2831,7 @@ namespace xui {
 				}
 
 				const auto value_col = lerp( s.text_dim, s.accent, std::max( anim::get( id + 1000000 ) * 0.65f, c.active_slider == id ? 0.85f : 0.0f ) );
-				draw::current( ).text( abs.x + slider_width - value_w, abs.y, value_buf, value_col );
+				draw::current( ).text( value_text_x, text_y, value_buf, value_col );
 			}
 
 			auto& value_anim = get_anim_states( )[ id ];
@@ -2788,19 +2848,17 @@ namespace xui {
 
 			if ( !display.empty( ) && !is_editing )
 			{
-				// Draw label text without color dot
-				const auto available_label_w = slider_width - value_w - s.item_spacing_x;
-				const auto label_text = truncate( display, available_label_w );
+				
 				const auto label_col = lerp( s.text_dim, s.text, hover_anim_val );
-				dl.text( abs.x, abs.y, label_text, label_col );
+				dl.text( abs.x, text_y, label_text, label_col );
 			}
 
-			draw_minimal_slider( dl, track_rect.x, track_rect.y, track_rect.w, track_rect.h, norm_pos, s );
+			draw_minimal_slider( dl, track_rect.x, track_rect.y, track_rect.w, track_rect.h, norm_pos, hover_anim_val, c.active_slider == id, s );
 
 			return changed;
 		}
 
-	} // the slider namespace
+	} 
 
 	bool checkbox( std::string_view label, setting& s )
 	{
@@ -2824,41 +2882,23 @@ namespace xui {
 		const auto& st = c.style;
 		const auto& input = c.input;
 
+		const auto row_h = st.checkbox_size;
+		const auto abs = layout::item( layout::item_width( 1 ), row_h );
+		const auto sw_w = row_h * 1.6f;
+
 		const auto [lw, lh] = xdraw::measure_text( display );
-		
-		// NEW LAYOUT: dots (left) → text (center) → toggle switch (right)
-		const auto toggle_w = k_checkbox_toggle_w;  // Width of toggle switch
-		const auto toggle_h = 16.0f;  // Height of toggle switch
-		const auto dots_w = 20.0f;    // Width for dots area
-		const auto spacing = st.item_spacing_x * 0.5f;
-		const auto [avail_w, avail_h] = layout::avail( );
-		
-		const auto total_w = avail_w; // Use full available width
-		const auto total_h = std::max( lh, toggle_h );
-		
-		const auto abs = layout::item( total_w, total_h );
-		
-		// Position calculations - dots at LEFT, toggle at RIGHT
-		const auto has_keybind = (s.bind.key != 0);
-		const auto dots_x = abs.x;
-		const auto dots_y = abs.y + (total_h - toggle_h) * 0.5f;
-		const auto dots_rect = rect{ dots_x, dots_y, dots_w, toggle_h };
-		
-		// Text position: after dots (if present) or at original left position
-		const auto text_x = has_keybind ? (abs.x + dots_w + spacing) : abs.x;
-		const auto text_y = abs.y + (total_h - lh) * 0.5f;
-		
-		// Toggle switch at far right
-		const auto toggle_x = abs.x + total_w - toggle_w;
-		const auto toggle_y = abs.y + (total_h - toggle_h) * 0.5f;
-		const auto toggle_rect = rect{ toggle_x, toggle_y, toggle_w, toggle_h };
+		const auto full_w = abs.w;
+		const auto extended = rect{ abs.x, abs.y, full_w, abs.h };
+
+		constexpr auto dot_area_w{ 16.0f };
+		const auto dot_gap = st.item_spacing_x * 0.5f;
+		const auto dots_rect = rect{ abs.right( ) - sw_w - dot_gap - dot_area_w, abs.y, dot_area_w, abs.h };
 
 		const auto can_interact = !c.overlay_blocking( );
 		auto changed{ false };
 
-		// Keybind listening logic
 		const auto badge_id = id + 300;
-		decltype(auto) reg = binds::detail::get_bind_registry_internal( );
+		auto& reg = binds::get_bind_registry( );
 		const auto badge_listening = ( reg.listening_setting == badge_id );
 
 		if ( badge_listening )
@@ -2886,10 +2926,10 @@ namespace xui {
 			}
 		}
 
-		// Toggle switch interaction
-		const auto toggle_hovered = can_interact && input.in_rect( toggle_rect ) && !badge_listening;
-		if ( toggle_hovered && input.mouse_clicked )
+		const auto hovered = can_interact && input.in_rect( extended ) && !badge_listening;
+		if ( hovered && input.mouse_clicked && !input.in_rect( dots_rect ) )
 		{
+			c.widget_claimed = true;
 			s.value = !s.value;
 			s.bind.active = s.value;
 
@@ -2902,7 +2942,6 @@ namespace xui {
 			changed = true;
 		}
 
-		// Context menu logic for dots
 		const auto ctx_id = id + 200;
 		const auto ctx_is_open = overlays::is_open( ctx_id );
 
@@ -2911,12 +2950,7 @@ namespace xui {
 			overlays::touch( ctx_id );
 		}
 
-		// Dots interaction (only for items with keybinds)
-		const auto dots_hovered = has_keybind && can_interact && input.in_rect( dots_rect ) && !badge_listening;
-		const auto row_hovered = can_interact && input.in_rect( abs ) && !badge_listening;
-
-		// Right-click any row item to open the bind context menu (checkbox_bind_overlay)
-		if ( row_hovered && input.rmb_clicked && ( !c.overlay_blocking( ) || ctx_is_open ) )
+		if ( hovered && input.rmb_clicked && ( !c.overlay_blocking( ) || ctx_is_open ) )
 		{
 			if ( ctx_is_open )
 			{
@@ -2929,102 +2963,35 @@ namespace xui {
 			}
 		}
 
-		// Click on dots area to start keybind listening
-		if ( has_keybind && dots_hovered && input.mouse_clicked && !badge_listening && !c.overlay_blocking( ) )
-		{
-			reg.listening_setting = badge_id;
-		}
-		else if ( badge_listening && input.mouse_clicked && !dots_hovered )
-		{
-			reg.listening_setting = 0;
-		}
-
-		// Animations
 		const auto check_anim = anim::lerp( id, s.value ? 1.0f : 0.0f, 8.0f );
-		const auto hover_anim = anim::lerp( id + 1, toggle_hovered ? 1.0f : 0.0f, 10.0f );
-		const auto dots_hover_anim = anim::lerp( id + 2, dots_hovered ? 1.0f : 0.0f, 10.0f );
+		const auto hover_anim = anim::lerp( id + 1, hovered ? 1.0f : 0.0f, 10.0f );
 		const auto ease_t = ease::smoothstep( check_anim );
 
 		auto& dl = draw::current( );
 
-		// Highlight effect
 		const auto now = std::chrono::steady_clock::now( );
 		const auto& hl = get_highlight_state( );
 		const auto is_highlighted = !hl.label.empty( ) && now < hl.expires_at && display == hl.label;
 		const auto highlight_anim = anim::lerp( id + 97, is_highlighted ? 1.0f : 0.0f, 18.0f );
 
+		const auto sw_x = abs.right( ) - sw_w;
+		draw_minimal_checkbox( dl, sw_x, abs.y, row_h, ease_t, st );
+
 		if ( highlight_anim > 0.01f )
 		{
 			auto pulse = st.accent;
 			pulse.a = static_cast< std::uint8_t >( std::min( 255.0f, pulse.a * ( 0.2f + highlight_anim * 0.55f ) ) );
-			dl.rect_filled( abs.x - 4.0f, abs.y - 2.0f, total_w + 8.0f, total_h + 4.0f, pulse, xdraw::corner_radius{ 8.0f } );
+			dl.rect_filled( extended.x - 4.0f, extended.y - 2.0f, extended.w + 8.0f, extended.h + 4.0f, pulse, xdraw::corner_radius{ 8.0f } );
 		}
 
-		// Draw gear icon at LEFT side (only for items with keybinds)
-		if ( has_keybind )
-		{
-			const auto gear_center_x = dots_x + dots_w * 0.5f;
-			const auto gear_center_y = dots_y + toggle_h * 0.5f;
-			const auto gear_size = 6.0f; // Size of the gear icon
-			
-			auto gear_color = st.text_dim;
-			if ( ctx_is_open || dots_hovered || badge_listening )
-			{
-				gear_color = lerp( gear_color, st.accent, 0.6f );
-			}
-			if ( badge_listening )
-			{
-				gear_color = st.keybind_waiting;
-			}
-			
-			// Draw simple gear icon using circles and rectangles
-			// Outer gear circle
-			dl.circle_filled( gear_center_x, gear_center_y, gear_size, gear_color );
-			
-			// Gear teeth (8 small rectangles around the circle)
-			for ( int i = 0; i < 8; ++i )
-			{
-				const auto angle = (i * 3.14159f * 2.0f) / 8.0f;
-				const auto tooth_x = gear_center_x + std::cos(angle) * gear_size * 0.8f - 0.5f;
-				const auto tooth_y = gear_center_y + std::sin(angle) * gear_size * 0.8f - 0.5f;
-				dl.rect_filled( tooth_x, tooth_y, 1.0f, 1.0f, gear_color );
-			}
-			
-			// Center hole
-			dl.circle_filled( gear_center_x, gear_center_y, gear_size * 0.3f, st.window_bg );
-		}
-
-		// Simple toggle switch drawing - CLEAN without any dots inside
-		// Draw toggle switch background
-		const auto rounding = toggle_h * 0.5f;
-		xdraw::color track_color;
-		if ( ease_t > 0.01f )
-		{
-			track_color = lerp( st.slider_track, st.slider_fill, ease_t );
-		}
-		else
-		{
-			track_color = st.text_dim;
-		}
-		dl.rect_filled( toggle_x, toggle_y, toggle_w, toggle_h, track_color, xdraw::corner_radius{ rounding } );
-		
-		// Draw toggle thumb - CLEAN solid circle without any dots
-		const auto thumb_size = toggle_h - 4.0f;
-		const auto thumb_radius = thumb_size * 0.5f;
-		const auto thumb_travel = toggle_w - toggle_h;
-		const auto thumb_x = toggle_x + 2.0f + thumb_travel * ease_t;
-		const auto thumb_y = toggle_y + 2.0f;
-		
-		// Draw solid white thumb circle - NO DOTS INSIDE
-		dl.circle_filled( thumb_x + thumb_radius, thumb_y + thumb_radius, thumb_radius, st.checkbox_mark_icon );
-
-		// Draw text in CENTER (between dots and toggle)
 		if ( !display.empty( ) )
 		{
-			const auto available_w = toggle_x - text_x - st.item_spacing_x;
+			const auto tx = abs.x;
+			const auto ty = abs.y + ( row_h - lh ) * 0.5f;
+			const auto label_right = abs.right( ) - sw_w - st.item_spacing_x;
+			const auto available_w = std::max( 0.0f, label_right - tx );
 			const auto label_text = truncate( display, available_w );
 			auto label_col = lerp( st.text_dim, st.text, std::max( check_anim, hover_anim ) );
-			
 			if ( highlight_anim > 0.01f )
 			{
 				const auto glow_col = lerp( st.accent, st.text, 0.35f );
@@ -3032,13 +2999,11 @@ namespace xui {
 
 				auto shadow = st.accent;
 				shadow.a = static_cast< std::uint8_t >( std::min( 255.0f, 120.0f * highlight_anim ) );
-				dl.text( text_x + 1.0f, text_y, label_text, shadow );
+				dl.text( tx + 1.0f, ty, label_text, shadow );
 			}
-			
-			dl.text( text_x, text_y, label_text, label_col );
+			dl.text( tx, ty, label_text, label_col );
 
-			// Keybind badge (shows the bound key name, or "..." while listening)
-			if ( has_keybind || badge_listening )
+			if ( s.bind.key != 0 || badge_listening )
 			{
 				const auto badge_text = badge_listening ? "..." : vk_name( s.bind.key );
 				const auto [kw, kh] = xdraw::measure_text( badge_text );
@@ -3049,18 +3014,52 @@ namespace xui {
 				const auto badge_h = kh + badge_pad_y * 2.0f;
 
 				const auto [displayed_w, displayed_h] = xdraw::measure_text( label_text );
-				const auto badge_x = text_x + displayed_w + 6.0f;
-				const auto badge_y = text_y + ( lh - badge_h ) * 0.5f;
+				const auto badge_x = tx + displayed_w + 4.0f;
+				const auto badge_y = ty + ( lh - badge_h ) * 0.5f;
+				const auto badge_rect = rect{ badge_x, badge_y, badge_w, badge_h };
 
-				if ( badge_x + badge_w <= toggle_x - st.item_spacing_x )
+				if ( badge_x + badge_w < label_right )
 				{
-					const auto badge_rect = rect{ badge_x, badge_y, badge_w, badge_h };
 					const auto badge_hovered = can_interact && input.in_rect( badge_rect );
-					const auto badge_col = badge_listening ? st.keybind_waiting : ( badge_hovered ? st.accent : st.text_dim );
+					if ( badge_hovered && input.mouse_clicked && !badge_listening && !c.overlay_blocking( ) )
+					{
+						c.widget_claimed = true;
+						reg.listening_setting = badge_id;
+					}
+					else if ( badge_listening && input.mouse_clicked && !badge_hovered )
+					{
+						reg.listening_setting = 0;
+					}
 
-					dl.rect_filled( badge_rect.x, badge_rect.y, badge_rect.w, badge_rect.h, st.window_bg, xdraw::corner_radius{ badge_h * 0.5f } );
-					dl.rect( badge_rect.x, badge_rect.y, badge_rect.w, badge_rect.h, badge_col, xdraw::corner_radius{ badge_h * 0.5f }, 1.0f );
-					dl.text( badge_rect.x + badge_pad_x, badge_rect.y + badge_pad_y, badge_text, badge_col );
+					const auto bind_active_anim = anim::lerp( id + 50, s.value ? 1.0f : 0.0f, 8.0f );
+					const auto badge_hover_anim = anim::lerp( id + 51, ( badge_hovered || badge_listening ) ? 1.0f : 0.0f, 12.0f );
+
+					auto badge_bg = st.keybind_bg;
+					badge_bg.a = static_cast< std::uint8_t >( std::max( badge_bg.a, static_cast< std::uint8_t >( 40 ) ) );
+					badge_bg = lighten( badge_bg, 1.0f + badge_hover_anim * 0.3f );
+
+					auto badge_border = lerp( st.keybind_border, st.accent, std::max( bind_active_anim * 0.5f, badge_hover_anim * 0.8f ) );
+					badge_border.a = static_cast< std::uint8_t >( std::max( badge_border.a, static_cast< std::uint8_t >( 30 ) ) );
+
+					if ( badge_listening )
+					{
+						badge_border = lerp( badge_border, st.keybind_waiting, 0.6f );
+					}
+
+					const auto badge_r = st.keybind_rounding;
+
+					dl.rect_filled( badge_x, badge_y, badge_w, badge_h, badge_bg, xdraw::corner_radius{ badge_r } );
+					dl.rect( badge_x, badge_y, badge_w, badge_h, badge_border, xdraw::corner_radius{ badge_r } );
+
+					auto key_col = lerp( st.text_dim, st.accent, bind_active_anim );
+					key_col = lerp( key_col, st.text, badge_hover_anim );
+
+					if ( badge_listening )
+					{
+						key_col = st.keybind_waiting;
+					}
+
+					dl.text( badge_x + badge_pad_x, badge_y + badge_pad_y, badge_text, key_col );
 				}
 			}
 		}
@@ -3112,6 +3111,7 @@ namespace xui {
 
 		if ( hovered && input.mouse_clicked )
 		{
+			c.widget_claimed = true;
 			c.active_keybind = id;
 		}
 
@@ -3396,13 +3396,6 @@ namespace xui {
 						this->m_item_h
 					};
 
-					const auto is_first = ( i == 0 );
-					const auto is_last = ( i == item_count - 1 );
-					const auto ir_tl = is_first ? pr : 0.0f;
-					const auto ir_tr = is_first ? pr : 0.0f;
-					const auto ir_bl = is_last ? pr : 0.0f;
-					const auto ir_br = is_last ? pr : 0.0f;
-
 					constexpr auto max_delay{ 0.5f };
 					const auto item_count_f = static_cast< float >( item_count );
 					const auto item_delay = ( item_count_f > 1.0f ) ? ( max_delay * static_cast< float >( i ) / ( item_count_f - 1.0f ) ) : 0.0f;
@@ -3424,18 +3417,12 @@ namespace xui {
 					sa += ( ( is_selected ? 1.0f : 0.0f ) - sa ) * std::min( 12.0f * dt, 1.0f );
 
 					const auto se = ease::out_quad( sa );
-					if ( se > 0.01f )
-					{
-						auto sel = style.combo_popup_item_selected;
-						sel.a = static_cast< std::uint8_t >( sel.a * item_alpha * se );
-						dl.rect_filled( ir.x, ir.y + slide, ir.w, ir.h, sel, xdraw::corner_radius{ ir_tl, ir_tr, ir_br, ir_bl } );
-					}
 
 					if ( ha > 0.01f )
 					{
 						auto hov = style.combo_popup_item_hovered;
 						hov.a = static_cast< std::uint8_t >( hov.a * item_alpha * ha );
-						dl.rect_filled( ir.x, ir.y + slide, ir.w, ir.h, hov, xdraw::corner_radius{ ir_tl, ir_tr, ir_br, ir_bl } );
+						dl.rect_filled( ir.x, ir.y + slide, ir.w, ir.h, hov, xdraw::corner_radius{ pr } );
 					}
 
 					const auto [tw, th] = xdraw::measure_text( this->m_items[ i ] );
@@ -3506,11 +3493,11 @@ namespace xui {
 			static constexpr auto k_scrollbar_w{ 6.0f };
 			static constexpr auto k_scrollbar_pad{ 4.0f };
 
-			rect get_dropdown( ) const
-			{
-				const auto full_h = static_cast< float >( this->m_items.size( ) ) * this->m_item_h + this->m_item_pad * 2.0f;
-				return { this->m_anchor.x, this->m_anchor.bottom( ) + 4.0f, this->m_width, std::min( full_h, this->k_max_h ) };
-			}
+rect get_dropdown( ) const
+				{
+					const auto full_h = static_cast< float >( this->m_items.size( ) ) * this->m_item_h + this->m_item_pad * 2.0f;
+					return { this->m_anchor.x, this->m_anchor.bottom( ), this->m_width, std::min( full_h, this->k_max_h ) };
+				}
 
 			float max_scroll( ) const
 			{
@@ -3557,7 +3544,7 @@ namespace xui {
 			float m_scrollbar_drag_offset{};
 		};
 
-	} // the combo namespace
+	} 
 
 	bool combo( std::string_view label, int& current, const char* const items[ ], int count, float width )
 	{
@@ -3586,17 +3573,25 @@ namespace xui {
 
 		if ( width <= 0.0f )
 		{
-			width = layout::item_width( ) * 0.55f;
+			width = layout::item_width( );
 		}
 
 		const auto [lw, lh] = xdraw::measure_text( display );
 		const auto combo_h_val = s.combo_h;
-		const auto sp = s.item_spacing_y * 0.25f;
-		const auto total_h = lh + sp + combo_h_val;
+		const auto row_h = std::max( lh, combo_h_val );
 
-		const auto abs = layout::item( width, total_h, lh );
-		const auto button_y = abs.y + lh + sp;
-		const auto button_rect = rect{ abs.x, button_y, width, combo_h_val };
+		const auto abs = layout::item( width, row_h );
+		const auto row_center_y = abs.y + row_h * 0.5f;
+		const auto text_y = std::floorf( row_center_y - lh * 0.5f );
+		const auto button_y = std::floorf( row_center_y - combo_h_val * 0.5f );
+
+		const auto gap = s.item_spacing_x;
+		constexpr auto combo_w{ 110.0f };
+		const auto button_x = abs.x + width - combo_w;
+		const auto label_slot_w = std::max( 0.0f, width - combo_w - gap );
+		const auto label_text = lw <= label_slot_w ? display : truncate( display, label_slot_w );
+		const auto button_w = combo_w;
+		const auto button_rect = rect{ button_x, button_y, button_w, combo_h_val };
 
 		if ( is_open )
 		{
@@ -3612,6 +3607,7 @@ namespace xui {
 
 		if ( hovered && input.mouse_clicked && !c.overlay_blocking( ) )
 		{
+			c.widget_claimed = true;
 			if ( is_open )
 			{
 				overlays::close( id );
@@ -3626,7 +3622,7 @@ namespace xui {
 					items_vec.emplace_back( items[ i ] );
 				}
 
-				overlays::add( std::make_unique<combo_overlay>( id, button_rect, width, items_vec, &current, s.combo_item_h, s.window_pad_y * 0.5f ) );
+				overlays::add( std::make_unique<combo_overlay>( id, button_rect, button_rect.w, items_vec, &current, s.combo_item_h, s.window_pad_y * 0.5f ) );
 			}
 		}
 
@@ -3639,26 +3635,45 @@ namespace xui {
 
 		if ( !display.empty( ) )
 		{
-			// Draw label text without color dot
-			const auto label_text = truncate( display, width );
+			
 			const auto label_col = lerp( s.text_dim, s.text, hover_anim );
-			dl.text( abs.x, abs.y, label_text, label_col );
+			dl.text( abs.x, text_y, label_text, label_col );
 		}
 
 		dl.rect_filled( button_rect.x, button_rect.y, button_rect.w, button_rect.h, bg, xdraw::corner_radius{ r } );
 		dl.rect( button_rect.x, button_rect.y, button_rect.w, button_rect.h, border, xdraw::corner_radius{ r } );
 
+		// iOS 26: the chevron lives in its own rounded zone on the right side of
+		// the field -- visually a distinct control area, but part of the component.
+		constexpr auto zone_inset{ 4.0f };
+		const auto zone_w = std::min( 30.0f, combo_h_val - zone_inset * 2.0f );
+		const auto zone_x = button_rect.x + button_rect.w - zone_w - zone_inset;
+		const auto zone_y = button_rect.y + ( combo_h_val - zone_w ) * 0.5f;
+		const auto zone_r = zone_w * 0.4f;
+		const auto zone_rect = rect{ zone_x, zone_y, zone_w, zone_w };
+
+		const auto zone_hovered = input.in_rect( zone_rect ) && !c.overlay_blocking( );
+		const auto zone_anim = anim::lerp( id ^ 0x5f5f5f5f, zone_hovered ? 1.0f : 0.0f, 16.0f );
+
+		const auto zone_bg = lerp( xdraw::color{ 255, 255, 255, 16 }, xdraw::color{ 255, 255, 255, 40 }, zone_anim );
+		const auto zone_border_col = lerp( xdraw::color{ 255, 255, 255, 24 }, xdraw::color{ 255, 255, 255, 52 }, zone_anim );
+
+		dl.rect_filled( zone_rect.x, zone_rect.y, zone_rect.w, zone_rect.h, zone_bg, xdraw::corner_radius{ zone_r } );
+		dl.rect( zone_rect.x, zone_rect.y, zone_rect.w, zone_rect.h, zone_border_col, xdraw::corner_radius{ zone_r } );
+
 		const auto current_text = ( current >= 0 && current < count ) ? items[ current ] : "";
-		const auto [tw, th] = xdraw::measure_text( current_text );
+		const auto [tw2, th2] = xdraw::measure_text( current_text );
+		const auto max_w = button_rect.w - zone_w - zone_inset * 2.0f - s.frame_pad_x * 2.0f;
+		const auto shown = tw2 <= max_w ? current_text : truncate( current_text, max_w );
 		const auto combo_text_col = lerp( s.text_dim, s.text, hover_anim );
-		dl.text( button_rect.x + s.frame_pad_x, button_rect.y + ( combo_h_val - th ) * 0.5f, current_text, combo_text_col );
+		dl.text( button_rect.x + s.frame_pad_x, button_rect.y + ( combo_h_val - th2 ) * 0.5f, shown, combo_text_col );
 
 		constexpr auto arrow_size{ 6.0f };
 		constexpr auto arrow_h_val{ 3.5f };
 
-		const auto ax = button_rect.right( ) - arrow_size - s.frame_pad_x - 4.0f;
-		const auto ay = button_rect.y + ( combo_h_val - arrow_h_val ) * 0.5f;
-		const auto arrow_col = lerp( s.combo_arrow, lighten( s.combo_arrow, 1.3f ), hover_anim );
+		const auto ax = zone_x + ( zone_w - arrow_size ) * 0.5f;
+		const auto ay = zone_y + ( zone_w - arrow_h_val ) * 0.5f;
+		const auto arrow_col = lerp( s.combo_arrow, lighten( s.combo_arrow, 1.5f ), zone_anim );
 
 		if ( is_open )
 		{
@@ -3829,7 +3844,7 @@ namespace xui {
 					const auto cx = ir.x + 4.0f;
 					const auto cy = ir.y + ( this->m_item_h - check_size ) * 0.5f + slide;
 
-					//draw_minimal_checkbox( dl, cx, cy, check_size, ce, style, item_alpha );
+					draw_minimal_checkbox( dl, cx, cy, check_size, ce, style, item_alpha );
 
 					auto text_col = style.text;
 					if ( ce > 0.5f )
@@ -3841,7 +3856,7 @@ namespace xui {
 					text_col.a = static_cast< std::uint8_t >( text_col.a * item_alpha );
 
 					const auto [tw, th] = xdraw::measure_text( this->m_items[ i ] );
-					dl.text( ir.x + check_size + 10.0f, ir.y + ( this->m_item_h - th ) * 0.5f + slide, this->m_items[ i ], text_col );
+					dl.text( ir.x + check_size * 1.6f + 10.0f, ir.y + ( this->m_item_h - th ) * 0.5f + slide, this->m_items[ i ], text_col );
 				}
 
 				const auto ms = this->max_scroll( );
@@ -3939,7 +3954,7 @@ namespace xui {
 			mutable bool m_display_dirty{ true };
 		};
 
-	} // the multicombo namespace
+	} 
 
 	bool multicombo( std::string_view label, bool* selected, const char* const items[ ], int count, float width )
 	{
@@ -3968,17 +3983,25 @@ namespace xui {
 
 		if ( width <= 0.0f )
 		{
-			width = layout::item_width( ) * 0.55f;
+			width = layout::item_width( );
 		}
 
 		const auto [lw, lh] = xdraw::measure_text( display );
 		const auto combo_h_val = s.combo_h;
-		const auto sp = s.item_spacing_y * 0.25f;
-		const auto total_h = lh + sp + combo_h_val;
+		const auto row_h = std::max( lh, combo_h_val );
 
-		const auto abs = layout::item( width, total_h, lh );
-		const auto button_y = abs.y + lh + sp;
-		const auto button_rect = rect{ abs.x, button_y, width, combo_h_val };
+		const auto abs = layout::item( width, row_h );
+		const auto row_center_y = abs.y + row_h * 0.5f;
+		const auto text_y = std::floorf( row_center_y - lh * 0.5f );
+		const auto button_y = std::floorf( row_center_y - combo_h_val * 0.5f );
+
+		const auto gap = s.item_spacing_x;
+		constexpr auto combo_w{ 110.0f };
+		const auto button_x = abs.x + width - combo_w;
+		const auto label_slot_w = std::max( 0.0f, width - combo_w - gap );
+		const auto label_text = lw <= label_slot_w ? display : truncate( display, label_slot_w );
+		const auto button_w = combo_w;
+		const auto button_rect = rect{ button_x, button_y, button_w, combo_h_val };
 
 		if ( is_open )
 		{
@@ -3994,13 +4017,14 @@ namespace xui {
 
 		if ( hovered && input.mouse_clicked && !c.overlay_blocking( ) )
 		{
+			c.widget_claimed = true;
 			if ( is_open )
 			{
 				overlays::close( id );
 			}
 			else
 			{
-				overlays::add( std::make_unique<multicombo_overlay>( id, button_rect, width, items, count, selected, s.combo_item_h, s.window_pad_y * 0.5f ) );
+				overlays::add( std::make_unique<multicombo_overlay>( id, button_rect, button_rect.w, items, count, selected, s.combo_item_h, s.window_pad_y * 0.5f ) );
 			}
 		}
 
@@ -4014,7 +4038,7 @@ namespace xui {
 
 		if ( !display.empty( ) )
 		{
-			dl.text( abs.x, abs.y, truncate( display, width ), mc_text_col );
+			dl.text( abs.x, text_y, label_text, mc_text_col );
 		}
 
 		dl.rect_filled( button_rect.x, button_rect.y, button_rect.w, button_rect.h, bg, xdraw::corner_radius{ r } );
@@ -4047,7 +4071,7 @@ namespace xui {
 
 		constexpr auto arrow_size{ 6.0f };
 		const auto arrow_pad = s.frame_pad_x + 4.0f + arrow_size + 8.0f;
-		const auto max_text_w = width - s.frame_pad_x - arrow_pad;
+		const auto max_text_w = button_rect.w - s.frame_pad_x - arrow_pad;
 		const auto text_trunc = truncate( display_text, max_text_w );
 		const auto [dtw, dth] = xdraw::measure_text( text_trunc );
 
@@ -4569,7 +4593,7 @@ namespace xui {
 			std::array<float, k_item_count> m_item_anims{};
 		};
 
-	} // the color_picker namespace
+	} 
 
 	bool color_picker( std::string_view label, xdraw::color& col, float width, bool show_alpha )
 	{
@@ -4670,6 +4694,7 @@ namespace xui {
 
 		if ( hovered && input.mouse_clicked )
 		{
+			c.widget_claimed = true;
 			if ( is_open )
 			{
 				overlays::close( id );
@@ -4754,7 +4779,7 @@ namespace xui {
 			return s;
 		}
 
-	} // the text_input namespace
+	} 
 
 	bool text_input( std::string_view label, std::string& buf, std::size_t max_len, std::string_view hint )
 	{
@@ -4786,6 +4811,7 @@ namespace xui {
 
 		if ( clicked )
 		{
+			c.widget_claimed = true;
 			c.active_text_input = id;
 			st.key_was_down.clear( );
 			st.key_repeat_timers.clear( );
@@ -5170,4 +5196,6 @@ namespace xui {
 		return changed;
 	}
 
-} // namespace xui
+} 
+
+

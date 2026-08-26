@@ -1,4 +1,5 @@
-#include <pch/pch.hpp>
+#include <external/xorstr.hpp>
+
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <utilities/logging/logging.hpp>
@@ -33,7 +34,7 @@ namespace features::misc {
 			other::s_name_change_pending = false;
 		}
 
-	} // namespace
+	} 
 
 	void other::on_round_start( )
 	{
@@ -48,7 +49,7 @@ namespace features::misc {
 		}
 
 		const auto attacker_key = cstypes::event_hash{ 0, "attacker" };
-		const auto attacker = memory::call<std::uintptr_t>( PATTERN (patterns::game_event_get_controller), event, &attacker_key );
+		
 	}
 
 	void other::on_frame_stage_notify( )
@@ -56,6 +57,7 @@ namespace features::misc {
 		this->do_player_alpha_changing( );
 		this->do_reveal_radar( );
 		this->do_name_changing( );
+		this->do_viewmodel_adjust( );
 	}
 
 	void other::do_reveal_radar( ) const
@@ -248,7 +250,7 @@ namespace features::misc {
 		}
 		else if ( this->m_name_changer_controller != local.controller )
 		{
-			// Keep the captured real name across map loads, where the controller may be recreated.
+			
 			this->m_name_changer_controller = local.controller;
 			this->m_last_sent_name.clear( );
 		}
@@ -261,36 +263,52 @@ namespace features::misc {
 		std::string display_name = base_name;
 		if ( cfg.clantag.value )
 		{
-			constexpr std::string_view tag{ "swift.fly " }; // Добавляем пробел в конец для плавного цикла
-			constexpr auto ticks_per_step{ 8 }; // Скорость анимации
+			constexpr std::string_view tag{ "memesense.gg" };
+			constexpr auto ticks_per_step{ 8 };
+			constexpr auto type_steps{ static_cast< int >( tag.size( ) ) };
+			constexpr auto hold_steps{ 16 };
+			constexpr auto dissolve_steps{ static_cast< int >( tag.size( ) ) };
+			constexpr auto blank_steps{ 2 };
+			constexpr auto total_steps{ type_steps + hold_steps + dissolve_steps + blank_steps };
 
 			const auto global_vars = memory::safe_read<std::uintptr_t>( addresses::globals::global_vars ).value_or( 0 );
 			const auto current_tick = global_vars
 				? memory::safe_read<int>( global_vars + 0x44 ).value_or( 0 )
 				: 0;
-			
-			// Вычисляем смещение для слайд-эффекта
-			const auto offset = ( current_tick / ticks_per_step ) % static_cast<int>( tag.size( ) );
-			
-			// Создаём слайдящийся текст путём ротации строки
-			std::string sliding_tag;
-			sliding_tag.reserve( tag.size( ) );
-			for ( std::size_t i = 0; i < tag.size( ); ++i )
+
+			const auto cycle_step = ( current_tick / ticks_per_step ) % total_steps;
+
+			std::string tag_anim;
+			tag_anim.reserve( tag.size( ) );
+
+			if ( cycle_step < type_steps )
 			{
-				sliding_tag += tag[ ( offset + i ) % tag.size( ) ];
+				// type-in: letters appear left to right
+				const auto typed = cycle_step;
+				for ( std::size_t i = 0; i < static_cast< std::size_t >( typed ); ++i )
+				{
+					tag_anim += tag[ i ];
+				}
 			}
-			
-			// Убираем пробелы в конце для чистого отображения
-			while ( !sliding_tag.empty( ) && sliding_tag.back( ) == ' ' )
+			else if ( cycle_step < type_steps + hold_steps )
 			{
-				sliding_tag.pop_back( );
+				// hold the full tag
+				tag_anim = tag;
 			}
-			
-			if ( !sliding_tag.empty( ) )
+			else if ( cycle_step < type_steps + hold_steps + dissolve_steps )
 			{
-				display_name.reserve( base_name.size( ) + sliding_tag.size( ) + 3 );
-				display_name = sliding_tag;
-				display_name += " | ";
+				// un-type: letters drop off right to left
+				const auto dissolved = cycle_step - ( type_steps + hold_steps );
+				const auto remaining = tag.size( ) - static_cast< std::size_t >( dissolved );
+				tag_anim = tag.substr( 0, remaining );
+			}
+			// else: brief blank pause before the next cycle
+
+			if ( !tag_anim.empty( ) )
+			{
+				display_name.reserve( tag_anim.size( ) + base_name.size( ) + 3 );
+				display_name = tag_anim;
+				display_name += " ";
 				display_name += base_name;
 			}
 		}
@@ -332,4 +350,46 @@ namespace features::misc {
 		}
 	}
 
-} // namespace features::misc
+	void other::do_viewmodel_adjust( )
+	{
+		const auto& cfg = settings::g_misc.m_viewmodel_adjust;
+		if ( !cfg.enabled.value )
+		{
+			this->m_cached_vm_x = std::numeric_limits<float>::quiet_NaN( );
+			this->m_cached_vm_y = std::numeric_limits<float>::quiet_NaN( );
+			this->m_cached_vm_z = std::numeric_limits<float>::quiet_NaN( );
+			this->m_cached_vm_fov = std::numeric_limits<float>::quiet_NaN( );
+			return;
+		}
+
+		const auto set_float_cvar = [ ]( std::uint32_t hash, float value )
+			{
+			addresses::globals::cvar->find(hash)->m_value.fl = value;
+			};
+
+		if ( cfg.offset_x.value != this->m_cached_vm_x )
+		{
+			set_float_cvar( "viewmodel_offset_x"_hash, cfg.offset_x.value );
+			this->m_cached_vm_x = cfg.offset_x.value;
+		}
+
+		if ( cfg.offset_y.value != this->m_cached_vm_y )
+		{
+			set_float_cvar( "viewmodel_offset_y"_hash, cfg.offset_y.value );
+			this->m_cached_vm_y = cfg.offset_y.value;
+		}
+
+		if ( cfg.offset_z.value != this->m_cached_vm_z )
+		{
+			set_float_cvar( "viewmodel_offset_z"_hash, cfg.offset_z.value );
+			this->m_cached_vm_z = cfg.offset_z.value;
+		}
+
+		if ( cfg.fov.value != this->m_cached_vm_fov )
+		{
+			set_float_cvar( "viewmodel_fov"_hash, cfg.fov.value );
+			this->m_cached_vm_fov = cfg.fov.value;
+		}
+	}
+
+} 

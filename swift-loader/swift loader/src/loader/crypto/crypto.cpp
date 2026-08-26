@@ -4,9 +4,26 @@
 #pragma comment(lib, "bcrypt.lib")
 #include <cstring>
 #include <algorithm>
+#include "VMProtectSDK.h"
 
 namespace crypto
 {
+
+void xor_layer( std::vector<uint8_t>& data, const std::string& key )
+{
+    if ( key.empty() ) return;
+    const size_t klen = key.size();
+    for ( size_t i = 0; i < data.size(); ++i )
+        data[ i ] ^= static_cast<uint8_t>( key[ i % klen ] );
+}
+
+void secure_zero( void* ptr, size_t len )
+{
+    if ( ptr && len )
+    {
+        RtlSecureZeroMemory( ptr, len );
+    }
+}
 
 // ─── SHA-256 ─────────────────────────────────────────────────────────────────
 
@@ -34,38 +51,6 @@ std::array<uint8_t, SHA256_SIZE> sha256( const void* data, size_t len )
     if ( hash ) BCryptDestroyHash( hash );
     if ( alg  ) BCryptCloseAlgorithmProvider( alg, 0 );
     return result;
-}
-
-// ─── Key / IV derivation ─────────────────────────────────────────────────────
-
-Key derive_key( const std::string& hwid, const std::string& salt )
-{
-    const std::string input = salt + hwid;
-    const auto hash = sha256( input.c_str(), input.size() );
-    Key key{};
-    memcpy( key.data(), hash.data(), AES_KEY_SIZE );
-    return key;
-}
-
-IV derive_iv( const std::string& hwid, const std::string& salt )
-{
-    const std::string input = salt + hwid;
-    const auto hash = sha256( input.c_str(), input.size() );
-    IV iv{};
-    memcpy( iv.data(), hash.data(), AES_IV_SIZE );
-    return iv;
-}
-
-// ─── XOR obfuscation layer ───────────────────────────────────────────────────
-// Cycles through the key string byte-by-byte. Used as a cheap transport-layer
-// scrambler before the AES decrypt pass.
-
-void xor_layer( std::vector<uint8_t>& data, const std::string& key )
-{
-    if ( key.empty() ) return;
-    const size_t klen = key.size();
-    for ( size_t i = 0; i < data.size(); ++i )
-        data[ i ] ^= static_cast<uint8_t>( key[ i % klen ] );
 }
 
 // ─── AES-256-CBC decrypt ─────────────────────────────────────────────────────
@@ -125,6 +110,48 @@ std::vector<uint8_t> decrypt( const std::vector<uint8_t>& cipher,
     if ( hkey ) BCryptDestroyKey( hkey );
     if ( alg  ) BCryptCloseAlgorithmProvider( alg, 0 );
     return plain;
+}
+
+std::vector<uint8_t> decrypt_swift_payload( const std::vector<uint8_t>& encrypted,
+                                             const std::string& key,
+                                             const std::string& hwid,
+                                             const std::string& token,
+                                             const std::string& cnonce,
+                                             const std::string& snonce )
+{
+    VMProtectBeginUltra("decrypt_swift_payload");
+    if ( encrypted.empty() || token.empty() ) return {};
+
+    // 1. Derive AES key: SHA-256("swift_key_" . hwid . "_" . key . "_" . token . "_" . cnonce . "_" . snonce)
+    std::string key_seed = "swift_key_" + hwid + "_" + key + "_" + token + "_" + cnonce + "_" + snonce;
+    auto key_bytes = sha256(key_seed.data(), key_seed.size());
+
+    Key aes_key{};
+    memcpy(aes_key.data(), key_bytes.data(), AES_KEY_SIZE);
+
+    // 2. Derive AES IV: first 16 bytes of SHA-256("swift_iv_" . snonce . "_" . cnonce . "_" . hwid)
+    std::string iv_seed = "swift_iv_" + snonce + "_" + cnonce + "_" + hwid;
+    auto iv_bytes = sha256(iv_seed.data(), iv_seed.size());
+
+    IV aes_iv{};
+    memcpy(aes_iv.data(), iv_bytes.data(), AES_IV_SIZE);
+
+    // 3. AES-256-CBC Decrypt
+    std::vector<uint8_t> xored = decrypt(encrypted, aes_key, aes_iv);
+    if (xored.empty()) {
+        VMProtectEnd();
+        return {};
+    }
+
+    // 4. Undo XOR layer using (hwid . token)
+    std::string xor_seed = hwid + token;
+    xor_layer(xored, xor_seed);
+
+    secure_zero(aes_key.data(), aes_key.size());
+    secure_zero(aes_iv.data(), aes_iv.size());
+
+    VMProtectEnd();
+    return xored;
 }
 
 } // namespace crypto

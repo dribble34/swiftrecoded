@@ -287,7 +287,7 @@ void restore_steam_identity()
     memset( g_orig_computer_name, 0, sizeof g_orig_computer_name );
 }
 
-bool launch()
+bool launch(const wchar_t* args)
 {
     HANDLE steam_key = open_reg_key(
         L"\\Registry\\Machine\\SOFTWARE\\Valve\\Steam",
@@ -317,6 +317,15 @@ bool launch()
 
     UNICODE_STRING_NT img_path{};
     init_us( img_path, nt_path );
+
+    wchar_t cmd_line[1024]{};
+    if (args && args[0]) {
+        swprintf_s(cmd_line, L"\"%s\" %s", exe_path, args);
+    } else {
+        swprintf_s(cmd_line, L"\"%s\"", exe_path);
+    }
+    UNICODE_STRING_NT cmd_us{};
+    init_us( cmd_us, cmd_line );
 
     using RtlCreateProcessParametersEx_t = NTSTATUS(NTAPI*)(
         PVOID*, UNICODE_STRING_NT*, UNICODE_STRING_NT*,
@@ -351,7 +360,7 @@ bool launch()
     init_us( img2, nt_path );
 
     PVOID params = nullptr;
-    if ( fn_cpp( &params, &img2, nullptr, nullptr, nullptr,
+    if ( fn_cpp( &params, &img2, nullptr, nullptr, &cmd_us,
                  nullptr, nullptr, nullptr, nullptr, nullptr, 1 ) < 0 )
         return false;
 

@@ -266,7 +266,7 @@ void App::screenFail(const Rect& panel, float alpha, float dt) {
 //  screenList / screenStatus (original, untouched)
 // ─────────────────────────────────────────────────────────────────────────────
 void App::screenList(const Rect& panel, float alpha, float dt) {
-    if (alpha <= 0.004f) return;
+    if (alpha <= 0.8f) return;
     Rect row(panel.x + 16.f, panel.y + kBarH + 18.f, panel.w - 32.f, 52.f);
     if (gameRow("game.cs2", row, &m_assets.cs2Icon, "Counter-Strike 2")) startDownload();
 }
@@ -307,6 +307,9 @@ static DownloadState* g_dlState = nullptr;
 static std::string    g_dlKey;
 
 void App::startDownload() {
+    DlStatus currentStatus = (DlStatus)InterlockedCompareExchange(&m_dlState.status, 0, 0);
+    if (currentStatus == DlStatus::Working) return; // Prevent spawning multiple injection threads!
+
     m_dlState   = {};
     g_dlState   = &m_dlState;
     g_dlKey     = m_key;

@@ -3,6 +3,7 @@
 #include <cstring>
 #include <algorithm>
 #include <vector>
+#include <fstream>
 #include "../protection/syscalls.hpp"
 #include "../obfuscation.hpp"
 #include "mapper.hpp"
@@ -58,18 +59,7 @@ static bool resolve_imports( uint8_t* img )
         uintptr_t mod = peb_import::find_module( peb_import::fnv1a_w( wname ) );
         if ( !mod )
         {
-            using LdrLoadDll_t = NTSTATUS(NTAPI*)( PWSTR, ULONG*, UNICODE_STRING_NT*, HMODULE* );
-            const auto ldr = peb_import::get<LdrLoadDll_t>( MOD_HASH("ntdll.dll"), FN_HASH("LdrLoadDll") );
-            if ( ldr )
-            {
-                UNICODE_STRING_NT us{
-                    static_cast<USHORT>( wcslen(wname) * 2 ),
-                    static_cast<USHORT>( wcslen(wname) * 2 + 2 ),
-                    wname };
-                HMODULE h = nullptr;
-                ldr( nullptr, nullptr, &us, &h );
-                mod = reinterpret_cast<uintptr_t>( h );
-            }
+            mod = reinterpret_cast<uintptr_t>( LoadLibraryA( mod_name ) );
         }
         if ( !mod ) continue;
 
@@ -127,33 +117,50 @@ static bool call_remote_entry( HANDLE proc, uintptr_t base, DWORD ep_rva )
 
     // Shellcode: call entry( base, DLL_PROCESS_ATTACH, 0 )
     // x64 calling convention: RCX=arg1, RDX=arg2, R8=arg3
+    // Correct x64 calling convention stub with 16-byte aligned stack (sub rsp, 0x28):
+    //   48 83 EC 28       = sub rsp, 0x28 (reserve shadow space + align 16)
     //   48 B9 [8 bytes]  = mov rcx, base
     //   BA 01 00 00 00   = mov edx, 1  (DLL_PROCESS_ATTACH)
     //   45 33 C0         = xor r8d, r8d
     //   48 B8 [8 bytes]  = mov rax, entry_addr
     //   FF D0            = call rax
+    //   48 83 C4 28       = add rsp, 0x28
     //   C3               = ret
-    uint8_t stub[32]{};
+    uint8_t stub[48]{};
     const uintptr_t entry_addr = base + ep_rva;
 
-    stub[0]  = 0x48; stub[1]  = 0xB9;
-    memcpy( &stub[2], &base, 8 );
-    stub[10] = 0xBA;
-    stub[11] = 0x01; stub[12] = 0x00; stub[13] = 0x00; stub[14] = 0x00;
-    stub[15] = 0x45; stub[16] = 0x33; stub[17] = 0xC0;
-    stub[18] = 0x48; stub[19] = 0xB8;
-    memcpy( &stub[20], &entry_addr, 8 );
-    stub[28] = 0xFF; stub[29] = 0xD0;
-    stub[30] = 0xC3;
+    int i = 0;
+    stub[i++] = 0x48; stub[i++] = 0x83; stub[i++] = 0xEC; stub[i++] = 0x28; // sub rsp, 0x28
+
+    stub[i++] = 0x48; stub[i++] = 0xB9; // mov rcx, base
+    memcpy(&stub[i], &base, 8); i += 8;
+
+    stub[i++] = 0xBA; stub[i++] = 0x01; stub[i++] = 0x00; stub[i++] = 0x00; stub[i++] = 0x00; // mov edx, 1
+    stub[i++] = 0x45; stub[i++] = 0x33; stub[i++] = 0xC0; // xor r8d, r8d
+
+    stub[i++] = 0x48; stub[i++] = 0xB8; // mov rax, entry_addr
+    memcpy(&stub[i], &entry_addr, 8); i += 8;
+
+    stub[i++] = 0xFF; stub[i++] = 0xD0; // call rax
+
+    stub[i++] = 0x48; stub[i++] = 0x83; stub[i++] = 0xC4; stub[i++] = 0x28; // add rsp, 0x28
+    stub[i++] = 0xC3; // ret
 
     void*  stub_mem = nullptr;
     SIZE_T stub_sz  = sizeof stub;
     if ( syscalls::allocate_virtual_memory( proc, &stub_mem, 0, &stub_sz,
              MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE ) < 0 || !stub_mem )
-        return false;
+    {
+        stub_mem = VirtualAllocEx( proc, nullptr, sizeof stub, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE );
+    }
+
+    if ( !stub_mem ) return false;
 
     SIZE_T wr = 0;
-    syscalls::write_virtual_memory( proc, stub_mem, stub, sizeof stub, &wr );
+    if ( syscalls::write_virtual_memory( proc, stub_mem, stub, sizeof stub, &wr ) < 0 )
+    {
+        WriteProcessMemory( proc, stub_mem, stub, sizeof stub, &wr );
+    }
 
     HANDLE               th = nullptr;
     OBJECT_ATTRIBUTES_NT oa{};
@@ -163,9 +170,16 @@ static bool call_remote_entry( HANDLE proc, uintptr_t base, DWORD ep_rva )
         stub_mem, nullptr,
         0, 0, 0, 0, nullptr );
 
+    if ( !th )
+    {
+        th = CreateRemoteThread( proc, nullptr, 0,
+            reinterpret_cast<LPTHREAD_START_ROUTINE>( stub_mem ), nullptr, 0, nullptr );
+    }
+
     if ( th )
     {
-        syscalls::close( th );
+        WaitForSingleObject( th, 10000 );
+        CloseHandle( th );
         return true;
     }
     return false;
@@ -184,7 +198,11 @@ uintptr_t map_remote( HANDLE proc, const std::vector<uint8_t>& pe )
     SIZE_T image_size  = opt.SizeOfImage;
     if ( syscalls::allocate_virtual_memory( proc, &remote_base, 0, &image_size,
              MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE ) < 0 || !remote_base )
-        return 0;
+    {
+        remote_base = VirtualAllocEx( proc, nullptr, opt.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE );
+    }
+
+    if ( !remote_base ) return 0;
 
     std::vector<uint8_t> local_img( opt.SizeOfImage, 0 );
     memcpy( local_img.data(), pe.data(), opt.SizeOfHeaders );
@@ -206,14 +224,32 @@ uintptr_t map_remote( HANDLE proc, const std::vector<uint8_t>& pe )
     SIZE_T written = 0;
     if ( syscalls::write_virtual_memory( proc, remote_base,
              local_img.data(), local_img.size(), &written ) < 0 )
-        return 0;
+    {
+        if ( !WriteProcessMemory( proc, remote_base, local_img.data(), local_img.size(), &written ) )
+            return 0;
+    }
 
     auto* remote_nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(
         local_img.data() + dos->e_lfanew );
-    set_section_perms( proc, reinterpret_cast<uint8_t*>( remote_base ), remote_nt );
+    
+    // Write detailed log for injection debugging
+    std::ofstream diag("swift_injection.log", std::ios::app);
+    if (diag.is_open()) {
+        diag << "[MAPPER] Memory allocated at: 0x" << std::hex << reinterpret_cast<uintptr_t>(remote_base)
+             << " Size: 0x" << opt.SizeOfImage << std::dec << "\n";
+        diag << "[MAPPER] Relocations and Imports resolved successfully.\n";
+        diag << "[MAPPER] Calling DllMain entry point at RVA: 0x" << std::hex << remote_nt->OptionalHeader.AddressOfEntryPoint << std::dec << "\n";
+    }
+
+    // Keep memory PAGE_EXECUTE_READWRITE for full hook and trampoline permissions
+    // set_section_perms( proc, reinterpret_cast<uint8_t*>( remote_base ), remote_nt );
 
     const DWORD ep_rva = remote_nt->OptionalHeader.AddressOfEntryPoint;
-    call_remote_entry( proc, reinterpret_cast<uintptr_t>( remote_base ), ep_rva );
+    bool called = call_remote_entry( proc, reinterpret_cast<uintptr_t>( remote_base ), ep_rva );
+
+    if (diag.is_open()) {
+        diag << "[MAPPER] call_remote_entry returned: " << (called ? "SUCCESS" : "FAILED") << "\n";
+    }
 
     return reinterpret_cast<uintptr_t>( remote_base );
 }

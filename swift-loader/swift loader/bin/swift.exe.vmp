@@ -1,4 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <Document Version="2">
-    <Protection InputFileName="swift.exe" Options="466688" VMCodeSectionName=".???" VMComplexity="40" OutputFileName="swiftv2.exe" />
+    <Protection InputFileName="swift.exe" Options="466688" VMCodeSectionName=".???" VMComplexity="40" OutputFileName="swiftv2.exe">
+        <Messages>
+            <Message Id="0">nigga u aint serious trying to crack a 10eur cheat is wild</Message>
+            <Message Id="1">nigga u aint serious trying to crack a 10eur cheat is wild</Message>
+            <Message Id="2">cracked or corrupted gg wp</Message>
+        </Messages>
+        <Procedures>
+            <Procedure MapAddress="on_inject(bool,class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,class std::allocator&lt;char&gt; &gt; const &amp;,class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,class std::allocator&lt;char&gt; &gt; const &amp;,class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,class std::allocator&lt;char&gt; &gt; &amp;)" Options="0" CompilationType="2" Complexity="100" />
+            <Procedure MapAddress="network::authenticate(class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,class std::allocator&lt;char&gt; &gt; const &amp;,class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,class std::allocator&lt;char&gt; &gt; const &amp;)" Options="0" CompilationType="2" Complexity="100" />
+            <Procedure MapAddress="network::download_payload(class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,class std::allocator&lt;char&gt; &gt; const &amp;,class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,class std::allocator&lt;char&gt; &gt; const &amp;)" Options="0" CompilationType="2" Complexity="100" />
+            <Procedure MapAddress="crypto::decrypt_session_payload(class std::vector&lt;unsigned char,class std::allocator&lt;unsigned char&gt; &gt; const &amp;,class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,class std::allocator&lt;char&gt; &gt; const &amp;)" Options="0" CompilationType="2" Complexity="100" />
+        </Procedures>
+    </Protection>
 </Document>

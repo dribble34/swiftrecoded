@@ -209,9 +209,8 @@ MapResult manual_map_inject(const std::vector<uint8_t>& pe_data) {
         return res;
     }
 
-    // Additional safety delay: Wait 60 seconds as requested by the user
-    log_diagnostic("INFO: Engine modules detected. Waiting 60 seconds for full game initialization before injecting...");
-    Sleep(60000);
+    // Wait 2 seconds for engine stabilization
+    Sleep(2000);
 
     HANDLE hProc = OpenProcess(
         PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ |

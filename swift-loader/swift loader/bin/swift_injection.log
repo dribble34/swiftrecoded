@@ -1,0 +1,61 @@
+[MAPPER] Memory allocated at: 0x2602d000000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[MAPPER] Memory allocated at: 0x2a1e2f00000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[MAPPER] Memory allocated at: 0x1d78ef00000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[MAPPER] Memory allocated at: 0x23edaf00000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[MAPPER] Memory allocated at: 0x1b31ca90000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[MAPPER] Memory allocated at: 0x24d6ba80000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[MAPPER] Memory allocated at: 0x27d00700000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[MAPPER] Memory allocated at: 0x226d3b00000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[MAPPER] Memory allocated at: 0x15b13b40000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[LOADER] CS2 process found (PID 13984). Waiting for engine modules (client/engine2/server)...
+[LOADER] Engine modules loaded. Starting 60-second stabilization timer...
+[LOADER] Waiting for CS2 main menu: 10/60s elapsed.
+[LOADER] Waiting for CS2 main menu: 20/60s elapsed.
+[LOADER] Waiting for CS2 main menu: 30/60s elapsed.
+[LOADER] Waiting for CS2 main menu: 40/60s elapsed.
+[LOADER] Waiting for CS2 main menu: 50/60s elapsed.
+[LOADER] Waiting for CS2 main menu: 60/60s elapsed.
+[LOADER] 60 seconds elapsed. Proceeding to VAC patch & manual map...
+[MAPPER] Memory allocated at: 0x21463d00000 Size: 0x7ce000
+[MAPPER] Relocations and Imports resolved successfully.
+[MAPPER] Calling DllMain entry point at RVA: 0x1795e0
+[MAPPER] call_remote_entry returned: SUCCESS
+[LOADER] CS2 process found (PID 17460). Waiting for engine modules (client/engine2/server)...
+[LOADER] Engine modules loaded. Starting 60-second stabilization timer...
+[LOADER] Waiting for CS2 main menu: 10/60s elapsed.
+[LOADER] Waiting for CS2 main menu: 20/60s elapsed.
+[LOADER] CS2 process found (PID 24716). Waiting for client.dll...
+[LOADER] Engine modules loaded. Starting 60-second stabilization timer...
+[LOADER] Waiting for CS2 main menu: 10/60s elapsed.
+[LOADER] Waiting for CS2 main menu: 20/60s elapsed.
+[LOADER] Waiting for CS2 main menu: 30/60s elapsed.
+[LOADER] CS2 process opened (PID 27820). Starting 60-second stabilization timer...
+[LOADER] Waiting for CS2 main menu: 10/60s elapsed.
+[LOADER] Waiting for CS2 main menu: 20/60s elapsed.

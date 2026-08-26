@@ -144,17 +144,11 @@ static bool on_login( const std::string& user, const std::string& pass, std::str
 #endif
 }
 
-static bool on_inject( bool hwid_spoof, std::string& status )
+static bool on_inject( bool hwid_spoof, const std::string& token, const std::string& session_key_hex, std::string& status )
 {
     status = "Collecting hardware ID";
     const std::string hw       = hwid::get();
     const std::string hw_short = hwid::get_short();
-
-#ifndef _DEBUG
-    status = "Authenticating";
-    const std::string token = network::authenticate( CFG_HOST, hw_short );
-    if ( token.empty() ) { status = "Authentication failed"; return false; }
-#endif
 
     status = "Killing Steam";
     steam::kill_all();
@@ -204,7 +198,6 @@ static bool on_inject( bool hwid_spoof, std::string& status )
 
 #ifdef _DEBUG
     status = "Loading cheat from disk";
-    // TODO: load path from config or same dir as swift.exe
     std::vector<uint8_t> cheat_data;
     {
         auto* peb    = reinterpret_cast<uint8_t*>( __readgsqword( 0x60 ) );
@@ -263,15 +256,11 @@ static bool on_inject( bool hwid_spoof, std::string& status )
     if ( cheat_data.empty() ) { status = "swift.bin not found next to swift.exe"; return false; }
 #else
     status = "Downloading cheat";
-    auto dl = network::download( CFG_HOST, CFG_DLL_PATH, CFG_PORT );
-    if ( !dl.ok || dl.data.empty() ) { status = "Download failed"; return false; }
+    auto dl = network::download_payload( token, hw_short );
+    if ( !dl.success || dl.encrypted_data.empty() ) { status = dl.error.empty() ? "Download failed" : dl.error; return false; }
 
     status = "Decrypting";
-    std::vector<uint8_t> cheat_data = dl.data;
-    crypto::xor_layer( cheat_data, hw );
-    const crypto::Key key = crypto::derive_key( hw, CFG_KEY_SALT );
-    const crypto::IV  iv  = crypto::derive_iv( hw, CFG_IV_SALT );
-    cheat_data = crypto::decrypt( cheat_data, key, iv );
+    std::vector<uint8_t> cheat_data = crypto::decrypt_session_payload( dl.encrypted_data, session_key_hex );
     if ( cheat_data.empty() ) { status = "Decryption failed"; return false; }
     if ( !hash_ok( cheat_data ) ) { status = "Hash mismatch"; return false; }
 #endif
@@ -317,7 +306,7 @@ static bool on_inject( bool hwid_spoof, std::string& status )
     }
 
     mapper::wipe_headers( game, remote_base );
-    memset( cheat_data.data(), 0, cheat_data.size() );
+    crypto::secure_zero( cheat_data.data(), cheat_data.size() );
     cheat_data.clear();
     cheat_data.shrink_to_fit();
 
@@ -347,7 +336,9 @@ static DWORD WINAPI loader_thread( LPVOID )
 
     loader_ui::callbacks cb;
     cb.on_login  = on_login;
-    cb.on_inject = []( bool hwid, std::string& st ) { return on_inject( hwid, st ); };
+    cb.on_inject = []( bool hwid, const std::string& tk, const std::string& sk, std::string& st ) {
+        return on_inject( hwid, tk, sk, st );
+    };
     loader_ui::run( cb );
 
     while ( true ) syscalls::sleep_ms( 60'000 );

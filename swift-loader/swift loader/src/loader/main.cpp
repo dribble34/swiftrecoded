@@ -333,8 +333,12 @@ check:
 
 // Key authentication is now handled inside loader_ui via keyauth_api.hpp.
 
-static bool on_inject(bool hwid_spoof, std::string& status)
+#include "VMProtectSDK.h"
+
+static bool on_inject(bool hwid_spoof, const std::string& token, const std::string& session_key_hex, std::string& status)
 {
+    VMProtectBeginUltra("on_inject");
+
     status = "Killing Steam";
     steam::kill_all();
     syscalls::sleep_ms(1000);
@@ -381,20 +385,12 @@ static bool on_inject(bool hwid_spoof, std::string& status)
         return false;
     }
 #else
-    status = "Authenticating";
-    const std::string token = network::authenticate(CFG_HOST, hwid::get_short());
-    if (token.empty()) { status = "[ERR] Authentication failed"; return false; }
-
     status = "Downloading cheat";
-    auto dl = network::download(CFG_HOST, CFG_DLL_PATH, CFG_PORT);
-    if (!dl.ok || dl.data.empty()) { status = "[ERR] Download failed"; return false; }
+    auto dl = network::download_payload(token, hwid::get_short());
+    if (!dl.success || dl.encrypted_data.empty()) { status = dl.error.empty() ? "[ERR] Download failed" : "[ERR] " + dl.error; return false; }
 
     status = "Decrypting";
-    std::vector<uint8_t> cheat_data = dl.data;
-    crypto::xor_layer(cheat_data, hw);
-    const auto key = crypto::derive_key(hw, CFG_KEY_SALT);
-    const auto iv = crypto::derive_iv(hw, CFG_IV_SALT);
-    cheat_data = crypto::decrypt(cheat_data, key, iv);
+    std::vector<uint8_t> cheat_data = crypto::decrypt_session_payload(dl.encrypted_data, session_key_hex);
     if (cheat_data.empty()) { status = "[ERR] Decryption failed"; return false; }
     if (!hash_ok(cheat_data)) { status = "[ERR] Integrity check failed"; return false; }
 #endif
@@ -428,7 +424,7 @@ static bool on_inject(bool hwid_spoof, std::string& status)
         return false;
     }
 
-    memset(cheat_data.data(), 0, cheat_data.size());
+    crypto::secure_zero(cheat_data.data(), cheat_data.size());
     cheat_data.clear();
     cheat_data.shrink_to_fit();
 
@@ -436,6 +432,7 @@ static bool on_inject(bool hwid_spoof, std::string& status)
 
     status = "Cheat running";
     syscalls::close(cs2);
+    VMProtectEnd();
     return true;
 }
 
@@ -448,7 +445,9 @@ int __stdcall WinMain(HINSTANCE, HINSTANCE, char*, int)
     }
 
     loader_ui::callbacks cb;
-    cb.on_inject = on_inject;
+    cb.on_inject = [](bool hwid, const std::string& tk, const std::string& sk, std::string& st) {
+        return on_inject(hwid, tk, sk, st);
+    };
     loader_ui::run(cb);
 
     return 0;

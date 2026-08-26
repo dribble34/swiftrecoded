@@ -6,23 +6,30 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include "../nt_types.hpp"
-#include <string>
-#include <cstdint>
 
 namespace network
 {
-    struct DownloadResult
+    struct AuthResult
     {
-        bool                 ok{};
-        std::vector<uint8_t> data{};
-        std::string          error{};
+        bool        success = false;
+        std::string message;
+        std::string token;
+        std::string session_key_hex;
+        std::string cnonce;
+        std::string snonce;
+        std::string expiry;
     };
 
+    struct PayloadResult
+    {
+        bool                 success = false;
+        std::vector<uint8_t> encrypted_data;
+        std::string          error;
+    };
 
-    DownloadResult download(const wchar_t* host, const wchar_t* path, uint16_t port = 443);
+    // Performs server-side auth check at /verify.php
+    AuthResult authenticate(const std::string& key, const std::string& hwid);
 
-
-
-    std::string authenticate(const wchar_t* host, const std::string& hwid_short);
+    // Downloads encrypted payload with single-use token at /download.php
+    PayloadResult download_payload(const std::string& key, const std::string& hwid, const std::string& token, const std::string& cnonce, const std::string& snonce);
 }

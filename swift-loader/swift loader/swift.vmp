@@ -1,0 +1,12 @@
+<VMProtect version="3.9.4" OutputFileName="bin/swift_protected.exe">
+    <Protection InputFileName="bin/swift.exe" Options="857032" MemoryProtection="0">
+        <Messages />
+        <Folders />
+        <Procedures>
+            <Procedure Value="WinMain" CompilationType="2" />
+        </Procedures>
+        <Objects />
+    </Protection>
+    <Script />
+    <LicenseManager />
+</VMProtect>

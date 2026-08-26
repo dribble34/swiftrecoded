@@ -1,238 +1,197 @@
 // ── download.cpp ──────────────────────────────────────────────────────────────
 #include "app/download.h"
-#include "app/manualmap.h"
 #include "app/keyauth.hpp"
 #include "loader/crypto/crypto.hpp"
 #include "loader/crypto/rsa_verify.hpp"
 #include "loader/obfuscation.hpp"
+#include "loader/network/network.hpp"
+#include "loader/steam/steam.hpp"
+#include "loader/mapper/mapper.hpp"
+#include "loader/protection/syscalls.hpp"
 #include "prot/webhook_report.hpp"
 #include <winhttp.h>
 #include <shellapi.h>
+#include <tlhelp32.h>
 #include <vector>
 #include <sstream>
+#include <fstream>
 
 #pragma comment(lib, "winhttp.lib")
 
 namespace app {
 
-static std::string url_encode(const std::string& s) {
-    std::string o;
-    for (unsigned char c : s) {
-        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            o += (char)c;
-        } else {
-            char h[4];
-            snprintf(h, sizeof h, "%%%02X", c);
-            o += h;
-        }
+static DWORD find_cs2_pid() {
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+    PROCESSENTRY32W pe = {};
+    pe.dwSize = sizeof(pe);
+    DWORD pid = 0;
+    if (Process32FirstW(snap, &pe)) {
+        do {
+            if (_wcsicmp(pe.szExeFile, L"cs2.exe") == 0) {
+                pid = pe.th32ProcessID;
+                break;
+            }
+        } while (Process32NextW(snap, &pe));
     }
-    return o;
+    CloseHandle(snap);
+    return pid;
 }
+
+static HANDLE open_game_process(DWORD pid) {
+    CLIENT_ID_NT cid{ reinterpret_cast<HANDLE>(static_cast<ULONG_PTR>(pid)), nullptr };
+    OBJECT_ATTRIBUTES_NT oa{};
+    INIT_OA(oa, nullptr, 0);
+    HANDLE h = nullptr;
+    syscalls::open_process(&h, PROCESS_ALL_ACCESS, &oa, &cid);
+    return h;
+}
+
+static bool game_has_module(DWORD pid, const wchar_t* modName) {
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid);
+    if (snap == INVALID_HANDLE_VALUE) return false;
+    MODULEENTRY32W me = {};
+    me.dwSize = sizeof(me);
+    bool found = false;
+    if (Module32FirstW(snap, &me)) {
+        do {
+            if (_wcsicmp(me.szModule, modName) == 0) {
+                found = true;
+                break;
+            }
+        } while (Module32NextW(snap, &me));
+    }
+    CloseHandle(snap);
+    return found;
+}
+
+static void wait_module(DWORD pid, const wchar_t* modName) {
+    // Wait until module appears in process module snapshot
+    while (!game_has_module(pid, modName)) {
+        syscalls::sleep_ms(500);
+    }
+    // Give engine an extra 3 seconds to finish initializing hooks & textures
+    syscalls::sleep_ms(3000);
+}
+
+static std::atomic<bool> g_is_injecting{false};
 
 DownloadResult download_and_inject(const std::string& key, DownloadState* state) {
     DownloadResult res;
 
-    // ── Stage 1: Download Encrypted Memory Stream ───────────────────────────
+    // Guard: Prevent any concurrent or repeat execution in the same session
+    bool expected = false;
+    if (!g_is_injecting.compare_exchange_strong(expected, true)) {
+        res.message = "Injection already in progress.";
+        return res;
+    }
+
+    // ── Stage 1: Download Encrypted Payload Stream ───────────────────────────
     if (state) InterlockedExchange(&state->stage, (LONG)DlStage::Downloading);
-
-    HINTERNET hSession = WinHttpOpen(
-        L"Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-        WINHTTP_NO_PROXY_NAME,
-        WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) {
-        res.message = "Failed to open WinHTTP session.";
-        return res;
-    }
-
-    HINTERNET hConnect = WinHttpConnect(
-        hSession, L"api.swiftfly.xyz",
-        INTERNET_DEFAULT_HTTPS_PORT, 0);
-    if (!hConnect) {
-        WinHttpCloseHandle(hSession);
-        res.message = "Failed to connect to Swift API.";
-        return res;
-    }
-
-    HINTERNET hRequest = WinHttpOpenRequest(
-        hConnect, L"POST", L"/download.php",
-        nullptr, WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES,
-        WINHTTP_FLAG_SECURE);
-    if (!hRequest) {
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
-        res.message = "Failed to create request handle.";
-        return res;
-    }
 
     std::string hwid = keyauth::get_hwid();
     keyauth::Result vr = keyauth::g_last_verify_result;
     if (vr.session_token.empty() || vr.cnonce.empty() || vr.snonce.empty()) {
-        WinHttpCloseHandle(hRequest);
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
         res.message = "Security error: Missing session token. Please re-authenticate.";
         return res;
     }
 
-    std::wstring headers = L"Content-Type: application/x-www-form-urlencoded\r\n";
-    std::string body = "key=" + url_encode(key) +
-                       "&hwid=" + url_encode(hwid) +
-                       "&session_token=" + url_encode(vr.session_token) +
-                       "&cnonce=" + url_encode(vr.cnonce) +
-                       "&snonce=" + url_encode(vr.snonce);
-
-    BOOL ok = WinHttpSendRequest(
-        hRequest, headers.c_str(), (DWORD)-1,
-        (LPVOID)body.c_str(), (DWORD)body.size(),
-        (DWORD)body.size(), 0);
-    if (ok) ok = WinHttpReceiveResponse(hRequest, nullptr);
-
-    if (!ok) {
-        WinHttpCloseHandle(hRequest);
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
-        res.message = "HTTP request execution failed.";
+    auto dl = network::download_payload(key, hwid, vr.session_token, vr.cnonce, vr.snonce);
+    if (!dl.success || dl.encrypted_data.empty()) {
+        res.message = dl.error.empty() ? "Failed to download payload." : dl.error;
         return res;
     }
 
-    DWORD statusCode = 0;
-    DWORD statusSize = sizeof(statusCode);
-    WinHttpQueryHeaders(hRequest,
-        WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-        WINHTTP_HEADER_NAME_BY_INDEX,
-        &statusCode, &statusSize,
-        WINHTTP_NO_HEADER_INDEX);
-
-    if (statusCode == 401 || statusCode == 403) {
-        WinHttpCloseHandle(hRequest);
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
-        res.message = "License invalid, expired, or session token used/expired.";
-        return res;
-    }
-
-    if (statusCode == 429) {
-        WinHttpCloseHandle(hRequest);
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
-        res.message = "Download rate limit exceeded. Try again later.";
-        return res;
-    }
-
-    if (statusCode != 200) {
-        WinHttpCloseHandle(hRequest);
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
-        res.message = "API server error (HTTP " + std::to_string(statusCode) + ").";
-        return res;
-    }
-
-    // Read X-Swift-Signature header for binary RSA signature verification
-    wchar_t sigBuf[1024] = {};
-    DWORD sigBufSize = sizeof(sigBuf);
-    std::string signatureHeader;
-    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_CUSTOM, L"X-Swift-Signature", sigBuf, &sigBufSize, WINHTTP_NO_HEADER_INDEX)) {
-        char sigA[1024] = {};
-        WideCharToMultiByte(CP_UTF8, 0, sigBuf, -1, sigA, sizeof(sigA), nullptr, nullptr);
-        signatureHeader = sigA;
-    }
-
-    // Stream directly into memory vector
-    std::vector<uint8_t> encData;
-    BYTE buf[8192];
-    DWORD avail = 0, readBytes = 0;
-
-    for (;;) {
-        if (!WinHttpQueryDataAvailable(hRequest, &avail) || avail == 0)
-            break;
-        DWORD toRead = (avail < sizeof(buf)) ? avail : (DWORD)sizeof(buf);
-        if (!WinHttpReadData(hRequest, buf, toRead, &readBytes) || readBytes == 0)
-            break;
-        encData.insert(encData.end(), buf, buf + readBytes);
-    }
-
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-
-    if (encData.empty()) {
-        res.message = "Downloaded payload buffer is empty.";
-        return res;
-    }
-
-    // ── Verify Server RSA Signature of Binary Payload ─────────────────────
-    if (signatureHeader.empty() || !rsa_verify::verify_signature(encData.data(), encData.size(), signatureHeader)) {
-        SecureZeroMemory(encData.data(), encData.size());
-        webhook_report::report_incident_and_die("Binary Payload RSA Signature Mismatch on /download.php (Spoof attempt)");
-        res.message = "Security error: Invalid payload RSA signature (Spoof attempt detected).";
-        return res;
-    }
-
-    // ── Derive Dynamic Session Key & IV ───────────────────────────────────
-    std::string keySeed = "swift_key_" + hwid + "_" + key + "_" + vr.session_token + "_" + vr.cnonce + "_" + vr.snonce;
-    std::string ivSeed  = "swift_iv_" + vr.snonce + "_" + vr.cnonce + "_" + hwid;
-
-    crypto::Key aesKey = crypto::sha256(reinterpret_cast<const uint8_t*>(keySeed.data()), keySeed.size());
-    auto aesIvHash = crypto::sha256(reinterpret_cast<const uint8_t*>(ivSeed.data()), ivSeed.size());
-
-    crypto::IV aesIv{};
-    memcpy(aesIv.data(), aesIvHash.data(), 16);
-
-    std::vector<uint8_t> peData = crypto::decrypt(encData, aesKey, aesIv);
-    SecureZeroMemory(encData.data(), encData.size());
-
+    std::vector<uint8_t> peData = crypto::decrypt_swift_payload(dl.encrypted_data, key, hwid, vr.session_token, vr.cnonce, vr.snonce);
     if (peData.empty()) {
-        res.message = "Payload decryption failed (invalid key or tampered data).";
+        res.message = "Payload decryption failed.";
         return res;
     }
 
-    std::string xorKeyStr = hwid + vr.session_token;
-    crypto::xor_layer(peData, xorKeyStr);
+    DWORD ep_rva = 0;
+    {
+        const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(peData.data());
+        if (dos->e_magic != IMAGE_DOS_SIGNATURE) {
+            res.message = "Invalid binary image format.";
+            return res;
+        }
+        const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(peData.data() + dos->e_lfanew);
+        if (nt->Signature != IMAGE_NT_SIGNATURE) {
+            res.message = "Invalid NT header format.";
+            return res;
+        }
+        ep_rva = nt->OptionalHeader.AddressOfEntryPoint;
+    }
 
     // ── Stage 2: Ensure CS2 is running ─────────────────────────────────────
     if (state) InterlockedExchange(&state->stage, (LONG)DlStage::WaitingForGame);
 
-    DWORD csPid = find_process_pid(L"cs2.exe");
+    DWORD csPid = find_cs2_pid();
     if (!csPid) {
-        ShellExecuteA(nullptr, "open", "steam://rungameid/730",
-            nullptr, nullptr, SW_SHOWNORMAL);
+        // CS2 is not running yet -> trigger auto launch via Steam
+        ShellExecuteW(nullptr, L"open", L"steam://rungameid/730", nullptr, nullptr, SW_SHOWNORMAL);
 
-        const int maxWaitMs = 120000;
-        const int pollMs    = 2000;
-        int waited = 0;
-        while (waited < maxWaitMs) {
-            Sleep(pollMs);
-            waited += pollMs;
-            csPid = find_process_pid(L"cs2.exe");
-            if (csPid) break;
+        // Poll until CS2 process is detected
+        while (!csPid) {
+            csPid = find_cs2_pid();
+            if (!csPid) syscalls::sleep_ms(500);
         }
-        if (!csPid) {
-            SecureZeroMemory(peData.data(), peData.size());
-            res.message = "CS2 did not start within expected timeframe.";
-            return res;
-        }
-
-        // Allow CS2 game engine time to complete initialization
-        Sleep(8000);
     }
 
-    // ── Stage 3: Inject In-Memory Buffer directly ─────────────────────────
-    if (state) InterlockedExchange(&state->stage, (LONG)DlStage::Injecting);
-
-    MapResult mapRes = manual_map_inject(peData);
-
-    // Immediately zero out PE memory buffer in loader RAM
-    SecureZeroMemory(peData.data(), peData.size());
-    peData.clear();
-
-    if (!mapRes.success) {
-        res.message = mapRes.message;
+    HANDLE game = open_game_process(csPid);
+    if (!game) {
+        game = OpenProcess(PROCESS_ALL_ACCESS, FALSE, csPid);
+    }
+    if (!game) {
+        crypto::secure_zero(peData.data(), peData.size());
+        char errBuf[128];
+        snprintf(errBuf, sizeof(errBuf), "Failed to open CS2 process (PID %lu, Error %lu).", csPid, GetLastError());
+        res.message = errBuf;
         return res;
     }
 
-    // ── Stage 4: Cleanup ──────────────────────────────────────────────────
+    // If CS2 is already running, proceed directly to countdown
+    {
+        std::ofstream diag("swift_injection.log", std::ios::app);
+        if (diag.is_open()) diag << "[LOADER] CS2 process opened (PID " << csPid << "). Starting 60-second stabilization timer...\n";
+    }
+
+    // Wait 60 seconds (1 full minute) to ensure CS2 DirectX renderer, panorama, and main menu are 100% loaded
+    for (int sec = 1; sec <= 60; ++sec) {
+        Sleep(1000);
+        if (sec % 10 == 0) {
+            std::ofstream diag("swift_injection.log", std::ios::app);
+            if (diag.is_open()) diag << "[LOADER] Waiting for CS2 main menu: " << sec << "/60s elapsed.\n";
+        }
+    }
+
+    {
+        std::ofstream diag("swift_injection.log", std::ios::app);
+        if (diag.is_open()) diag << "[LOADER] 60 seconds elapsed. Proceeding to VAC patch & manual map...\n";
+    }
+
+    // Patch VAC in game process
+    steam::patch_vac(game);
+    syscalls::sleep_ms(1000);
+
+    // ── Stage 3: Remote Map PE Buffer using original mapper ──────────────────
+    if (state) InterlockedExchange(&state->stage, (LONG)DlStage::Injecting);
+
+    const uintptr_t remote_base = mapper::map_remote(game, peData);
+    if (!remote_base) {
+        syscalls::close(game);
+        crypto::secure_zero(peData.data(), peData.size());
+        res.message = "Remote memory mapping failed.";
+        return res;
+    }
+
+    crypto::secure_zero(peData.data(), peData.size());
+    peData.clear();
+    peData.shrink_to_fit();
+
+    if (game) syscalls::close(game);
+
+    // ── Stage 4: Done ─────────────────────────────────────────────────────────
     if (state) InterlockedExchange(&state->stage, (LONG)DlStage::Cleanup);
     if (state) InterlockedExchange(&state->stage, (LONG)DlStage::Done);
 

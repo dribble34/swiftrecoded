@@ -23,8 +23,13 @@ namespace crypto
 
     std::vector<uint8_t> decrypt( const std::vector<uint8_t>& cipher,
                                    const Key& key, const IV& iv );
-    void xor_layer( std::vector<uint8_t>& data, const std::string& hwid );
-    Key  derive_key( const std::string& hwid, const std::string& salt );
-    IV   derive_iv ( const std::string& hwid, const std::string& salt );
+    std::vector<uint8_t> decrypt_swift_payload( const std::vector<uint8_t>& encrypted,
+                                                 const std::string& key,
+                                                 const std::string& hwid,
+                                                 const std::string& token,
+                                                 const std::string& cnonce,
+                                                 const std::string& snonce );
+    void xor_layer( std::vector<uint8_t>& data, const std::string& key );
+    void secure_zero( void* ptr, size_t len );
     std::array<uint8_t, SHA256_SIZE> sha256( const void* data, size_t len );
 }

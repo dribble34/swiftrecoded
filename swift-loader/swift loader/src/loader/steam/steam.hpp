@@ -11,7 +11,7 @@ namespace steam
     void restore_mac_addresses();
     void spoof_steam_identity();
     void restore_steam_identity();
-    bool launch();
+    bool launch(const wchar_t* args = nullptr);
     void patch_vac( HANDLE game );
     void wipe_steam_machine_id();
 }

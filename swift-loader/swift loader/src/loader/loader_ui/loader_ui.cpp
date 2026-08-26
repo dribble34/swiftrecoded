@@ -27,7 +27,7 @@
 
 #include "loader_ui.hpp"
 #include "../protection/hwid.hpp"
-#include "keyauth_api.hpp"
+#include "../network/network.hpp"
 #include "embedded_icons.hpp"   // icon_*_data / icon_*_size
 
 // ── D3D globals ───────────────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ struct VerifShared
 {
     volatile LONG               step    = 0;  // 1=hwid done, 2=sub done, 3=srv done
     volatile bool               done    = false;
-    keyauth_api::CheckResult    result  = {};
+    network::AuthResult         auth_res = {};
     std::string                 key;
     std::string                 hwid_str;
 };
@@ -351,12 +351,14 @@ void run(callbacks cb)
                     // Launch verification thread
                     CreateThread(nullptr, 0, [](LPVOID) -> DWORD
                     {
-                        keyauth_api::VerifyCallbacks cbs;
-                        cbs.on_hwid_done    = []{ InterlockedExchange(&g_vs.step, 1); Sleep(800); };
-                        cbs.on_sub_done     = []{ InterlockedExchange(&g_vs.step, 2); Sleep(700); };
-                        cbs.on_server_done  = []{ InterlockedExchange(&g_vs.step, 3); Sleep(500); };
+                        Sleep(300);
+                        InterlockedExchange(&g_vs.step, 1); // HWID
+                        Sleep(400);
+                        InterlockedExchange(&g_vs.step, 2); // Sub
+                        Sleep(400);
 
-                        g_vs.result = keyauth_api::verify_key(g_vs.key, g_vs.hwid_str, cbs);
+                        g_vs.auth_res = network::authenticate(g_vs.key, g_vs.hwid_str);
+                        InterlockedExchange(&g_vs.step, 3); // Server
                         g_vs.done   = true;
                         return 0;
                     }, nullptr, 0, nullptr);
@@ -374,22 +376,13 @@ void run(callbacks cb)
             if (g_vs.done && step_done >= 3)
             {
                 verif_running = false;
-                if (g_vs.result.success)
+                if (g_vs.auth_res.success)
                 {
                     cur = Page::panel;
                 }
                 else
                 {
-                    fail_msg = "";
-                    if (!g_vs.result.hwid_ok)
-                        fail_msg += "Failed HWID Check\n";
-                    if (!g_vs.result.sub_ok)
-                        fail_msg += "Failed Subscription Check\n";
-                    if (!g_vs.result.server_ok)
-                        fail_msg += "Failed Server Check";
-                    if (fail_msg.empty())
-                        fail_msg = g_vs.result.message.empty()
-                            ? "Authentication failed." : g_vs.result.message;
+                    fail_msg = g_vs.auth_res.message.empty() ? "Authentication failed." : g_vs.auth_res.message;
                     cur = Page::result_fail;
                 }
             }
@@ -623,18 +616,18 @@ void run(callbacks cb)
             if (ImGui::Button(btn_lbl, { (float)WIN_W - pad * 2.f, 38.f }))
             {
                 injecting = true; injected = false; inject_status = "[ ] Starting";
-                struct Ctx { callbacks* cb; std::string* st; bool hw; };
+                struct Ctx { callbacks* cb; std::string* st; bool hw; std::string tk; std::string sk; };
                 CreateThread(nullptr, 0, [](LPVOID p) -> DWORD
                 {
                     auto* c = (Ctx*)p;
-                    bool ok = c->cb->on_inject(c->hw, *c->st);
+                    bool ok = c->cb->on_inject(c->hw, c->tk, c->sk, *c->st);
                     if (ok)
                         *c->st = "[DONE] Injected successfully";
                     else if (c->st->rfind("[ERR]", 0) != 0)
                         *c->st = "[ERR] " + *c->st;
                     delete c;
                     return 0;
-                }, new Ctx{ &cb, &inject_status, hwid_spoof }, 0, nullptr);
+                }, new Ctx{ &cb, &inject_status, hwid_spoof, g_vs.auth_res.token, g_vs.auth_res.session_key_hex }, 0, nullptr);
             }
 
             if (!canLoad) ImGui::EndDisabled();

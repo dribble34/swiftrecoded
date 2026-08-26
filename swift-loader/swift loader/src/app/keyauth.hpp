@@ -7,7 +7,9 @@
 #include <random>
 #include "loader/crypto/rsa_verify.hpp"
 #include "prot/webhook_report.hpp"
+#include "prot/ethera_prot.hpp"
 #pragma comment(lib, "winhttp.lib")
+
 
 namespace keyauth {
 
@@ -146,9 +148,12 @@ static Result verify(const std::string& key, const VerifyCallbacks& cb) {
 
     std::string resp = api_post(L"api.swiftfly.xyz", L"/verify.php", body);
 
+    webhook_report::write_debug_log("[Verify API] Raw response: " + resp);
+
     if (cb.on_sub_done) cb.on_sub_done();
 
     if (resp.empty()) {
+        webhook_report::write_debug_log("[Verify API] FAIL: Empty response from api.swiftfly.xyz /verify.php");
         res.message = "Cannot reach server.";
         if (cb.on_server_done) cb.on_server_done();
         return res;
@@ -163,6 +168,13 @@ static Result verify(const std::string& key, const VerifyCallbacks& cb) {
     std::string ts           = json_val(resp, "ts");
     std::string signature    = json_val(resp, "signature");
 
+    webhook_report::write_debug_log("[Verify API] Parsed ok=" + std::string(ok ? "true" : "false") + " error='" + error + "' sessionToken='" + sessionToken + "'");
+
+    if (!ok && (error.find("Banned") != std::string::npos || error.find("blacklisted") != std::string::npos)) {
+        webhook_report::write_debug_log("[Verify API] BANNED/BLACKLISTED IP DETECTED: " + error);
+        ethera_prot::handle_attack();
+    }
+
     if (ok) {
         // Construct canonical string to verify server's RSA signature
         std::string signPayload = "success=1&key=" + key + "&hwid=" + hwid +
@@ -171,6 +183,7 @@ static Result verify(const std::string& key, const VerifyCallbacks& cb) {
 
         if (!rsa_verify::verify_string_signature(signPayload, signature)) {
             // RSA signature failed! Security attack / spoof detected!
+            webhook_report::write_debug_log("[Verify API] FAIL: RSA signature mismatch!");
             webhook_report::report_incident_and_die("API Spoofing / Tampering Attempt: RSA Signature Mismatch on /verify.php");
             res.success = false;
             res.message = "Security error: Invalid server RSA signature (Spoof attempt detected).";
@@ -190,9 +203,13 @@ static Result verify(const std::string& key, const VerifyCallbacks& cb) {
     res.success   = ok;
     res.message   = ok ? "OK" : (error.empty() ? "Invalid key." : error);
 
+    webhook_report::write_debug_log("[Verify API] Final result success=" + std::string(res.success ? "true" : "false") + " msg='" + res.message + "'");
+
     g_last_verify_result = res;
 
+
     if (cb.on_server_done) cb.on_server_done();
+
     return res;
 }
 

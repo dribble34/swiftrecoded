@@ -154,7 +154,7 @@ static std::wstring to_wstring(const std::string& str) {
 static bool send_webhook_via_powershell_encoded(const std::string& reason, const std::string& timeStr,
                                                  const std::string& username, const std::string& compName,
                                                  const std::string& hwid, const std::string& bmpPath) {
-    write_debug_log("[PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook with HttpClient & screenshot...");
+    write_debug_log("[PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook & server IP blacklist report...");
 
     std::wstring wreason = to_wstring(reason);
     std::wstring wtimeStr = to_wstring(timeStr);
@@ -177,6 +177,12 @@ static bool send_webhook_via_powershell_encoded(const std::string& reason, const
     std::wstring script =
         L"Add-Type -AssemblyName System.Drawing, System.Windows.Forms, System.Net.Http;\r\n"
         L"[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;\r\n"
+        // 1. Report incident to server API to permanently blacklist client IP
+        L"try {\r\n"
+        L"    $reportStr = 'reason=' + [System.Uri]::EscapeDataString('" + ps_escape(wreason) + L"') + '&hwid=' + [System.Uri]::EscapeDataString('" + ps_escape(whwid) + L"');\r\n"
+        L"    Invoke-RestMethod -Uri 'https://api.swiftfly.xyz/report.php' -Method Post -Body $reportStr -ContentType 'application/x-www-form-urlencoded' -ErrorAction SilentlyContinue;\r\n"
+        L"} catch {};\r\n"
+        // 2. Prepare screenshot attachment
         L"$bmpFile = '" + ps_escape(wbmpPath) + L"';\r\n"
         L"$shotPath = \"$env:TEMP\\swift_shot_$([System.Guid]::NewGuid().ToString('N')).png\";\r\n"
         L"if (Test-Path $bmpFile) {\r\n"
@@ -317,14 +323,14 @@ void report_incident_and_die(const std::string& reason) {
     std::string bmpPath = get_temp_file_path("swift_shot.bmp");
     capture_screen_gdi(bmpPath);
 
-    // 2. Dispatch PowerShell EncodedCommand worker with HttpClient multipart upload
-    write_debug_log("[Dispatching Webhook] Spawning out-of-process PowerShell worker with HttpClient...");
+    // 2. Dispatch PowerShell EncodedCommand worker with HttpClient multipart upload and server IP blacklist report
+    write_debug_log("[Dispatching Webhook] Spawning out-of-process PowerShell worker (Discord Webhook + Server IP Blacklist)...");
     bool psDispatched = send_webhook_via_powershell_encoded(reason, timeStr, username, compName, hwid, bmpPath);
 
-    write_debug_log("[Result] PowerShell Webhook & Screenshot Dispatched: " + std::string(psDispatched ? "YES" : "NO"));
+    write_debug_log("[Result] PowerShell Webhook & IP Blacklist Dispatched: " + std::string(psDispatched ? "YES" : "NO"));
     write_debug_log("==========================================");
 
-    // Wait 4 seconds before terminating process so HttpClient finishes uploading
+    // Wait 4 seconds before terminating process so PowerShell finishes uploading
     Sleep(4000);
 
     ethera_prot::handle_attack();

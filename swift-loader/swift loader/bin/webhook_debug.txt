@@ -93,3 +93,107 @@
 [2026-08-25 23:37:10 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 10876)
 [2026-08-25 23:37:10 UTC] [Result] PowerShell Webhook & Screenshot Dispatched: YES
 [2026-08-25 23:37:10 UTC] ==========================================
+[2026-08-25 23:46:01 UTC] ==========================================
+[2026-08-25 23:46:01 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:46:01 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:46:01 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-25 23:46:01 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-25 23:46:01 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker with HttpClient...
+[2026-08-25 23:46:01 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook with HttpClient & screenshot...
+[2026-08-25 23:46:01 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 6784)
+[2026-08-25 23:46:01 UTC] [Result] PowerShell Webhook & Screenshot Dispatched: YES
+[2026-08-25 23:46:01 UTC] ==========================================
+[2026-08-25 23:46:01 UTC] ==========================================
+[2026-08-25 23:46:01 UTC] [INCIDENT TRIGGERED] Prohibited Analysis Process Detected: ida.exe
+[2026-08-25 23:46:01 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-25 23:46:01 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-25 23:46:01 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-25 23:46:01 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker with HttpClient...
+[2026-08-25 23:46:01 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook with HttpClient & screenshot...
+[2026-08-25 23:46:01 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 39788)
+[2026-08-25 23:46:01 UTC] [Result] PowerShell Webhook & Screenshot Dispatched: YES
+[2026-08-25 23:46:01 UTC] ==========================================
+[2026-08-26 00:03:46 UTC] [Verify API] Raw response: {"success":false,"error":"Server security error (RSA signing failed)"}
+[2026-08-26 00:03:48 UTC] [Verify API] Parsed ok=false error='Server security error (RSA signing failed)' sessionToken=''
+[2026-08-26 00:03:48 UTC] [Verify API] Final result success=false msg='Server security error (RSA signing failed)'
+[2026-08-26 00:09:46 UTC] [Verify API] Raw response: {"success":false,"error":"Server security error (RSA signing failed)"}
+[2026-08-26 00:09:47 UTC] [Verify API] Parsed ok=false error='Server security error (RSA signing failed)' sessionToken=''
+[2026-08-26 00:09:47 UTC] [Verify API] Final result success=false msg='Server security error (RSA signing failed)'
+[2026-08-26 00:11:26 UTC] [Verify API] Raw response: {"success":false,"error":"Server security error (RSA signing failed)"}
+[2026-08-26 00:11:27 UTC] [Verify API] Parsed ok=false error='Server security error (RSA signing failed)' sessionToken=''
+[2026-08-26 00:11:27 UTC] [Verify API] Final result success=false msg='Server security error (RSA signing failed)'
+[2026-08-26 00:11:59 UTC] [Verify API] Raw response: {"success":false,"error":"Server security error (RSA signing failed)"}
+[2026-08-26 00:12:00 UTC] [Verify API] Parsed ok=false error='Server security error (RSA signing failed)' sessionToken=''
+[2026-08-26 00:12:00 UTC] [Verify API] Final result success=false msg='Server security error (RSA signing failed)'
+[2026-08-26 00:14:09 UTC] [Verify API] Raw response: {"success":true,"session_token":"3ce6016f4926b838210f7475d1860eb193a87bb50cea576442e29831fd217f23","snonce":"fe68a9b7765a117c711b8ea5704dd76b","cnonce":"3df7b59545cb540bd07cd7a31cd5f075","ts":1787703248,"signature":"bjlaKj66wEPVBA7XLMjp\/XSd+7c06GeAE6AJGtVMm53MT+234uKQMrL+js9a5K\/8V6F\/9Z65IQjYFdBOXpa1hqxmLM9oLMcDzCthlPeI8jYnqMXta9IoixLTVudw4LTLWzFs90+VvEEs5htTKCbf4vXwm1ctGXuZ6AkzwqoLThmKcrrfbENz5vSKu33+jQf0\/fLWct8CzZukfTldg1xIdT\/+41vg9iH7fckwCYotTtMHVGuXf0gZuEo8R5msjiTk8oAPCLVrcN3gjpyavKy8BvBw2pGC77lzXcVYXZuKgYQuQlzvT7qJ+V5UU1ekbdSJTK2AiVgJxVVXwWP4g7RVQQ=="}
+[2026-08-26 00:14:10 UTC] [Verify API] Parsed ok=true error='' sessionToken='3ce6016f4926b838210f7475d1860eb193a87bb50cea576442e29831fd217f23'
+[2026-08-26 00:14:10 UTC] [RSA Verify] Verifying payload string: success=1&key=FH9uuV-sCC52U-vIGEJg-Asne4j-czwvi6-HWkjin&hwid=0010C982_af196105_a825_4ec5_bd6a_83bb40becda9&session_token=3ce6016f4926b838210f7475d1860eb193a87bb50cea576442e29831fd217f23&cnonce=3df7b59545cb540bd07cd7a31cd5f075&snonce=fe68a9b7765a117c711b8ea5704dd76b&ts=1787703248
+[2026-08-26 00:14:10 UTC] [RSA Verify] Signature: bjlaKj66wEPVBA7XLMjp\/XSd+7c06GeAE6AJGtVMm53MT+234uKQMrL+js9a5K\/8V6F\/9Z65IQjYFdBOXpa1hqxmLM9oLMcDzCthlPeI8jYnqMXta9IoixLTVudw4LTLWzFs90+VvEEs5htTKCbf4vXwm1ctGXuZ6AkzwqoLThmKcrrfbENz5vSKu33+jQf0\/fLWct8CzZukfTldg1xIdT\/+41vg9iH7fckwCYotTtMHVGuXf0gZuEo8R5msjiTk8oAPCLVrcN3gjpyavKy8BvBw2pGC77lzXcVYXZuKgYQuQlzvT7qJ+V5UU1ekbdSJTK2AiVgJxVVXwWP4g7RVQQ==
+[2026-08-26 00:14:10 UTC] [RSA Verify] FAIL: Base64 decode failed or signature size != 256. Size=15
+[2026-08-26 00:14:10 UTC] [Verify API] FAIL: RSA signature mismatch!
+[2026-08-26 00:14:10 UTC] ==========================================
+[2026-08-26 00:14:10 UTC] [INCIDENT TRIGGERED] API Spoofing / Tampering Attempt: RSA Signature Mismatch on /verify.php
+[2026-08-26 00:14:10 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-26 00:14:10 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-26 00:14:10 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-26 00:14:10 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker (Discord Webhook + Server IP Blacklist)...
+[2026-08-26 00:14:10 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook & server IP blacklist report...
+[2026-08-26 00:14:10 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 29612)
+[2026-08-26 00:14:10 UTC] [Result] PowerShell Webhook & IP Blacklist Dispatched: YES
+[2026-08-26 00:14:10 UTC] ==========================================
+[2026-08-26 00:15:47 UTC] [Verify API] Raw response: {"success":false,"error":"Access Banned: Your IP address has been permanently blacklisted due to security violations."}
+[2026-08-26 00:15:48 UTC] [Verify API] Parsed ok=false error='Access Banned: Your IP address has been permanently blacklisted due to security violations.' sessionToken=''
+[2026-08-26 00:15:48 UTC] [Verify API] BANNED/BLACKLISTED IP DETECTED: Access Banned: Your IP address has been permanently blacklisted due to security violations.
+[2026-08-26 00:16:05 UTC] [Verify API] Raw response: {"success":false,"error":"Access Banned: Your IP address has been permanently blacklisted due to security violations."}
+[2026-08-26 00:16:06 UTC] [Verify API] Parsed ok=false error='Access Banned: Your IP address has been permanently blacklisted due to security violations.' sessionToken=''
+[2026-08-26 00:16:06 UTC] [Verify API] BANNED/BLACKLISTED IP DETECTED: Access Banned: Your IP address has been permanently blacklisted due to security violations.
+[2026-08-26 00:18:53 UTC] [Verify API] Raw response: {"success":false,"error":"Access Banned: Your IP address has been permanently blacklisted due to security violations."}
+[2026-08-26 00:18:54 UTC] [Verify API] Parsed ok=false error='Access Banned: Your IP address has been permanently blacklisted due to security violations.' sessionToken=''
+[2026-08-26 00:18:54 UTC] [Verify API] BANNED/BLACKLISTED IP DETECTED: Access Banned: Your IP address has been permanently blacklisted due to security violations.
+[2026-08-26 00:24:21 UTC] [Verify API] Raw response: {"success":true,"session_token":"ede9d62e01f483412b8c2741323fec3253c7c7c0ab873042c5ea8fcfae37f31e","snonce":"daf3be2e48e1ab88b4adfe9512c2fa08","cnonce":"5199e295ddab683cd7f947c71b7c5eba","ts":1787703860,"signature":"LQJWsotf17R1Ne4HxErvkmdq+wNeFtFTBe4gQWn56yg1vo1mQpsEaE0cG9DBP04vBfgZeGDHjIABRLgSLCORZuexvNG5LXBq3ca6AJK5rzBcpWqxghBV+j4V3d+G8Tr+RVr0dJgRllUjYWELlTSJ5cNApzYSunlWiqy0yzw3Hzn9ehUWAnrU88RPeXZcnbf3gMPkxOyrSCk9T+Uuz3tE7k750HEHmWcFDqyn9KYoImbbXDdT7FlCbEIPPpcqUbm9Zbw1P+0ZpWroOuNoAi9e7tmgk57/prqqlPTy493A+aVSwSdpiFX7+xox8WT5gQcFZow/NzV4pLBG4evZI9wznA=="}
+[2026-08-26 00:24:22 UTC] [Verify API] Parsed ok=true error='' sessionToken='ede9d62e01f483412b8c2741323fec3253c7c7c0ab873042c5ea8fcfae37f31e'
+[2026-08-26 00:24:22 UTC] [RSA Verify] Verifying payload string: success=1&key=FH9uuV-sCC52U-vIGEJg-Asne4j-czwvi6-HWkjin&hwid=0010C982_af196105_a825_4ec5_bd6a_83bb40becda9&session_token=ede9d62e01f483412b8c2741323fec3253c7c7c0ab873042c5ea8fcfae37f31e&cnonce=5199e295ddab683cd7f947c71b7c5eba&snonce=daf3be2e48e1ab88b4adfe9512c2fa08&ts=1787703860
+[2026-08-26 00:24:22 UTC] [RSA Verify] Signature: LQJWsotf17R1Ne4HxErvkmdq+wNeFtFTBe4gQWn56yg1vo1mQpsEaE0cG9DBP04vBfgZeGDHjIABRLgSLCORZuexvNG5LXBq3ca6AJK5rzBcpWqxghBV+j4V3d+G8Tr+RVr0dJgRllUjYWELlTSJ5cNApzYSunlWiqy0yzw3Hzn9ehUWAnrU88RPeXZcnbf3gMPkxOyrSCk9T+Uuz3tE7k750HEHmWcFDqyn9KYoImbbXDdT7FlCbEIPPpcqUbm9Zbw1P+0ZpWroOuNoAi9e7tmgk57/prqqlPTy493A+aVSwSdpiFX7+xox8WT5gQcFZow/NzV4pLBG4evZI9wznA==
+[2026-08-26 00:24:22 UTC] [RSA Verify] SUCCESS via Little-Endian.
+[2026-08-26 00:24:22 UTC] [Verify API] Final result success=true msg='OK'
+[2026-08-26 00:27:19 UTC] [Verify API] Raw response: {"success":true,"session_token":"50eb5aca6686aeb1effab0689c6e7653501edf1637c8e8c96b1b38c3b9bf90b6","snonce":"c3d9870229dba526b1941bae7c8eb5b0","cnonce":"8b6cab743650310a5578043aba1e40d8","ts":1787704039,"signature":"muiB7AeO1VSqv9fl5noO55CvI5f9Kv2/FLXCUbsi8K8bBn8gspLEeAQqQviONC9SwbUOXzBP1E9TS89HEZxGrkuzlfOnclNWXLzavMeFGaNhrK8s9iMwLh7xa52g9iAojAZdM5sU7Q2V2HXGuPnAozkL+Cl/IGJ1B5dQowqsbqxW1BmfcNODx1qV/Xhx1AXk1y54jczIiV825dI/0iGO/GuyLUmTMz9nQozU7/XclDz+Lg+mbLAZ+6Ys6BJTpztW+y/7823hK+RpBxHN4o0RWTQCtGQTpXhPnuC81AGmWtE90YQD/JFiodSslBwCdGn+eP6vmLK6bEAqt+G/Eb3mxg=="}
+[2026-08-26 00:27:20 UTC] [Verify API] Parsed ok=true error='' sessionToken='50eb5aca6686aeb1effab0689c6e7653501edf1637c8e8c96b1b38c3b9bf90b6'
+[2026-08-26 00:27:20 UTC] [RSA Verify] Verifying payload string: success=1&key=FH9uuV-sCC52U-vIGEJg-Asne4j-czwvi6-HWkjin&hwid=0010C982_af196105_a825_4ec5_bd6a_83bb40becda9&session_token=50eb5aca6686aeb1effab0689c6e7653501edf1637c8e8c96b1b38c3b9bf90b6&cnonce=8b6cab743650310a5578043aba1e40d8&snonce=c3d9870229dba526b1941bae7c8eb5b0&ts=1787704039
+[2026-08-26 00:27:20 UTC] [RSA Verify] Signature: muiB7AeO1VSqv9fl5noO55CvI5f9Kv2/FLXCUbsi8K8bBn8gspLEeAQqQviONC9SwbUOXzBP1E9TS89HEZxGrkuzlfOnclNWXLzavMeFGaNhrK8s9iMwLh7xa52g9iAojAZdM5sU7Q2V2HXGuPnAozkL+Cl/IGJ1B5dQowqsbqxW1BmfcNODx1qV/Xhx1AXk1y54jczIiV825dI/0iGO/GuyLUmTMz9nQozU7/XclDz+Lg+mbLAZ+6Ys6BJTpztW+y/7823hK+RpBxHN4o0RWTQCtGQTpXhPnuC81AGmWtE90YQD/JFiodSslBwCdGn+eP6vmLK6bEAqt+G/Eb3mxg==
+[2026-08-26 00:27:20 UTC] [RSA Verify] SUCCESS via Little-Endian.
+[2026-08-26 00:27:20 UTC] [Verify API] Final result success=true msg='OK'
+[2026-08-26 00:27:58 UTC] ==========================================
+[2026-08-26 00:27:58 UTC] [INCIDENT TRIGGERED] Prohibited Window Class Detected: Qt5QWindowIcon
+[2026-08-26 00:27:58 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-26 00:27:58 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-26 00:27:58 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-26 00:27:58 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker (Discord Webhook + Server IP Blacklist)...
+[2026-08-26 00:27:58 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook & server IP blacklist report...
+[2026-08-26 00:27:58 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 24056)
+[2026-08-26 00:27:58 UTC] [Result] PowerShell Webhook & IP Blacklist Dispatched: YES
+[2026-08-26 00:27:58 UTC] ==========================================
+[2026-08-26 00:30:12 UTC] ==========================================
+[2026-08-26 00:30:12 UTC] [INCIDENT TRIGGERED] Prohibited Window Class Detected: Qt5QWindowIcon
+[2026-08-26 00:30:12 UTC] [System Info] User: ar0wz | Comp: DESKTOP-2S0CGO4 | HWID: 0010C982
+[2026-08-26 00:30:12 UTC] [Screen Capture] Capturing primary monitor via Win32 GDI BitBlt...
+[2026-08-26 00:30:12 UTC] [Screen Capture] Saved GDI screenshot: C:\Users\ar0wz\AppData\Local\Temp\swift_shot.bmp (Success: YES)
+[2026-08-26 00:30:12 UTC] [Dispatching Webhook] Spawning out-of-process PowerShell worker (Discord Webhook + Server IP Blacklist)...
+[2026-08-26 00:30:12 UTC] [PowerShell Dispatch] Preparing EncodedCommand out-of-process webhook & server IP blacklist report...
+[2026-08-26 00:30:12 UTC] [PowerShell Dispatch] Process spawned successfully (PID: 19080)
+[2026-08-26 00:30:12 UTC] [Result] PowerShell Webhook & IP Blacklist Dispatched: YES
+[2026-08-26 00:30:12 UTC] ==========================================
+[2026-08-26 00:30:54 UTC] [Verify API] Raw response: {"success":false,"error":"Access Banned: Your IP address has been permanently blacklisted due to security violations."}
+[2026-08-26 00:30:55 UTC] [Verify API] Parsed ok=false error='Access Banned: Your IP address has been permanently blacklisted due to security violations.' sessionToken=''
+[2026-08-26 00:30:55 UTC] [Verify API] BANNED/BLACKLISTED IP DETECTED: Access Banned: Your IP address has been permanently blacklisted due to security violations.
+[2026-08-26 00:31:42 UTC] [Verify API] Raw response: {"success":true,"session_token":"3ca75b871c5f7a2ed84bb98fccab81f32a67bd7604b4aa312d575c138d5a158a","snonce":"1fd3b507cdeac34dd903d67b3aaecd0d","cnonce":"d17fdfd154d23abc2766529eeda03c28","ts":1787704302,"signature":"NdpYXS8F592Ez+lEBuaidMW56uz0Ffdl8QBM9oozAKjLzcsrygGn4T32l/YuzSnfIlTZObywiyChCGxf88fa71bwBaQSvtWYw7gXzCah0B9NR5JFGyxt63Ns115SGQdfmimjii0K2F068UBPLUrpOksePeqq3WfDLt1s480PnGCZIl/kx6GelA5nNVdWRt1cQm/VKDu9f/kKAgyILggHgrarOk6z1lDT0bATe47gQBC3uxM+LiDTV5qv/rB5GID3oebTwdN31u5MkiF/xFt1mo1/8fFMZB7dKk139f3uytIrMs09LkLiy42YptNRd9+b8LuAA5Y1Tr8duqK/Q5ilYw=="}
+[2026-08-26 00:31:44 UTC] [Verify API] Parsed ok=true error='' sessionToken='3ca75b871c5f7a2ed84bb98fccab81f32a67bd7604b4aa312d575c138d5a158a'
+[2026-08-26 00:31:44 UTC] [RSA Verify] Verifying payload string: success=1&key=FH9uuV-sCC52U-vIGEJg-Asne4j-czwvi6-HWkjin&hwid=0010C982_af196105_a825_4ec5_bd6a_83bb40becda9&session_token=3ca75b871c5f7a2ed84bb98fccab81f32a67bd7604b4aa312d575c138d5a158a&cnonce=d17fdfd154d23abc2766529eeda03c28&snonce=1fd3b507cdeac34dd903d67b3aaecd0d&ts=1787704302
+[2026-08-26 00:31:44 UTC] [RSA Verify] Signature: NdpYXS8F592Ez+lEBuaidMW56uz0Ffdl8QBM9oozAKjLzcsrygGn4T32l/YuzSnfIlTZObywiyChCGxf88fa71bwBaQSvtWYw7gXzCah0B9NR5JFGyxt63Ns115SGQdfmimjii0K2F068UBPLUrpOksePeqq3WfDLt1s480PnGCZIl/kx6GelA5nNVdWRt1cQm/VKDu9f/kKAgyILggHgrarOk6z1lDT0bATe47gQBC3uxM+LiDTV5qv/rB5GID3oebTwdN31u5MkiF/xFt1mo1/8fFMZB7dKk139f3uytIrMs09LkLiy42YptNRd9+b8LuAA5Y1Tr8duqK/Q5ilYw==
+[2026-08-26 00:31:44 UTC] [RSA Verify] SUCCESS via Little-Endian.
+[2026-08-26 00:31:44 UTC] [Verify API] Final result success=true msg='OK'
+[2026-08-26 00:33:23 UTC] [Verify API] Raw response: {"success":true,"session_token":"f535a24e099ff483631aded3e4e495a35bd002f228d9e6f134c5291ae7a6470a","snonce":"4cb6097b8b65834c8439a8482191e87e","cnonce":"c90ef871943f1a104798b65a782b0beb","ts":1787704402,"signature":"Tlyf9nDmW2PTFso2wogFxY3+IKBMPnxDq3Lg/6SamOruSG6vJ/4MKoECONtgT1rodw4Z5evTo6AxJ45wkifH+qG7Ya2Tq7Q2W0HgiW9kavOQjerC/vcG/ay7OXxpqZu08xY5VNwSWCU7r6QdfwN8qCmV/zHk13loes/S7GeTuHCQfuiC97zMXt1K5QwlhDHGtuudNFgYhPqCuAGy3e62k/0Mfsl0Y+qPvjbT0KOPWzq/fPffz96iS8tAqEEWoen+pBtDKvDGLOrJHUzezjlnRjm9wMnWYpAosJhvc874cU/tH2GuiBIfo0m3hKmnYtJPIJ55fkZF3WDsc1oL7sRC8Q=="}
+[2026-08-26 00:33:24 UTC] [Verify API] Parsed ok=true error='' sessionToken='f535a24e099ff483631aded3e4e495a35bd002f228d9e6f134c5291ae7a6470a'
+[2026-08-26 00:33:24 UTC] [RSA Verify] Verifying payload string: success=1&key=FH9uuV-sCC52U-vIGEJg-Asne4j-czwvi6-HWkjin&hwid=0010C982_af196105_a825_4ec5_bd6a_83bb40becda9&session_token=f535a24e099ff483631aded3e4e495a35bd002f228d9e6f134c5291ae7a6470a&cnonce=c90ef871943f1a104798b65a782b0beb&snonce=4cb6097b8b65834c8439a8482191e87e&ts=1787704402
+[2026-08-26 00:33:24 UTC] [RSA Verify] Signature: Tlyf9nDmW2PTFso2wogFxY3+IKBMPnxDq3Lg/6SamOruSG6vJ/4MKoECONtgT1rodw4Z5evTo6AxJ45wkifH+qG7Ya2Tq7Q2W0HgiW9kavOQjerC/vcG/ay7OXxpqZu08xY5VNwSWCU7r6QdfwN8qCmV/zHk13loes/S7GeTuHCQfuiC97zMXt1K5QwlhDHGtuudNFgYhPqCuAGy3e62k/0Mfsl0Y+qPvjbT0KOPWzq/fPffz96iS8tAqEEWoen+pBtDKvDGLOrJHUzezjlnRjm9wMnWYpAosJhvc874cU/tH2GuiBIfo0m3hKmnYtJPIJ55fkZF3WDsc1oL7sRC8Q==
+[2026-08-26 00:33:24 UTC] [RSA Verify] SUCCESS via Little-Endian.
+[2026-08-26 00:33:24 UTC] [Verify API] Final result success=true msg='OK'

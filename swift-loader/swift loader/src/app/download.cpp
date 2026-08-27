@@ -82,15 +82,19 @@ static DWORD wait_for_cs2(int timeout_ms) {
     return 0;
 }
 
-// Poll until the three engine modules are all loaded in the target process, or timeout.
-// Injecting before these are up puts the DLL at risk of pattern-scanning missing modules
-// and either crashing or silently failing.
+// Poll until the engine modules are loaded in the target process, or timeout.
+// Injecting before these are up puts the DLL at risk of pattern-scanning missing
+// modules and either crashing or silently failing.
+//
+// Only client.dll and engine2.dll are checked -- server.dll is NOT loaded at
+// the CS2 main menu on modern (Source 2) builds. It only loads when the player
+// actually joins or hosts a game session. Waiting for it here would time out
+// forever with the game sitting perfectly ready at the menu.
 static bool wait_for_engine_ready(DWORD pid, int timeout_ms) {
     int elapsed = 0;
     while (elapsed < timeout_ms) {
         if (game_has_module(pid, L"client.dll") &&
-            game_has_module(pid, L"engine2.dll") &&
-            game_has_module(pid, L"server.dll")) {
+            game_has_module(pid, L"engine2.dll")) {
             return true;
         }
         syscalls::sleep_ms(1000);
@@ -201,7 +205,7 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
     // at the main menu, users still had to sit through a full minute. And if CS2
     // was NOT loaded yet, 60s might still not be enough. Poll for readiness
     // instead, with a 3-minute cap.
-    log_inject("Waiting for engine modules (client.dll, engine2.dll, server.dll)...");
+    log_inject("Waiting for engine modules (client.dll, engine2.dll)...");
     if (!wait_for_engine_ready(csPid, 180000)) {
         syscalls::close(game);
         crypto::secure_zero(peData.data(), peData.size());

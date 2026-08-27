@@ -291,7 +291,10 @@ namespace features::misc {
 	{
 	public:
 		void on_override_view( std::uintptr_t view_setup );
+		void on_create_move( systems::input::usercmd* cmd );
 		void update_fov_sensitivity( std::uintptr_t player_pawn ) const;
+
+		[[nodiscard]] bool freecam_active( ) const noexcept { return this->m_freecam_active; }
 
 	private:
 		void do_thirdperson( std::uintptr_t view_setup, std::uintptr_t local_pawn ) const;
@@ -301,6 +304,11 @@ namespace features::misc {
 		mutable float m_cached_fov_sensitivity{ -1.0f };
 		mutable bool m_cached_scoped{};
 		mutable float m_cached_target_fov{};
+
+		// camera flies while the pawn is pinned. movement comes from the command
+		// the game already built, then is zeroed so the body does not follow.
+		bool m_freecam_active{};
+		math::vector3 m_freecam_position{};
 	};
 
 	class hud

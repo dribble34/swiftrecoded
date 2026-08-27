@@ -26,9 +26,77 @@ namespace features::misc {
 		}
 	}
 
+	void camera::on_create_move( systems::input::usercmd* cmd )
+	{
+		const auto& cfg = settings::g_misc.m_camera;
+		const auto local = systems::g_local.get( );
+		const auto wants_freecam = cfg.freecam.value && local.is_alive && local.pawn && local.team >= 2;
+
+		if ( !wants_freecam )
+		{
+			this->m_freecam_active = false;
+			return;
+		}
+
+		const auto base = cmd->csgo_user_cmd.mutable_base( );
+		if ( !base )
+		{
+			return;
+		}
+
+		// latch on from the current eye so toggling does not teleport the view
+		if ( !this->m_freecam_active )
+		{
+			const auto game_scene_node = memory::read<std::uintptr_t>( local.pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+			const auto origin = memory::read<math::vector3>( game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+			const auto view_offset = memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseModelEntity", "m_vecViewOffset"_hash ) );
+
+			this->m_freecam_position = origin + view_offset;
+			this->m_freecam_active = true;
+		}
+
+		const auto view_angles = systems::g_input.get_view_angles( );
+
+		math::vector3 forward{}, left{}, up{};
+		math::helpers::angle_vectors_left( view_angles, &forward, &left, &up );
+
+		// units per second (running is ~250). forwardmove/leftmove are already
+		// normalised to [-1, 1] in CS2, not the old 450 scale.
+		const auto speed = std::max( cfg.freecam_speed.value, 0.0f ) * cstypes::tick_interval;
+		const auto forward_move = std::clamp( base->forwardmove( ), -1.0f, 1.0f );
+		const auto left_move = std::clamp( base->leftmove( ), -1.0f, 1.0f );
+
+		this->m_freecam_position += forward * forward_move * speed;
+		this->m_freecam_position += left * left_move * speed;
+
+		if ( cmd->buttons.value & cstypes::command_buttons::in_jump )
+		{
+			this->m_freecam_position.z += speed;
+		}
+
+		if ( cmd->buttons.value & cstypes::command_buttons::in_duck )
+		{
+			this->m_freecam_position.z -= speed;
+		}
+
+		// pin the pawn: strip the movement we just consumed
+		base->set_forwardmove( 0.0f );
+		base->set_leftmove( 0.0f );
+		cmd->buttons.value &= ~static_cast< std::uintptr_t >( cstypes::command_buttons::in_jump );
+		cmd->buttons.value &= ~static_cast< std::uintptr_t >( cstypes::command_buttons::in_duck );
+	}
+
 	void camera::on_override_view( std::uintptr_t view_setup )
 	{
 		const auto local = systems::g_local.get( );
+
+		if ( this->m_freecam_active )
+		{
+			memory::write<math::vector3>( view_setup + 0x4a0, this->m_freecam_position );
+			this->do_aspect_ratio_change( view_setup );
+			return;
+		}
+
 		if ( local.is_alive && !systems::g_local.is_in_cinematic( ) && local.team >= 2 && local.pawn )
 		{
 			this->do_thirdperson( view_setup, local.pawn );

@@ -82,7 +82,8 @@ namespace features::combat {
 			return false;
 		}
 
-		const auto local_pawn = systems::g_local.get( ).pawn;
+		const auto local = systems::g_local.get( );
+		const auto local_pawn = local.pawn;
 		const auto net_channel = memory::call<std::uintptr_t>( PATTERN( patterns::get_net_channel ), 0, 0 );
 		const auto global_vars = memory::read<std::uintptr_t>( addresses::globals::global_vars );
 
@@ -99,15 +100,61 @@ namespace features::combat {
 		}( );
 
 		const auto current_time = memory::read<float>( global_vars + 0x30 );
-		const auto latency = memory::call_vfunc<float>( net_channel, 10, 0 );
 
-		if ( !std::isfinite( max_unlag ) || !std::isfinite( current_time ) || !std::isfinite( latency ) )
+		// vfunc 10 is the engine's latency accessor (float, seconds). m_iPing on
+		// the controller is the same value in ms; take the larger of the two.
+		const auto channel_latency = memory::call_vfunc<float>( net_channel, 10, 0 );
+
+		const auto reported_ping = local.controller
+			? memory::read<int>( local.controller + SCHEMA( "CCSPlayerController", "m_iPing"_hash ) )
+			: 0;
+
+		const auto ping_latency = reported_ping > 0
+			? static_cast< float >( reported_ping ) / 1000.0f
+			: 0.0f;
+
+		const auto measured = std::max( std::isfinite( channel_latency ) ? channel_latency : 0.0f, ping_latency );
+
+		if ( !std::isfinite( max_unlag ) || !std::isfinite( current_time ) || !std::isfinite( measured ) )
 		{
 			return false;
 		}
 
-		const auto budget = max_unlag - std::max( latency, 0.0f );
-		const auto correct = std::max( latency, 0.0f );
+		// m_iPing is smoothed and refreshed periodically, so it can sit below
+		// the real latency. underestimating costs the shot, overestimating only
+		// costs range -- so hold the peak and decay it slowly.
+		// only needs to cover sub-tick drift, not spikes -- the peak-hold does
+		// those. at 15ms the budget sat on top of the common 0.1562 record age
+		// and rejected a quarter of them.
+		constexpr auto jitter_margin{ 0.005f };
+		constexpr auto decay_per_second{ 0.5f };
+
+		static float held_latency{};
+		static float held_time{};
+
+		if ( measured > held_latency || current_time < held_time )
+		{
+			held_latency = measured;
+		}
+		else
+		{
+			const auto elapsed = current_time - held_time;
+			if ( elapsed > 0.0f && elapsed < 1.0f )
+			{
+				held_latency -= ( held_latency - measured ) * std::min( elapsed * decay_per_second, 1.0f );
+			}
+			else if ( elapsed >= 1.0f )
+			{
+				held_latency = measured;
+			}
+		}
+
+		held_time = current_time;
+
+		const auto latency = std::max( held_latency, 0.0f ) + jitter_margin;
+
+		const auto budget = max_unlag - latency;
+		const auto correct = std::max( measured, 0.0f );
 
 		return budget > 0.0f
 			&& this->simulation_time >= current_time - budget

@@ -55,8 +55,8 @@ namespace logging::console {
 			return;
 		}
 
-		const bool was_emitting = emitting;
-		emitting = true;
+		const bool was_emitting = emitting.get( );
+		emitting.get( ) = true;
 		diag::write( diag::level::info, text );
 
 #if defined( DEV )
@@ -69,7 +69,7 @@ namespace logging::console {
 		}
 #endif
 
-		emitting = was_emitting;
+		emitting.get( ) = was_emitting;
 	}
 
 } 

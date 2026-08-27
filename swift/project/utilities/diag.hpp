@@ -10,8 +10,7 @@
 #include <cstdint>
 #include <cstdio>
 
-
-
+#include <utilities/tls/dynamic_tls.hpp>
 
 namespace diag {
 
@@ -31,9 +30,13 @@ namespace diag {
 	inline HANDLE g_log_file{};
 	inline HMODULE g_module{};
 	inline std::uintptr_t g_module_end{};
-	inline thread_local std::uint32_t g_exception_scope_depth{};
-	inline thread_local std::uint32_t g_probe_scope_depth{};
-	inline thread_local const char* g_exception_phase{ "none" };
+	inline tls::dynamic_tls<std::uint32_t> g_exception_scope_depth{};
+	inline tls::dynamic_tls<std::uint32_t> g_probe_scope_depth{};
+	// Per-thread default is nullptr rather than "none": every read site
+	// only dereferences this while g_exception_scope_depth is nonzero,
+	// which is only true once exception_scope's constructor has already
+	// assigned a real phase string on this thread.
+	inline tls::dynamic_tls<const char*> g_exception_phase{};
 
 #if defined( DEV )
 	
@@ -58,7 +61,7 @@ namespace diag {
 
 	inline minidump_write_fn g_minidump_write{};
 	inline volatile LONG g_crash_claimed{};
-	inline thread_local bool g_writing_minidump{};
+	inline tls::dynamic_tls<bool> g_writing_minidump{};
 
 	struct crash_report_request
 	{
@@ -243,20 +246,51 @@ namespace diag {
 	{
 		g_module = module_handle;
 
+		// Parse the module's own headers unconditionally and first: under
+		// a generic manual map the module has no entry in the loader's
+		// module list, so GetModuleFileNameW below can fail, and
+		// everything that depends on g_module_end (is_module_address, the
+		// VEH's own-module check) must keep working regardless.
+		const auto* dos_header =
+			reinterpret_cast<const IMAGE_DOS_HEADER*>( module_handle );
+		if ( dos_header->e_magic == IMAGE_DOS_SIGNATURE )
+		{
+			const auto* nt_headers =
+				reinterpret_cast<const IMAGE_NT_HEADERS*>(
+					reinterpret_cast<std::uintptr_t>( module_handle ) +
+					dos_header->e_lfanew );
+			if ( nt_headers->Signature == IMAGE_NT_SIGNATURE )
+			{
+				g_module_end =
+					reinterpret_cast<std::uintptr_t>( module_handle ) +
+					nt_headers->OptionalHeader.SizeOfImage;
+			}
+		}
+
 		wchar_t directory[ MAX_PATH ]{};
 		const DWORD path_length =
 			GetModuleFileNameW( module_handle, directory, MAX_PATH );
 		if ( !path_length || path_length >= MAX_PATH )
 		{
-			return;
-		}
-
-		for ( DWORD i = path_length; i > 0; --i )
-		{
-			if ( directory[ i - 1 ] == L'\\' || directory[ i - 1 ] == L'/' )
+			// Not registered with the loader (manual map). Fall back to
+			// the current directory so logging still works instead of
+			// silently staying disabled.
+			const DWORD cwd_length =
+				GetCurrentDirectoryW( MAX_PATH, directory );
+			if ( !cwd_length || cwd_length >= MAX_PATH )
 			{
-				directory[ i ] = L'\0';
-				break;
+				return;
+			}
+		}
+		else
+		{
+			for ( DWORD i = path_length; i > 0; --i )
+			{
+				if ( directory[ i - 1 ] == L'\\' || directory[ i - 1 ] == L'/' )
+				{
+					directory[ i ] = L'\0';
+					break;
+				}
 			}
 		}
 
@@ -290,22 +324,6 @@ namespace diag {
 			g_log_file = nullptr;
 		}
 #endif
-
-		const auto* dos_header =
-			reinterpret_cast<const IMAGE_DOS_HEADER*>( module_handle );
-		if ( dos_header->e_magic == IMAGE_DOS_SIGNATURE )
-		{
-			const auto* nt_headers =
-				reinterpret_cast<const IMAGE_NT_HEADERS*>(
-					reinterpret_cast<std::uintptr_t>( module_handle ) +
-					dos_header->e_lfanew );
-			if ( nt_headers->Signature == IMAGE_NT_SIGNATURE )
-			{
-				g_module_end =
-					reinterpret_cast<std::uintptr_t>( module_handle ) +
-					nt_headers->OptionalHeader.SizeOfImage;
-			}
-		}
 
 #if defined( DEV )
 		make_artifact_path(
@@ -364,53 +382,61 @@ namespace diag {
 	{
 	public:
 		explicit exception_scope( const char* phase = "feature pipeline" )
-			: m_previous_phase( g_exception_phase )
+			: m_depth( g_exception_scope_depth.get( ) )
+			, m_phase( g_exception_phase.get( ) )
+			, m_previous_phase( m_phase )
 		{
-			++g_exception_scope_depth;
-			g_exception_phase = phase;
+			++m_depth;
+			m_phase = phase;
 		}
 
 		~exception_scope( )
 		{
-			g_exception_phase = m_previous_phase;
-			--g_exception_scope_depth;
+			m_phase = m_previous_phase;
+			--m_depth;
 		}
 
 		exception_scope( const exception_scope& ) = delete;
 		exception_scope& operator=( const exception_scope& ) = delete;
 
 	private:
+		std::uint32_t& m_depth;
+		const char*& m_phase;
 		const char* m_previous_phase;
 	};
 
-	
-	
-	
+	// Suppresses expected first-chance exceptions from an explicit SEH probe.
+	// Construct this in a caller of the function containing __try; MSVC does not
+	// permit unwindable C++ locals in the same function as SEH.
 	class probe_scope
 	{
 	public:
 		probe_scope( )
+			: m_depth( g_probe_scope_depth.get( ) )
 		{
-			++g_probe_scope_depth;
+			++m_depth;
 		}
 
 		~probe_scope( )
 		{
-			--g_probe_scope_depth;
+			--m_depth;
 		}
 
 		probe_scope( const probe_scope& ) = delete;
 		probe_scope& operator=( const probe_scope& ) = delete;
+
+	private:
+		std::uint32_t& m_depth;
 	};
 
 	inline bool probe_active( )
 	{
-		return g_probe_scope_depth != 0;
+		return g_probe_scope_depth.get( ) != 0;
 	}
 
 	inline void set_exception_phase( const char* phase )
 	{
-		g_exception_phase = phase;
+		g_exception_phase.get( ) = phase;
 	}
 
 #if defined( DEV )
@@ -543,7 +569,7 @@ namespace diag {
 		auto write_attempt = [&]( unsigned long dump_type, DWORD& error )
 		{
 			BOOL result{};
-			g_writing_minidump = true;
+			g_writing_minidump.get( ) = true;
 			__try
 			{
 				result = g_minidump_write(
@@ -563,7 +589,7 @@ namespace diag {
 			{
 				error = GetExceptionCode( );
 			}
-			g_writing_minidump = false;
+			g_writing_minidump.get( ) = false;
 			return result != FALSE;
 		};
 

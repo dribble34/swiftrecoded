@@ -1049,6 +1049,10 @@ namespace settings {
 			config::val<float> thirdperson_distance{ 85.0f, "camera", "thirdperson distance" };
 			config::val<float> thirdperson_hull_size{ 12.0f, "camera", "thirdperson hull size" };
 
+			xui::setting freecam{ false, { VK_XBUTTON2, xui::bind_mode::toggle }, "freecam", "camera" };
+			// units per second -- running is roughly 250 for reference
+			config::val<float> freecam_speed{ 300.0f, "camera", "freecam speed" };
+
 			xui::setting change_aspect_ratio{ false, {}, "custom aspect ratio", "camera" };
 			config::val<float> aspect_ratio{ 1.333f, "camera", "aspect ratio" };
 		} m_camera{};

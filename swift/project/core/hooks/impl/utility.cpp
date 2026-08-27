@@ -126,7 +126,7 @@ namespace hooks {
 
 	std::intptr_t __fastcall utility::log_internal( std::uintptr_t a1, std::uint32_t channel, std::int32_t severity, std::uintptr_t metadata, const char* message, std::intptr_t* args )
 	{
-		if ( settings::g_misc.disable_game_logs && !logging::console::emitting )
+		if ( settings::g_misc.disable_game_logs && !logging::console::emitting.get( ) )
 		{
 			return 0;
 		}

@@ -1,5 +1,6 @@
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
+#include <utilities/tls/dynamic_tls.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
 #include <core/settings.hpp>
@@ -11,14 +12,32 @@ namespace features::combat {
 
 	namespace detail {
 
+		// every fraction from the trace is normalized over this span
+		// 4, not 8: hit_elements is 0xc0 bytes = 8 records, and each penetration
+		// can emit a solid span plus an air gap
+		inline constexpr auto k_max_penetrations{ 4 };
+		inline constexpr auto k_trace_range{ 8192.0f };
+
+		// layout verified against client.dll
 		struct bullet_trace_record
 		{
+			// fractions over the full trace ray
 			float enter_fraction;
 			float exit_fraction;
+
+			// damage still carried AFTER this span, not damage dealt at it.
+			// zeroed on the record where the bullet dies.
 			float damage_applied;
-			int team_at_contact;
+
+			// penetrations left in the budget (was mislabelled team_at_contact)
+			int penetrations_remaining;
+
+			// indices into the surface array; entity handle at element + 0x2c
 			std::uint16_t enter_contact_ix;
 			std::uint16_t exit_contact_ix;
+
+			// bit 0 set = span inside solid material, clear = air gap.
+			// really "is solid", not "can be penetrated".
 			std::uint8_t can_penetrate;
 			std::uint8_t pad[ 3 ];
 		};
@@ -43,12 +62,10 @@ namespace features::combat {
 			bool track_record,
 			bullet_path& out )
 		{
-			constexpr auto k_max_penetrations{ 8 };
-			constexpr auto k_trace_range{ 8192.0f };
-
 			const auto trace_delta = direction * k_trace_range;
 
-			thread_local systems::tracing::trace_data trace_storage{};
+			static tls::dynamic_tls<systems::tracing::trace_data> trace_storage_slot{};
+			auto& trace_storage = trace_storage_slot.get( );
 			trace_storage = {};
 			auto* trace = &trace_storage;
 			trace->array_pointer = &trace->elements;
@@ -101,7 +118,8 @@ namespace features::combat {
 			const math::vector3& start,
 			const math::vector3& delta,
 			const math::vector3& mins,
-			const math::vector3& maxs )
+			const math::vector3& maxs,
+			float& out_fraction )
 		{
 			auto inverse = bone_rotation;
 			inverse.x = -inverse.x;
@@ -129,9 +147,17 @@ namespace features::combat {
 				return entry <= exit;
 			};
 
-			return axis( local_origin.x, local_delta.x, mins.x, maxs.x ) &&
-				axis( local_origin.y, local_delta.y, mins.y, maxs.y ) &&
-				axis( local_origin.z, local_delta.z, mins.z, maxs.z );
+			if ( !axis( local_origin.x, local_delta.x, mins.x, maxs.x ) ||
+				!axis( local_origin.y, local_delta.y, mins.y, maxs.y ) ||
+				!axis( local_origin.z, local_delta.z, mins.z, maxs.z ) )
+			{
+				return false;
+			}
+
+			// entry is parameterized over delta, so it is directly comparable to
+			// the engine's enter_fraction
+			out_fraction = std::clamp( entry, 0.0f, 1.0f );
+			return true;
 		}
 
 	}
@@ -267,22 +293,20 @@ bool shared::penetration::run( const math::vector3& start, const math::vector3& 
 		return false;
 	}
 
-	struct hitbox_intersection
-	{
-		int index{ -1 };
-		float fraction{ 1.0f };
-		float center_projection{ 1.0f };
-		bool valid{ false };
-	};
-
-	hitbox_intersection intersections[ 19 ]{};
-	auto intersection_count{ 0 };
+	// nearest hitbox along the ray, nearest centre as fallback. do NOT match
+	// against the record's enter_fraction: on a penetrating shot that marks
+	// where the air gap after the wall began, so it diverges by the
+	// wall-to-target distance and kills long wallbangs.
+	auto actual_hitbox{ -1 };
+	auto fallback_hitbox{ -1 };
+	auto closest_hitbox_fraction{ 1.0f };
+	auto closest_hitbox_projection{ 1.0f };
 
 	if ( ctx.record )
 	{
 		for ( const auto& hitbox : ctx.hitboxes )
 		{
-			if ( hitbox.bone < 0 || hitbox.bone >= ctx.record->bone_count || hitbox.index < 0 || hitbox.index >= 19 )
+			if ( hitbox.bone < 0 || hitbox.bone >= ctx.record->bone_count || hitbox.index < 0 )
 			{
 				continue;
 			}
@@ -295,29 +319,33 @@ bool shared::penetration::run( const math::vector3& start, const math::vector3& 
 			{
 				const auto capsule_start = bone.rotation.rotate_vector( hitbox.mins ) + bone.position;
 				const auto capsule_end = bone.rotation.rotate_vector( hitbox.maxs ) + bone.position;
-				intersects = detail::intersect_capsule( g_shared, start, direction * 8192.0f, capsule_start, capsule_end, hitbox.radius, fraction );
+				intersects = detail::intersect_capsule( g_shared, start, direction * detail::k_trace_range, capsule_start, capsule_end, hitbox.radius, fraction );
 			}
 			else
 			{
-				intersects = detail::intersect_box( bone.rotation, bone.position, start, direction * 8192.0f, hitbox.mins, hitbox.maxs );
+				intersects = detail::intersect_box( bone.rotation, bone.position, start, direction * detail::k_trace_range, hitbox.mins, hitbox.maxs, fraction );
 			}
 
-			if ( intersects )
+			if ( intersects && fraction < closest_hitbox_fraction )
 			{
-				const auto center = bone.rotation.rotate_vector( ( hitbox.mins + hitbox.maxs ) * 0.5f ) + bone.position;
-				const auto center_delta = center - start;
-				const auto projection = center_delta.dot( direction ) / 8192.0f;
+				closest_hitbox_fraction = fraction;
+				actual_hitbox = hitbox.index;
+			}
 
-				intersections[ intersection_count ] = hitbox_intersection
-				{
-					.index = hitbox.index,
-					.fraction = fraction,
-					.center_projection = projection,
-					.valid = true
-				};
-				++intersection_count;
+			const auto center = bone.rotation.rotate_vector( ( hitbox.mins + hitbox.maxs ) * 0.5f ) + bone.position;
+			const auto projection = ( center - start ).dot( direction ) / detail::k_trace_range;
+
+			if ( projection >= 0.0f && projection < closest_hitbox_projection )
+			{
+				closest_hitbox_projection = projection;
+				fallback_hitbox = hitbox.index;
 			}
 		}
+	}
+
+	if ( actual_hitbox < 0 )
+	{
+		actual_hitbox = fallback_hitbox;
 	}
 
 	auto penetrated{ false };
@@ -331,6 +359,8 @@ bool shared::penetration::run( const math::vector3& start, const math::vector3& 
 			break;
 		}
 
+		// players are found on the cleared-bit records -- matching them on the
+		// set-bit ones instead made the ragebot stop finding targets entirely.
 		if ( ( hit.can_penetrate & 1 ) != 0 )
 		{
 			penetrated = true;
@@ -352,53 +382,8 @@ bool shared::penetration::run( const math::vector3& start, const math::vector3& 
 			continue;
 		}
 
-		auto best_hitbox{ -1 };
-		auto best_match_diff{ 1.0f };
-
-		const auto trace_fraction = hit.enter_fraction;
-
-		for ( auto j = 0; j < intersection_count; ++j )
-		{
-			const auto& inter = intersections[ j ];
-			if ( !inter.valid )
-			{
-				continue;
-			}
-
-			const auto diff = std::fabsf( inter.fraction - trace_fraction );
-			if ( diff < best_match_diff )
-			{
-				best_match_diff = diff;
-				best_hitbox = inter.index;
-			}
-		}
-
+		const auto best_hitbox = actual_hitbox;
 		if ( best_hitbox < 0 )
-		{
-			for ( auto j = 0; j < intersection_count; ++j )
-			{
-				const auto& inter = intersections[ j ];
-				if ( !inter.valid )
-				{
-					continue;
-				}
-
-				const auto diff = std::fabsf( inter.center_projection - trace_fraction );
-				if ( diff < best_match_diff )
-				{
-					best_match_diff = diff;
-					best_hitbox = inter.index;
-				}
-			}
-		}
-
-		if ( best_hitbox < 0 )
-		{
-			continue;
-		}
-
-		constexpr auto max_fraction_diff{ 0.15f };
-		if ( best_match_diff > max_fraction_diff )
 		{
 			continue;
 		}
@@ -451,11 +436,12 @@ bool shared::penetration::can( const math::vector3& start, const math::vector3& 
 
 		if ( ( hit.can_penetrate & 1 ) != 0 )
 		{
-			if ( hit.exit_fraction == 1.0f )
-			{
-				break;
-			}
-
+			// Pure "can this shot get through the wall" check: don't treat
+			// "this was the last recorded surface" as blocked -- that's
+			// just as true for a bare wall with nothing behind it as it is
+			// for one that fully absorbed the shot, and the two need to be
+			// told apart by can_penetrate, not by whether anything further
+			// was in the trace.
 			if ( hit.damage_applied < 0.03f )
 			{
 				return false;
@@ -468,6 +454,39 @@ bool shared::penetration::can( const math::vector3& start, const math::vector3& 
 
 	return false;
 }
+
+	float shared::penetration::penetration_cost( float damage, float thickness, float surface_modifier, float damage_scale ) const
+	{
+		// Transcribed from client.dll's per-contact penetration handler:
+		//
+		//   m    = max( 0, 1 / S )
+		//   cost = 3m * max( 0, 3.75 / P )  +  k * D  +  ( T^2 * m ) / 24
+		//
+		// with D = damage carried in, P = the weapon's m_flPenetration,
+		// S = surface modifier, T = thickness, k = 0.16 by default. Note the
+		// T^2 term: penetration falls off quadratically with wall thickness,
+		// not linearly, which is why a wall being twice as thick costs far
+		// more than twice the damage.
+		//
+		// The engine substitutes S and k for a handful of surface classes when
+		// the entry and exit materials match -- props 85/87 -> S 3.0, prop 76
+		// -> S 2.0, thin 71/89 -> S 3.0 with k 0.05, and a 0x2000-flagged pair
+		// -> S 32.0 with k 0.00001 when thin (glass, essentially free) or
+		// S 3.0 when thick. Callers that know the surface class should pass
+		// the substituted values rather than the raw ones.
+		if ( surface_modifier < k_min_surface_modifier || this->m_weapon_data.penetration <= 0.0f )
+		{
+			return std::numeric_limits<float>::max( );
+		}
+
+		const auto m = std::max( 0.0f, 1.0f / surface_modifier );
+		const auto weapon_term = std::max( 0.0f, 3.75f / this->m_weapon_data.penetration );
+		const auto cost = 3.0f * m * weapon_term
+			+ damage_scale * damage
+			+ ( thickness * thickness * m ) / 24.0f;
+
+		return std::max( 0.0f, cost );
+	}
 
 	float shared::penetration::get_max_damage( int hitgroup, int target_armor, bool has_helmet, int target_team ) const
 	{

@@ -11,6 +11,7 @@
 #include <protection/game_addresses.hpp>
 #include "../hooks.hpp"
 
+
 namespace hooks {
 
 	// the composition texture handle the preview panel renders into; once the
@@ -419,6 +420,10 @@ namespace hooks {
 				}
 				features::misc::g_projectile_trajectory.on_create_move( current_cmd );
 			}
+
+			// last, so it strips the movement every other feature has already
+			// written -- the pawn must stay put while the camera flies.
+			features::misc::g_camera.on_create_move( current_cmd );
 			if ( trace )
 			{
 				diag::step( "create_move: post-combat movement end" );
@@ -957,6 +962,7 @@ namespace hooks {
 	float* __fastcall cheat::get_interpolated_shoot_position( std::uintptr_t thisptr, float* out, int* tick_frac )
 	{
 		const auto result = m_get_interpolated_shoot_position.call<float*>( thisptr, out, tick_frac );
+
 
 		
 		

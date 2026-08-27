@@ -121,6 +121,9 @@ namespace features::combat {
 		const auto& prestate = systems::g_prediction.pre( );
 
 		aim_context out{};
+
+		// fallback if prediction is unavailable; zero would read as perfect
+		// accuracy and fire everything
 		out.predicted_inaccuracy = g_shared.get_inaccuracy( true );
 
 		systems::g_prediction.simulate( cmd, local, [ & ]
@@ -129,6 +132,11 @@ namespace features::combat {
 
 				out.velocity = memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseEntity", "m_vecAbsVelocity"_hash ) );
 				out.spread = g_shared.get_spread( );
+
+				// must be sampled inside simulate: this runs post-move and
+				// pre-restore, so velocity/flags/duck are what the shot is
+				// actually fired with
+				out.predicted_inaccuracy = g_shared.get_inaccuracy( true );
 			} );
 
 		ctx.spread = out.spread;
@@ -216,13 +224,27 @@ namespace features::combat {
 
 			if ( records.empty( ) )
 			{
+				// no usable history: fall back to extrapolation, then to a live
+				// snapshot, rather than dropping the candidate outright
 				auto extrap = g_shared.lc( ).extrapolate( pawn );
-				if ( !extrap.has_value( ) )
+
+				if ( extrap.has_value( ) )
 				{
-					continue;
+					this->m_extrapolated_records.push_back( std::move( *extrap ) );
+				}
+				else
+				{
+					// built in place: a record carries two 128-bone arrays, which
+					// is not something to hand around on the stack per player
+					this->m_extrapolated_records.emplace_back( );
+
+					if ( !this->m_extrapolated_records.back( ).setup( pawn ) )
+					{
+						this->m_extrapolated_records.pop_back( );
+						continue;
+					}
 				}
 
-				this->m_extrapolated_records.push_back( std::move( *extrap ) );
 				records.push_back( &this->m_extrapolated_records.back( ) );
 			}
 
@@ -285,6 +307,77 @@ namespace features::combat {
 		if ( candidates.empty( ) )
 		{
 			this->m_release_duck_for_shot = false;
+
+			// autostop must not depend on lag-comp history. repeats the
+			// gather_candidates enemy filter minus the record requirement.
+			if ( autostop_enabled && this->should_stop_movement( ctx ) )
+			{
+				const auto eye = g_shared.get_eye_position( local.pawn );
+				const auto view_angles = systems::g_input.get_view_angles( );
+				const auto max_fov_sq = ( config.max_fov.value + 15.0f ) * ( config.max_fov.value + 15.0f );
+
+				for ( const auto& p : systems::g_entities.get_by_type( systems::entities::type::player ) )
+				{
+					if ( !p.ptr || p.ptr == local.controller )
+					{
+						continue;
+					}
+
+					if ( !memory::read<bool>( p.ptr + SCHEMA( "CCSPlayerController", "m_bPawnIsAlive"_hash ) ) )
+					{
+						continue;
+					}
+
+					const auto pawn_handle = memory::read<std::uint32_t>( p.ptr + SCHEMA( "CBasePlayerController", "m_hPawn"_hash ) );
+					const auto pawn = systems::g_entities.lookup( pawn_handle );
+
+					if ( !pawn || pawn == local.pawn )
+					{
+						continue;
+					}
+
+					if ( !local.is_this_other_team( memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iTeamNum"_hash ) ) ) )
+					{
+						continue;
+					}
+
+					if ( memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iHealth"_hash ) ) <= 0 )
+					{
+						continue;
+					}
+
+					const auto game_scene_node = memory::read<std::uintptr_t>( pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+					if ( !game_scene_node )
+					{
+						continue;
+					}
+
+					const auto origin = memory::read<math::vector3>( game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+					const auto center = origin + math::vector3{ 0.0f, 0.0f, 45.0f };
+
+					if ( angle_distance_sqr( view_angles, math::helpers::calculate_angle( eye, center ) ) > max_fov_sq )
+					{
+						continue;
+					}
+
+					// only stop for someone actually shootable from here --
+					// max_fov is often the full 180 degrees
+					if ( !systems::g_tracing.is_visible( eye, center, pawn, local.pawn ) )
+					{
+						auto pen_damage{ 0.0f };
+						const auto direction = ( center - eye ).normalized( );
+
+						if ( !g_shared.pen( ).can( eye, direction, pen_damage, local ) )
+						{
+							continue;
+						}
+					}
+
+					this->m_should_stop = true;
+					break;
+				}
+			}
+
 			return;
 		}
 
@@ -415,8 +508,10 @@ namespace features::combat {
 				const auto inacc_floor = std::max( inacc_stand, 0.004f );
 				const auto real_inacc = g_shared.get_inaccuracy_at_velocity( local.pawn, real_vel );
 
-				const auto too_inaccurate = real_inacc > inacc_floor * 2.0f + 0.003f;
-				const auto too_fast = ctx.weapon_max_speed > 0.0f && real_speed_2d > ctx.weapon_max_speed * 0.20f;
+				// coarse backstop only -- hitchance already accounts for speed via
+				// the predicted inaccuracy. raise for more aggression, lower for less.
+				const auto too_inaccurate = real_inacc > inacc_floor * 5.0f + 0.010f;
+				const auto too_fast = ctx.weapon_max_speed > 0.0f && real_speed_2d > ctx.weapon_max_speed * 0.60f;
 
 				// airborne shots are only reliable right around the jump apex — the
 				// jump spread grows quickly away from it. the reconstructed
@@ -432,7 +527,8 @@ namespace features::combat {
 						const auto min_air_inaccuracy = accuracy_penalty + inac_jump_apex;
 						const auto real_air_inaccuracy = g_shared.get_inaccuracy_at_velocity( local.pawn, full_vel );
 
-						constexpr auto air_tolerance{ 0.003f };
+						// 0.003 pinned airborne shots to one tick of the jump arc
+						constexpr auto air_tolerance{ 0.010f };
 						return real_air_inaccuracy > min_air_inaccuracy + air_tolerance;
 					}( );
 
@@ -445,6 +541,9 @@ namespace features::combat {
 
 		if ( autostop_enabled && !shot_viable && this->should_stop_movement( ctx ) )
 		{
+			// only stop if the predicted stop position actually yields a hit.
+			// a scoped sniper satisfies should_stop_movement at almost any
+			// speed, so without this it stops whenever scoped and moving.
 			const auto stop = this->predict_stop( ctx, primary_eye, local );
 			if ( stop )
 			{
@@ -921,10 +1020,12 @@ namespace features::combat {
 				continue;
 			}
 
+			// resolve the bookkeeping to whatever the engine says was hit, but
+			// keep aiming where we traced -- retargeting to another hitbox's
+			// centre fires a ray nothing validated
 			auto resolved_hitbox = tp.hitbox;
 			auto resolved_hitbox_index = tp.hitbox_index;
 			auto resolved_bone_index = tp.bone_index;
-			auto resolved_position = tp.position;
 
 			if ( pen.hitbox != tp.hitbox_index )
 			{
@@ -942,17 +1043,13 @@ namespace features::combat {
 				resolved_hitbox = actual_hitbox;
 				resolved_hitbox_index = actual_hitbox.index;
 				resolved_bone_index = actual_hitbox.bone;
-
-				const auto& actual_bone = skeleton[ resolved_bone_index ];
-				resolved_position = actual_bone.rotation.rotate_vector( ( actual_hitbox.mins + actual_hitbox.maxs ) * 0.5f ) + actual_bone.position;
 			}
 
-			const auto resolved_aim = math::helpers::calculate_angle( eye, resolved_position );
 			scan_hit h{};
-			h.position = resolved_position;
-			h.aim_angle = resolved_aim;
+			h.position = tp.position;
+			h.aim_angle = aim;
 			h.damage = pen.damage;
-			h.fov = math::helpers::angle_distance( ctx.view_angles, resolved_aim );
+			h.fov = math::helpers::angle_distance( ctx.view_angles, aim );
 			h.hitbox_index = resolved_hitbox_index;
 			h.hitgroup = pen.hitgroup;
 			h.bone_index = resolved_bone_index;
@@ -1583,11 +1680,28 @@ namespace features::combat {
 			// the inaccuracy and spread come from the weapon accuracy state
 			// captured at create move (m_ctx), the same state the server rolls
 			// the spread with on the fire tick
-			const auto corrected = g_shared.find_spread_correction( aim_angle, stamp_tick );
+			auto correction_error{ 0.0f };
+			const auto corrected = g_shared.find_spread_correction( aim_angle, stamp_tick, &correction_error );
+
 			if ( corrected.x == 0.0f && corrected.y == 0.0f && corrected.z == 0.0f )
 			{
 				this->m_firing_this_tick = false;
 				return;
+			}
+
+			// exact fixed point returns zero error; otherwise take the closest
+			// approximation if the leftover spread still lands inside the target
+			if ( correction_error > 0.0f )
+			{
+				const auto distance = ( tgt.hit.position - shoot_eye ).length( );
+				const auto extent = tgt.hit.hitbox.radius > 0.001f ? tgt.hit.hitbox.radius : 2.0f;
+				const auto tolerance = distance > 1.0f ? ( extent * 0.75f ) / distance : 0.0f;
+
+				if ( correction_error > tolerance )
+				{
+					this->m_firing_this_tick = false;
+					return;
+				}
 			}
 
 			aim_angle = corrected;
@@ -2060,6 +2174,18 @@ namespace features::combat {
 			if ( dist_sq > max_dist_sq )
 			{
 				return false;
+			}
+
+			// nothing penetrates past k_max_penetration_distance, so measure
+			// along the bullet path and skip positions that cannot work
+			if ( cand.records[ 0 ] )
+			{
+				constexpr auto max_pen_dist_sq{ shared::penetration::k_max_penetration_distance * shared::penetration::k_max_penetration_distance };
+
+				if ( ( cand.records[ 0 ]->origin - pos ).length_sqr( ) > max_pen_dist_sq )
+				{
+					return false;
+				}
 			}
 
 			const auto trace = systems::g_tracing.trace_hull( local_origin, pos, { -16, -16, 0 }, { 16, 16, 72 }, local.pawn, 0x1c3003, 4 );

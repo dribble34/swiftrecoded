@@ -1,5 +1,6 @@
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
+#include <utilities/tls/dynamic_tls.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
 #include <core/settings.hpp>
@@ -166,7 +167,8 @@ namespace features::combat {
 			std::array<math::vector2, 256> values{};
 		};
 
-		thread_local spread_cache cache{};
+		static tls::dynamic_tls<spread_cache> cache_slot{};
+		auto& cache = cache_slot.get( );
 		if ( !cache.initialized || cache.inaccuracy != inaccuracy || cache.spread != spread ||
 			cache.recoil_index != this->m_ctx.recoil_index || cache.item_def_idx != this->m_ctx.item_def_idx ||
 			cache.num_bullets != this->m_ctx.num_bullets )
@@ -233,11 +235,25 @@ namespace features::combat {
 		return static_cast< float >( hits ) / static_cast< float >( samples );
 	}
 
-	math::vector3 shared::find_spread_correction( const math::vector3& aim_angle, int tick ) const
+	math::vector3 shared::find_spread_correction( const math::vector3& aim_angle, int tick, float* out_error ) const
 	{
-		for ( auto i = 0; i < 720; i++ )
+		// seed = SHA1( q(pitch), q(yaw), tick )[0], q() snapping to 0.5 deg
+		// steps; roll is never hashed.
+		//
+		// a fixed point needs the fired pitch to land in the same bucket as
+		// the seed we cancelled. the correction is well under a degree, so
+		// only buckets adjacent to the aim pitch can ever match.
+		constexpr auto k_bucket{ 0.5f };
+		constexpr auto k_window{ 6 };
+
+		const auto base_bucket = std::roundf( aim_angle.x * 2.0f ) * k_bucket;
+
+		auto best = math::vector3{};
+		auto best_error{ 1.0e30f };
+
+		for ( auto i = -k_window; i <= k_window; ++i )
 		{
-			const auto test_angles = math::vector3{ static_cast< float >( i ) / 2.0f, aim_angle.y, 0.0f };
+			const auto test_angles = math::vector3{ base_bucket + static_cast< float >( i ) * k_bucket, aim_angle.y, 0.0f };
 			const auto seed = this->get_spread_seed( test_angles, tick );
 			const auto spread = this->calculate_spread( seed, this->m_ctx.inaccuracy, this->m_ctx.spread, this->m_ctx.recoil_index, this->m_ctx.item_def_idx, this->m_ctx.num_bullets );
 
@@ -245,13 +261,37 @@ namespace features::combat {
 			adj_angle.x += math::helpers::rad_to_deg( std::atan( std::sqrt( spread.x * spread.x + spread.y * spread.y ) ) );
 			adj_angle.z = -math::helpers::rad_to_deg( std::atan2( spread.x, spread.y ) );
 
-			if ( this->get_spread_seed( adj_angle, tick ) == seed )
+			const auto actual_seed = this->get_spread_seed( adj_angle, tick );
+			if ( actual_seed == seed )
 			{
+				if ( out_error )
+				{
+					*out_error = 0.0f;
+				}
+
 				return adj_angle;
+			}
+
+			// not a fixed point: the server rolls `actual` where we cancelled
+			// `spread`. keep the smallest residual instead of giving up.
+			const auto actual = this->calculate_spread( actual_seed, this->m_ctx.inaccuracy, this->m_ctx.spread, this->m_ctx.recoil_index, this->m_ctx.item_def_idx, this->m_ctx.num_bullets );
+			const auto dx = actual.x - spread.x;
+			const auto dy = actual.y - spread.y;
+			const auto error = std::sqrt( dx * dx + dy * dy );
+
+			if ( error < best_error )
+			{
+				best_error = error;
+				best = adj_angle;
 			}
 		}
 
-		return {};
+		if ( out_error )
+		{
+			*out_error = best_error;
+		}
+
+		return best;
 	}
 
 	math::vector3 shared::get_eye_position( std::uintptr_t local_pawn ) const

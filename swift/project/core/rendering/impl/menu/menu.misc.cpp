@@ -346,6 +346,13 @@ namespace rendering {
 					xui::end_popup( );
 				}
 
+				xui::checkbox( "freecam", cam.freecam );
+				if ( xui::begin_popup( "##fc_popup", 220.0f ) )
+				{
+					xui::slider_float( "speed", cam.freecam_speed, 50.0f, 2000.0f, "%.0f" );
+					xui::end_popup( );
+				}
+
 				xui::checkbox( "aspect ratio", cam.change_aspect_ratio );
 				if ( xui::begin_popup( "##ar_popup", 220.0f ) )
 				{

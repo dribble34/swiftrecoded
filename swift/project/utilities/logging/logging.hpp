@@ -3,6 +3,8 @@
 #include <format>
 #include <string_view>
 
+#include <utilities/tls/dynamic_tls.hpp>
+
 namespace logging {
 
 	namespace console {
@@ -17,7 +19,7 @@ namespace logging {
 			print_raw( std::vformat( fmt, std::make_format_args( args... ) ).c_str( ) );
 		}
 
-		inline thread_local bool emitting{};
+		inline tls::dynamic_tls<bool> emitting{};
 
 	} 
 

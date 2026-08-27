@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <core/systems/systems.hpp>
+#include <utilities/tls/dynamic_tls.hpp>
 
 namespace features::combat {
 
@@ -131,7 +132,17 @@ namespace features::combat {
 				bool penetrated{};
 			};
 
+			// hard gates from client.dll: either one zeroes the penetration
+			// counter and stops the bullet. the distance bound is not scaled by
+			// m_flPenetration, so nothing penetrates past it.
+			static constexpr auto k_max_penetration_distance{ 3000.0f };
+			static constexpr auto k_min_surface_modifier{ 0.1f };
+
 			void prepare( std::uintptr_t weapon_vdata, std::uintptr_t weapon );
+
+			// analytic penetration cost, for paths that cannot afford a bullet
+			// trace per candidate. surface_modifier is the worst across the span.
+			[[nodiscard]] float penetration_cost( float damage, float thickness, float surface_modifier, float damage_scale = 0.16f ) const;
 
 			[[nodiscard]] target_static prepare_target_static( std::uintptr_t target_pawn ) const;
 			[[nodiscard]] run_context prepare_target( std::uintptr_t target_pawn, lagcomp::record* record ) const;
@@ -214,11 +225,11 @@ namespace features::combat {
 		[[nodiscard]] lagcomp& lc( ) { return this->m_lc; }
 		[[nodiscard]] shoot_history& sh( ) { return this->m_sh; }
 
-		[[nodiscard]] bool autowalling( ) const { return this->m_autowalling; }
-		[[nodiscard]] lagcomp::record* current_autowall_record( ) const { return this->m_current_autowall_record; }
+		[[nodiscard]] bool autowalling( ) const { return this->m_autowalling.get( ); }
+		[[nodiscard]] lagcomp::record* current_autowall_record( ) const { return this->m_current_autowall_record.get( ); }
 
-		void begin_autowall( lagcomp::record* record ) { this->m_autowalling = true; this->m_current_autowall_record = record; }
-		void end_autowall( ) { this->m_autowalling = false; this->m_current_autowall_record = nullptr; }
+		void begin_autowall( lagcomp::record* record ) { this->m_autowalling.get( ) = true; this->m_current_autowall_record.get( ) = record; }
+		void end_autowall( ) { this->m_autowalling.get( ) = false; this->m_current_autowall_record.get( ) = nullptr; }
 
 		[[nodiscard]] int& last_shoot_tick( ) { return this->m_last_shoot_tick; }
 
@@ -226,7 +237,8 @@ namespace features::combat {
 		[[nodiscard]] math::vector2 calculate_spread( int seed, float accuracy, float spread, float recoil_index, int item_def_idx, int num_bullets ) const;
 		[[nodiscard]] math::vector3 get_aim_punch( std::uintptr_t local_pawn ) const;
 		[[nodiscard]] float calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples = 256, float needed = 0.0f ) const;
-		[[nodiscard]] math::vector3 find_spread_correction( const math::vector3& aim_angle, int tick ) const;
+		// out_error: 0 on an exact fixed point, else the residual spread error
+		[[nodiscard]] math::vector3 find_spread_correction( const math::vector3& aim_angle, int tick, float* out_error = nullptr ) const;
 		[[nodiscard]] math::vector3 get_eye_position( std::uintptr_t local_pawn ) const;
 		[[nodiscard]] math::vector3 get_shoot_position( ) const;
 		[[nodiscard]] math::vector3 get_interpolated_shoot_position( std::uintptr_t local_pawn, bool newest = false ) const;
@@ -249,8 +261,9 @@ namespace features::combat {
 		shoot_history m_sh{};
 
 		
-		inline static thread_local bool m_autowalling{};
-		inline static thread_local lagcomp::record* m_current_autowall_record{ nullptr };
+		// Parallel rage workers must not overwrite each other's trace record.
+		inline static tls::dynamic_tls<bool> m_autowalling{};
+		inline static tls::dynamic_tls<lagcomp::record*> m_current_autowall_record{};
 
 		int m_last_shoot_tick{};
 	};

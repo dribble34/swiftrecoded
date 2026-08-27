@@ -24,7 +24,53 @@ namespace {
 	std::atomic<LPTOP_LEVEL_EXCEPTION_FILTER> g_previous_exception_filter{};
 	PVOID g_vectored_exception_handler{};
 
+	PRUNTIME_FUNCTION g_exception_table{};
+	DWORD g_exception_table_count{};
+	bool g_exception_table_registered{};
+
 	LONG WINAPI diag_unhandled_exception_filter( EXCEPTION_POINTERS* info );
+
+	// Registers this module's own .pdata with the process so x64 SEH
+	// (__try/__except, vectored/unhandled exception filters) works inside
+	// it even when the module never went through the Windows loader --
+	// RtlLookupFunctionEntry has no way to find unwind info for a
+	// manually mapped module otherwise. Must run before any code in this
+	// module relies on __try/__except, including the CRT init below and
+	// any C++ static initializer it runs, so it's the very first thing
+	// `entry` does. Calling this on a normally LoadLibrary'd module is
+	// harmless: it just adds a redundant dynamic table entry alongside
+	// the loader's own static registration.
+	void register_exception_table( HMODULE module_handle )
+	{
+		const auto base = reinterpret_cast<std::uintptr_t>( module_handle );
+		const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>( base );
+		if ( dos->e_magic != IMAGE_DOS_SIGNATURE )
+		{
+			return;
+		}
+
+		const auto* nt =
+			reinterpret_cast<const IMAGE_NT_HEADERS64*>( base + dos->e_lfanew );
+		if ( nt->Signature != IMAGE_NT_SIGNATURE )
+		{
+			return;
+		}
+
+		const auto& directory =
+			nt->OptionalHeader.DataDirectory[ IMAGE_DIRECTORY_ENTRY_EXCEPTION ];
+		if ( !directory.VirtualAddress || !directory.Size )
+		{
+			return;
+		}
+
+		g_exception_table =
+			reinterpret_cast<PRUNTIME_FUNCTION>( base + directory.VirtualAddress );
+		g_exception_table_count =
+			directory.Size / sizeof( RUNTIME_FUNCTION );
+
+		g_exception_table_registered = RtlAddFunctionTable(
+			g_exception_table, g_exception_table_count, base ) != FALSE;
+	}
 
 #if defined( DEV )
 	hooking::jmp g_minidump_hook{};
@@ -41,7 +87,7 @@ namespace {
 	{
 		const auto original =
 			g_minidump_hook.original<diag::minidump_write_fn>( );
-		if ( !diag::g_writing_minidump &&
+		if ( !diag::g_writing_minidump.get( ) &&
 			exception &&
 			!exception->client_pointers &&
 			exception->exception_pointers )
@@ -172,13 +218,13 @@ namespace {
 		{
 			diag::record_crash(
 				info,
-				diag::g_exception_scope_depth
-					? diag::g_exception_phase
+				diag::g_exception_scope_depth.get( )
+					? diag::g_exception_phase.get( )
 					: "first-chance fault in swift.fly DLL" );
 			return EXCEPTION_CONTINUE_SEARCH;
 		}
 
-		if ( diag::g_exception_scope_depth == 0 )
+		if ( diag::g_exception_scope_depth.get( ) == 0 )
 		{
 			return EXCEPTION_CONTINUE_SEARCH;
 		}
@@ -211,7 +257,7 @@ namespace {
 		_snprintf_s(
 			buf, sizeof( buf ), _TRUNCATE,
 			"FEATURE EXCEPTION [%s] 0x%08lX at %s+0x%llX (0x%p), accessed 0x%p",
-			diag::g_exception_phase,
+			diag::g_exception_phase.get( ),
 			code,
 			module_name,
 			module_base
@@ -494,11 +540,17 @@ extern "C" int __stdcall entry( HMODULE module_handle, DWORD reason, LPVOID rese
 {
 	if ( reason == DLL_PROCESS_ATTACH )
 	{
+		register_exception_table( module_handle );
+
 		_CRT_INIT( module_handle, reason, reserved );
 		DisableThreadLibraryCalls( module_handle );
 
 		diag::set_module( module_handle );
 		diag::step( "stage: dll attach" );
+		diag::writef(
+			diag::level::info,
+			"exception table self-registration: %s",
+			g_exception_table_registered ? "ok" : "failed" );
 		diag::step( "build: development diagnostics" );
 
 		diag::step( "stage: crt done, spawning thread" );
@@ -518,6 +570,12 @@ extern "C" int __stdcall entry( HMODULE module_handle, DWORD reason, LPVOID rese
 	}
 	else if ( reason == DLL_PROCESS_DETACH )
 	{
+		if ( g_exception_table_registered )
+		{
+			RtlDeleteFunctionTable( g_exception_table );
+			g_exception_table_registered = false;
+		}
+
 #if defined( DEV )
 		if ( g_vectored_exception_handler )
 		{

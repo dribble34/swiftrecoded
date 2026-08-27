@@ -20,6 +20,11 @@
 
 namespace app {
 
+static void log_inject(const char* msg) {
+    std::ofstream diag("swift_injection.log", std::ios::app);
+    if (diag.is_open()) diag << "[LOADER] " << msg << "\n";
+}
+
 static DWORD find_cs2_pid() {
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return 0;
@@ -65,23 +70,52 @@ static bool game_has_module(DWORD pid, const wchar_t* modName) {
     return found;
 }
 
-static void wait_module(DWORD pid, const wchar_t* modName) {
-    // Wait until module appears in process module snapshot
-    while (!game_has_module(pid, modName)) {
+// Poll until cs2.exe shows up in the process list, or timeout. Returns 0 on timeout.
+static DWORD wait_for_cs2(int timeout_ms) {
+    int elapsed = 0;
+    while (elapsed < timeout_ms) {
+        DWORD pid = find_cs2_pid();
+        if (pid) return pid;
         syscalls::sleep_ms(500);
+        elapsed += 500;
     }
-    // Give engine an extra 3 seconds to finish initializing hooks & textures
-    syscalls::sleep_ms(3000);
+    return 0;
+}
+
+// Poll until the three engine modules are all loaded in the target process, or timeout.
+// Injecting before these are up puts the DLL at risk of pattern-scanning missing modules
+// and either crashing or silently failing.
+static bool wait_for_engine_ready(DWORD pid, int timeout_ms) {
+    int elapsed = 0;
+    while (elapsed < timeout_ms) {
+        if (game_has_module(pid, L"client.dll") &&
+            game_has_module(pid, L"engine2.dll") &&
+            game_has_module(pid, L"server.dll")) {
+            return true;
+        }
+        syscalls::sleep_ms(1000);
+        elapsed += 1000;
+    }
+    return false;
 }
 
 static std::atomic<bool> g_is_injecting{false};
 
+// RAII guard so failed injections don't permanently lock the loader for the session.
+struct InjectGuard {
+    bool held{false};
+    bool acquire() { bool exp = false; held = g_is_injecting.compare_exchange_strong(exp, true); return held; }
+    ~InjectGuard() { if (held) g_is_injecting.store(false); }
+};
+
 DownloadResult download_and_inject(const std::string& key, DownloadState* state) {
     DownloadResult res;
 
-    // Guard: Prevent any concurrent or repeat execution in the same session
-    bool expected = false;
-    if (!g_is_injecting.compare_exchange_strong(expected, true)) {
+    // Guard: block concurrent runs, but ALWAYS release on return (RAII).
+    // The old code set the flag to true and never reset it on failure paths,
+    // so any failed attempt locked the loader for the rest of the session.
+    InjectGuard guard;
+    if (!guard.acquire()) {
         res.message = "Injection already in progress.";
         return res;
     }
@@ -96,6 +130,7 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
         return res;
     }
 
+    log_inject("Downloading encrypted payload...");
     auto dl = network::download_payload(key, hwid, vr.session_token, vr.cnonce, vr.snonce);
     if (!dl.success || dl.encrypted_data.empty()) {
         res.message = dl.error.empty() ? "Failed to download payload." : dl.error;
@@ -108,8 +143,12 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
         return res;
     }
 
-    DWORD ep_rva = 0;
+    // Sanity-check PE headers before touching CS2 -- fail fast if the payload is malformed
     {
+        if (peData.size() < sizeof(IMAGE_DOS_HEADER)) {
+            res.message = "Payload too small to be a valid PE.";
+            return res;
+        }
         const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(peData.data());
         if (dos->e_magic != IMAGE_DOS_SIGNATURE) {
             res.message = "Invalid binary image format.";
@@ -120,23 +159,31 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
             res.message = "Invalid NT header format.";
             return res;
         }
-        ep_rva = nt->OptionalHeader.AddressOfEntryPoint;
     }
+    log_inject("Payload decrypted and validated.");
 
     // ── Stage 2: Ensure CS2 is running ─────────────────────────────────────
     if (state) InterlockedExchange(&state->stage, (LONG)DlStage::WaitingForGame);
 
     DWORD csPid = find_cs2_pid();
     if (!csPid) {
-        // CS2 is not running yet -> trigger auto launch via Steam
+        // CS2 not running yet -> trigger auto launch via Steam.
+        log_inject("CS2 not running. Launching via Steam...");
         ShellExecuteW(nullptr, L"open", L"steam://rungameid/730", nullptr, nullptr, SW_SHOWNORMAL);
 
-        // Poll until CS2 process is detected
-        while (!csPid) {
-            csPid = find_cs2_pid();
-            if (!csPid) syscalls::sleep_ms(500);
+        // Timeout: 3 minutes. If Steam is missing/broken or the user cancels
+        // the launch prompt, we surface a real error instead of hanging.
+        csPid = wait_for_cs2(180000);
+        if (!csPid) {
+            crypto::secure_zero(peData.data(), peData.size());
+            res.message = "CS2 did not launch within 3 minutes. Is Steam installed and CS2 owned?";
+            return res;
         }
     }
+
+    char buf[128];
+    snprintf(buf, sizeof(buf), "CS2 process opened (PID %lu).", csPid);
+    log_inject(buf);
 
     HANDLE game = open_game_process(csPid);
     if (!game) {
@@ -144,43 +191,44 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
     }
     if (!game) {
         crypto::secure_zero(peData.data(), peData.size());
-        char errBuf[128];
-        snprintf(errBuf, sizeof(errBuf), "Failed to open CS2 process (PID %lu, Error %lu).", csPid, GetLastError());
-        res.message = errBuf;
+        snprintf(buf, sizeof(buf), "Failed to open CS2 process (PID %lu, Error %lu).", csPid, GetLastError());
+        res.message = buf;
         return res;
     }
 
-    // If CS2 is already running, proceed directly to countdown
-    {
-        std::ofstream diag("swift_injection.log", std::ios::app);
-        if (diag.is_open()) diag << "[LOADER] CS2 process opened (PID " << csPid << "). Starting 60-second stabilization timer...\n";
+    // Wait for the actual engine modules the injected DLL is going to pattern-scan.
+    // The old code hard-slept 60 seconds regardless -- meaning if CS2 was already
+    // at the main menu, users still had to sit through a full minute. And if CS2
+    // was NOT loaded yet, 60s might still not be enough. Poll for readiness
+    // instead, with a 3-minute cap.
+    log_inject("Waiting for engine modules (client.dll, engine2.dll, server.dll)...");
+    if (!wait_for_engine_ready(csPid, 180000)) {
+        syscalls::close(game);
+        crypto::secure_zero(peData.data(), peData.size());
+        res.message = "CS2 engine modules didn't finish loading in time. Reach the main menu and try again.";
+        return res;
     }
 
-    // Wait 60 seconds (1 full minute) to ensure CS2 DirectX renderer, panorama, and main menu are 100% loaded
-    for (int sec = 1; sec <= 60; ++sec) {
-        Sleep(1000);
-        if (sec % 10 == 0) {
-            std::ofstream diag("swift_injection.log", std::ios::app);
-            if (diag.is_open()) diag << "[LOADER] Waiting for CS2 main menu: " << sec << "/60s elapsed.\n";
-        }
-    }
+    // Small grace period after modules appear -- schemas/vtables aren't guaranteed
+    // populated the instant client.dll shows up. 5s is much shorter than the
+    // previous unconditional 60s.
+    log_inject("Engine modules loaded. Waiting 5s for stabilization...");
+    syscalls::sleep_ms(5000);
 
-    {
-        std::ofstream diag("swift_injection.log", std::ios::app);
-        if (diag.is_open()) diag << "[LOADER] 60 seconds elapsed. Proceeding to VAC patch & manual map...\n";
-    }
-
-    // Patch VAC in game process
+    // Patch VAC in game process (no-op on modern CS2 where no vac* module is
+    // loaded inside cs2.exe; harmless to keep for older builds).
     steam::patch_vac(game);
-    syscalls::sleep_ms(1000);
+    syscalls::sleep_ms(500);
 
     // ── Stage 3: Remote Map PE Buffer using original mapper ──────────────────
     if (state) InterlockedExchange(&state->stage, (LONG)DlStage::Injecting);
+    log_inject("Mapping DLL into CS2...");
 
     const uintptr_t remote_base = mapper::map_remote(game, peData);
     if (!remote_base) {
         syscalls::close(game);
         crypto::secure_zero(peData.data(), peData.size());
+        log_inject("Mapper returned null base.");
         res.message = "Remote memory mapping failed.";
         return res;
     }
@@ -189,11 +237,12 @@ DownloadResult download_and_inject(const std::string& key, DownloadState* state)
     peData.clear();
     peData.shrink_to_fit();
 
-    if (game) syscalls::close(game);
+    syscalls::close(game);
 
     // ── Stage 4: Done ─────────────────────────────────────────────────────────
     if (state) InterlockedExchange(&state->stage, (LONG)DlStage::Cleanup);
     if (state) InterlockedExchange(&state->stage, (LONG)DlStage::Done);
+    log_inject("Injection complete.");
 
     res.success = true;
     return res;

@@ -879,7 +879,12 @@ namespace features::combat {
 			return;
 		}
 
-		constexpr auto cock_ticks{ 13 };
+		// the R8 primary "cocks" for a fixed wall-clock time before the shot
+		// releases (~0.203 s, i.e. 13 ticks at 64). derive the tick count from
+		// the tick interval so it still lines up on non-64 servers instead of
+		// releasing the button early and dropping the shot.
+		constexpr auto cock_time{ 0.203125f };
+		const auto cock_ticks{ std::max( 1, cstypes::time_to_ticks( cock_time ) ) };
 		if ( this->m_revolver_cock_ticks >= cock_ticks )
 		{
 			set_command_button( cmd, cstypes::command_buttons::in_attack, false );

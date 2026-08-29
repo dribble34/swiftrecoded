@@ -1,4 +1,4 @@
-#ifndef GAME_ADDRESSES_HPP
+﻿#ifndef GAME_ADDRESSES_HPP
 #define GAME_ADDRESSES_HPP
 #include <cstdint>
 #include <utilities/memory/memory.hpp>

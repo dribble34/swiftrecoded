@@ -81,7 +81,6 @@ namespace rendering {
 		}
 
 		this->try_bind_ui_assets( );
-		features::misc::g_dlight.on_present( );
 
 		m_context->OMSetRenderTargets( 1, &this->m_rtv, nullptr );
 

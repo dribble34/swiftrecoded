@@ -263,46 +263,67 @@ namespace features::misc {
 		std::string display_name = base_name;
 		if ( cfg.clantag.value )
 		{
-			constexpr std::string_view tag{ "memesense.gg" };
-			constexpr auto ticks_per_step{ 8 };
-			constexpr auto type_steps{ static_cast< int >( tag.size( ) ) };
-			constexpr auto hold_steps{ 16 };
-			constexpr auto dissolve_steps{ static_cast< int >( tag.size( ) ) };
-			constexpr auto blank_steps{ 2 };
-			constexpr auto total_steps{ type_steps + hold_steps + dissolve_steps + blank_steps };
+			constexpr std::string_view tag{ "swift.fly" };
+			const auto mode = cfg.clantag_type.value;
 
 			const auto global_vars = memory::safe_read<std::uintptr_t>( addresses::globals::global_vars ).value_or( 0 );
 			const auto current_tick = global_vars
 				? memory::safe_read<int>( global_vars + 0x44 ).value_or( 0 )
 				: 0;
 
-			const auto cycle_step = ( current_tick / ticks_per_step ) % total_steps;
-
 			std::string tag_anim;
-			tag_anim.reserve( tag.size( ) );
 
-			if ( cycle_step < type_steps )
+			if ( mode == 0 ) // static
 			{
-				// type-in: letters appear left to right
-				const auto typed = cycle_step;
-				for ( std::size_t i = 0; i < static_cast< std::size_t >( typed ); ++i )
-				{
-					tag_anim += tag[ i ];
-				}
-			}
-			else if ( cycle_step < type_steps + hold_steps )
-			{
-				// hold the full tag
 				tag_anim = tag;
 			}
-			else if ( cycle_step < type_steps + hold_steps + dissolve_steps )
+			else if ( mode == 1 ) // scroll
 			{
-				// un-type: letters drop off right to left
-				const auto dissolved = cycle_step - ( type_steps + hold_steps );
-				const auto remaining = tag.size( ) - static_cast< std::size_t >( dissolved );
-				tag_anim = tag.substr( 0, remaining );
+				std::string padded = std::string( tag );
+				if ( padded.size( ) < 15 )
+					padded.append( 15 - padded.size( ), ' ' );
+
+				const auto shift = ( current_tick / 8 ) % padded.size( );
+				std::rotate( padded.begin( ), padded.begin( ) + static_cast<std::ptrdiff_t>( shift ), padded.end( ) );
+				tag_anim = padded.substr( 0, 15 );
 			}
-			// else: brief blank pause before the next cycle
+			else if ( mode == 2 ) // reverse scroll
+			{
+				std::string padded = std::string( tag );
+				if ( padded.size( ) < 15 )
+					padded.append( 15 - padded.size( ), ' ' );
+
+				const auto shift = padded.size( ) - (( current_tick / 8 ) % padded.size( ));
+				std::rotate( padded.begin( ), padded.begin( ) + static_cast<std::ptrdiff_t>( shift % padded.size( ) ), padded.end( ) );
+				tag_anim = padded.substr( 0, 15 );
+			}
+			else // wave (typewriter expand/contract)
+			{
+				constexpr auto ticks_per_step{ 10 };
+				constexpr auto type_steps{ static_cast< int >( tag.size( ) ) };
+				constexpr auto hold_steps{ 16 };
+				constexpr auto dissolve_steps{ static_cast< int >( tag.size( ) ) };
+				constexpr auto blank_steps{ 2 };
+				constexpr auto total_steps{ type_steps + hold_steps + dissolve_steps + blank_steps };
+
+				const auto cycle_step = ( current_tick / ticks_per_step ) % total_steps;
+
+				if ( cycle_step < type_steps )
+				{
+					const auto typed = cycle_step;
+					tag_anim = tag.substr( 0, static_cast< std::size_t >( typed ) );
+				}
+				else if ( cycle_step < type_steps + hold_steps )
+				{
+					tag_anim = tag;
+				}
+				else if ( cycle_step < type_steps + hold_steps + dissolve_steps )
+				{
+					const auto dissolved = cycle_step - ( type_steps + hold_steps );
+					const auto remaining = tag.size( ) - static_cast< std::size_t >( dissolved );
+					tag_anim = tag.substr( 0, remaining );
+				}
+			}
 
 			if ( !tag_anim.empty( ) )
 			{

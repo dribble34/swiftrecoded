@@ -27,6 +27,7 @@ namespace settings {
 				xui::setting body_aim{ false, {}, "force b-aim", "ragebot" };
 				xui::setting autostop{ true, {}, "autostop", "ragebot" };
 				xui::setting autostop_early{ false, {}, "autostop early", "ragebot" };
+				xui::setting crouch_to_stop{ false, {}, "crouch to stop", "ragebot" };
 				xui::setting force_shot{ false, {}, "force shot", "ragebot" };
 
 				config::val<float> max_fov{ 180.0f };
@@ -211,6 +212,7 @@ namespace settings {
 			};
 
 			xui::setting enabled{ true, {}, "anti aim", "anti aim" };
+			xui::setting at_target{ false, {}, "at target", "anti aim" };
 			config::enm<pitch_mode> pitch{ pitch_mode::down, "anti aim", "pitch" };
 			config::val<float> custom_pitch{ 0.0f, "anti aim", "custom pitch" };
 			config::enm<yaw_mode> yaw{ yaw_mode::backwards, "anti aim", "yaw" };
@@ -222,8 +224,27 @@ namespace settings {
 			xui::setting hide_shots{ true, {}, "hide onshot", "anti aim" };
 			xui::setting avoid_backstab{ true, {}, "avoid backstab", "anti aim" };
 
+			xui::setting pitch_jitter{ false, {}, "pitch jitter", "anti aim" };
+			config::val<float> pitch_jitter_amount{ 45.0f, "anti aim", "pitch jitter amount" };
+			xui::setting yaw_jitter{ false, {}, "yaw jitter", "anti aim" };
+			config::val<float> yaw_jitter_amount{ 30.0f, "anti aim", "yaw jitter amount" };
+
+			enum class visualizer_style : int { circle, arrow };
+
+			xui::setting mouse_override{ false, { VK_XBUTTON1, xui::bind_mode::hold_on }, "mouse override", "anti aim" };
+			config::val<float> mouse_override_yaw{ 0.0f, "anti aim", "mouse override yaw" };
+			bool mouse_override_has_set = false;
+
 			xui::setting direction_indicator{ true, {}, "direction indicator", "anti aim" };
+			config::val<int> direction_indicator_style{ 1, "anti aim", "direction indicator style" }; // 0: arrow, 1: half circle
 			config::col direction_indicator_color{ { 173, 192, 255, 220 }, "anti aim", "direction indicator color" };
+			config::col direction_indicator_arc_color{ { 0, 0, 0, 180 }, "anti aim", "direction indicator arc color" };
+			config::val<float> direction_indicator_distance{ 55.0f, "anti aim", "direction indicator distance" };
+			config::val<float> direction_indicator_width{ 12.0f, "anti aim", "direction indicator width" };
+			config::val<float> direction_indicator_height{ 18.0f, "anti aim", "direction indicator height" };
+			config::val<float> direction_indicator_size{ 16.0f, "anti aim", "direction indicator size" };
+			xui::setting direction_indicator_fade{ true, {}, "direction indicator fade animation", "anti aim" };
+			config::val<float> direction_indicator_fade_delay{ 2.0f, "anti aim", "direction indicator fade delay" };
 			xui::setting direction_indicator_glow{ true, {}, "direction indicator glow", "anti aim" };
 			config::val<float> direction_indicator_glow_strength{ 0.55f, "anti aim", "direction indicator glow strength" };
 
@@ -548,6 +569,8 @@ namespace settings {
 				{
 					xui::setting enabled{};
 					xui::setting glow{};
+					config::val<int> style{ 0 }; // 0: arrows, 1: arc circle
+					xui::setting sharp_borders{ false, {}, "sharp borders", "oof" };
 					config::val<float> width{ 20.0f };
 					config::val<float> height{ 15.0f };
 					config::val<float> radius_x{ 200.0f };
@@ -559,9 +582,10 @@ namespace settings {
 
 					oof_arrow( ) = default;
 
-					explicit oof_arrow( const std::string& prefix ) : enabled{ true, {}, "oof arrow", prefix + " oof" }, glow{ true, {}, "glow", prefix + " oof" }
+					explicit oof_arrow( const std::string& prefix ) : enabled{ true, {}, "oof arrow", prefix + " oof" }, glow{ true, {}, "glow", prefix + " oof" }, sharp_borders{ false, {}, "sharp borders", prefix + " oof" }
 					{
 						const auto cat = prefix + " oof";
+						this->style.reg( cat, "style" );
 						this->width.reg( cat, "width" );
 						this->height.reg( cat, "height" );
 						this->radius_x.reg( cat, "radius x" );
@@ -952,6 +976,7 @@ namespace settings {
 		struct name_changer
 		{
 			xui::setting clantag{ false, {}, "clantag", "name changer" };
+			config::val<int> clantag_type{ 0, "name changer", "clantag type" }; // 0: static, 1: scroll, 2: reverse scroll, 3: wave/typewriter
 			xui::setting override_name{ false, {}, "override name", "name changer" };
 			config::str name{ "Player", "name changer", "name" };
 		} m_name_changer{};
@@ -972,8 +997,8 @@ namespace settings {
 
 		struct impacts
 		{
-			enum class sound_type : int { shop_click, home_click, bell, killcard, bullet_casing, coin_pickup, item_drop, popcan, key_press, custom };
-			enum class marker_type : int { classic, damage, both };
+			enum class sound_type : int { shop_click, home_click, bell, killcard, bullet_casing, coin_pickup, item_drop, popcan, key_press, custom, hit, bubble, metal, neverlose, rust_headshot, agpa2 };
+			enum class marker_type : int { basic, fortnite, classic, damage, both };
 			enum class bullet_impact_type : int { overlay, sparks, both };
 			enum class death_effect_type : int { classic, sparks };
 			enum class log_mode : int { screen_text, screen_widget, console };
@@ -982,6 +1007,8 @@ namespace settings {
 
 			xui::setting hit_log{ true, {}, "hit logs", "impacts" };
 			config::val<float> hit_log_duration{ 3.5f, "impacts", "hit log duration" };
+			xui::setting console_log{ true, {}, "console logs", "impacts" };
+			xui::setting chat_log{ false, {}, "chat logs", "impacts" };
 
 			xui::setting miss_log{ true, {}, "miss logs", "impacts" };
 			config::val<float> miss_log_duration{ 4.5f, "impacts", "miss log duration" };
@@ -1011,6 +1038,7 @@ namespace settings {
 			config::col bullet_impact_effect_edge_color{ { 173, 192, 255, 255 }, "impacts", "bullet impact edge color" };
 			config::col bullet_impact_effect_color_spark{ { 173, 192, 255, 255 }, "impacts", "bullet impact spark color" };
 			config::val<float> bullet_impact_effect_duration{ 2.5f, "impacts", "bullet impact duration" };
+			config::val<float> bullet_impact_effect_size{ 6.0f, "bullet impacts", "size" };
 			xui::setting bullet_impact_effect_glow{ true, {}, "glow", "bullet impacts" };
 			config::val<float> bullet_impact_effect_glow_strength{ 1.0f, "bullet impacts", "glow strength" };
 
@@ -1082,29 +1110,21 @@ namespace settings {
 
 			struct scope
 			{
+				enum class style_type : std::uint8_t { cross, classic };
+
 				xui::setting enabled{ true, {}, "scope overlay", "scope overlay" };
+				config::enm<style_type> style{ style_type::cross, "scope overlay", "style" };
 				config::val<float> line_length{ 125.0f, "scope overlay", "line length" };
 				config::val<float> gap{ 8.0f, "scope overlay", "gap" };
 				config::val<float> thickness{ 0.5f, "scope overlay", "thickness" };
 				config::val<float> anim_speed{ 10.0f, "scope overlay", "anim speed" };
 				config::col color{ { 173, 192, 255, 255 }, "scope overlay", "color" };
 				xui::setting fade_in{ true, {}, "fade in", "scope overlay" };
-
+				xui::setting dynamic_spread{ true, {}, "dynamic spread", "scope overlay" };
+				xui::setting spread_circle{ false, {}, "spread circle", "scope overlay" };
 				xui::setting glow{ true, {}, "glow", "scope overlay" };
 				config::val<float> glow_strength{ 1.0f, "scope overlay", "glow strength" };
 			} m_scope{};
-
-			struct hat
-			{
-				enum class hat_type : std::uint8_t { kasa, bucket };
-
-				xui::setting enabled{ false, {}, "hat", "hat" };
-				config::enm<hat_type> type{ hat_type::kasa, "hat", "type" };
-				config::col color{ { 255, 171, 234, 160 }, "hat", "color" };
-				config::col secondary_color{ { 173, 192, 255, 160 }, "hat", "secondary color" };
-				xui::setting glow{ true, {}, "glow", "hat" };
-				config::val<float> glow_strength{ 1.0f, "hat", "glow strength" };
-			} m_hat{};
 
 			struct velocity
 			{
@@ -1119,14 +1139,6 @@ namespace settings {
 				config::val<float> indicator_y{ 0.5f, "velocity hud", "indicator y position" };
 			} m_velocity{};
 		} m_hud{};
-
-		struct dlight
-		{
-			xui::setting enabled{ false, {}, "dynamic light", "misc" };
-			config::col color{ { 255, 255, 255, 255 }, "dlight", "color" };
-			config::val<float> radius{ 300.0f, "dlight", "radius" };
-			config::val<float> z_offset{ 2.0f, "dlight", "z offset" };
-		} m_dlight{};
 
 		struct autobuy
 		{
@@ -1177,8 +1189,26 @@ namespace settings {
 		xui::setting jumpbug{ true, {}, "jumpbug", "movement" };
 		xui::setting fastladder{ true, {}, "fastladder", "movement" };
 		xui::setting edgejump{ false, { 'E', xui::bind_mode::hold_on}, "edgejump", "movement" };
+		xui::setting edgestop{ false, { 'N', xui::bind_mode::hold_on}, "edgestop", "movement" };
+		xui::setting edgebug{ false, {}, "edgebug", "movement" };
+		config::val<int> edgebug_mode{ 1, "movement", "edgebug mode" };
+		config::val<int> edgebug_passes{ 1, "movement", "edgebug passes" };
+		xui::setting edgebug_include_jump_steps{ false, {}, "edgebug jump steps", "movement" };
 		xui::setting slowwalk{ false, { 'P', xui::bind_mode::hold_on}, "slowwalk", "movement" };
 		config::val<float> slowwalk_speed{ 33.0f, "movement", "slowwalk speed" };
+
+		struct pixel_surf
+		{
+			xui::setting enabled{ false, {}, "pixel surf", "movement" };
+			config::val<int> button_type{ 0, "movement", "pixel surf button" };
+			xui::setting angle_correction{ true, {}, "pixel surf angles", "movement" };
+			config::val<float> ledge_units{ 1.0f, "movement", "pixel surf ledge" };
+		} m_pixelsurf{};
+
+		struct test_strafer
+		{
+			xui::setting enabled{ false, {}, "test strafer", "movement" };
+		} m_test_strafer{};
 	};
 
 	struct world

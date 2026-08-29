@@ -1,4 +1,4 @@
-#include <core/settings.hpp>
+﻿#include <core/settings.hpp>
 #include <core/systems/systems.hpp>
 
 #include "../../rendering.hpp"
@@ -380,9 +380,15 @@ namespace rendering {
 				xui::checkbox( "oof arrows", ov.m_oof_arrow.enabled );
 				if ( xui::begin_popup( "##oof_popup", 220.0f ) )
 				{
+					constexpr const char* oof_styles[]{ "arrows", "arc circle" };
+					xui::combo( "style##oof", ov.m_oof_arrow.style, oof_styles, 2 );
+					if ( ov.m_oof_arrow.style.value == 1 )
+					{
+						xui::checkbox( "sharp borders##oof", ov.m_oof_arrow.sharp_borders );
+					}
 					xui::checkbox( "glow##oof", ov.m_oof_arrow.glow );
-					xui::slider_float( "width##oof", ov.m_oof_arrow.width, 4.0f, 40.0f, "%.0f" );
-					xui::slider_float( "height##oof", ov.m_oof_arrow.height, 4.0f, 40.0f, "%.0f" );
+					xui::slider_float( "width##oof", ov.m_oof_arrow.width, 4.0f, 60.0f, "%.0f" );
+					xui::slider_float( "height##oof", ov.m_oof_arrow.height, 4.0f, 60.0f, "%.0f" );
 					xui::slider_float( "radius x##oof", ov.m_oof_arrow.radius_x, 50.0f, 600.0f, "%.0f" );
 					xui::slider_float( "radius y##oof", ov.m_oof_arrow.radius_y, 50.0f, 600.0f, "%.0f" );
 					xui::slider_float( "glow strength##oof", ov.m_oof_arrow.glow_strength, 0.1f, 1.0f, "%.2f" );
@@ -463,21 +469,6 @@ namespace rendering {
 				detail::draw_chams_config( "arms chams", "vm_arms", esp.m_viewmodel.arms );
 				xui::end_child( );
 			}
-		}
-
-		// right column: model preview (full-height box, header on top, model below)
-		xui::layout::set_cursor( this->m_body_x - this->m_x + col_w + tokens::gap, this->m_body_y - this->m_y );
-
-		if ( xui::begin_child( "##player_preview", col_w, this->m_body_h, false ) )
-		{
-			xui::text( "model preview", tokens::col_text );
-
-			constexpr auto k_preview_header_h{ 36.0f };
-
-			auto& dl = xui::draw::current( );
-			detail::draw_model_preview( dl, this->m_body_x + col_w + tokens::gap, this->m_body_y + k_preview_header_h, col_w, this->m_body_h - k_preview_header_h, p.m_overlay[ subtab ] );
-
-			xui::end_child( );
 		}
 	}
 

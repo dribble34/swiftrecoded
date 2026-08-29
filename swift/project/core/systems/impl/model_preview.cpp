@@ -1,4 +1,4 @@
-#include <external/xorstr.hpp>
+﻿#include <external/xorstr.hpp>
 
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
@@ -46,11 +46,12 @@ namespace systems
         pose_sequence: sequence,
         player: true,
         mouse_rotate: true,
+        mouse_rotate_yaw: true,
         sync_spawn_addons: true,
         'transparent-background': true,
         'pin-fov': 'vertical',
         csm_split_plane0_distance_override: '120.0',
-        hittest: false,
+        hittest: true,
         style: 'width: 100%; height: 100%;'
     });
 

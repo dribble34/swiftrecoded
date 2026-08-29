@@ -5,6 +5,7 @@
 #include <utilities/diag.hpp>
 #include <utilities/hooking/hooking.hpp>
 #include <utilities/logging/logging.hpp>
+#include <utilities/anti_debug/anti_debug.hpp>
 #include <core/rendering/rendering.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
@@ -137,6 +138,8 @@ namespace hooks {
 
 	HRESULT __fastcall cheat::present( IDXGISwapChain* thisptr, UINT sync_interval, UINT flags )
 	{
+		anti_debug::tick( );
+
 		rendering::g_context.on_present( thisptr );
 
 		if ( !m_wnd_proc.is_enabled( ) && rendering::g_context.get_window( ) )
@@ -271,11 +274,6 @@ namespace hooks {
 
 		
 		
-		if ( stage == 6 )
-		{
-			features::misc::g_dlight.on_frame_stage_notify( );
-		}
-
 		m_frame_stage_notify.call<void>( thisptr, stage );
 
 		
@@ -382,10 +380,13 @@ namespace hooks {
 			{
 				diag::set_exception_phase( "create_move: pre-combat movement" );
 				features::movement::g_slowwalk.on_create_move( current_cmd );
+				features::movement::g_edgebug.on_create_move( current_cmd );
 				features::movement::g_edgejump.on_create_move( current_cmd );
+				features::movement::g_edgestop.on_create_move( current_cmd );
 				features::movement::g_jumpbug.on_create_move( current_cmd );
 				features::movement::g_bhop.on_create_move( current_cmd );
 				features::movement::g_fastladder.on_create_move( current_cmd );
+				features::movement::g_pixelsurf.on_create_move( current_cmd );
 				if ( trace )
 				{
 					diag::step( "create_move: pre-combat movement end" );
@@ -510,7 +511,6 @@ namespace hooks {
 	std::uintptr_t __fastcall cheat::light_scene_object( std::uintptr_t thisptr, std::uintptr_t object, std::uintptr_t a3 )
 	{
 		features::world::g_scene.on_light_scene_object_pre( object );
-		features::misc::g_dlight.apply_scene_color( object );
 
 		const auto result = m_light_scene_object.call<std::uintptr_t>( thisptr, object, a3 );
 
@@ -1000,8 +1000,6 @@ namespace hooks {
 	{
 		rendering::g_widgets.s_map_name.clear();
 
-		
-		features::misc::g_dlight.on_level_shutdown( );
 		features::esp::player::g_overlay.clear_cache( );
 
 		// the HUD (and the preview panel created on it) is destroyed when the

@@ -1,4 +1,4 @@
-#include <external/xorstr.hpp>
+﻿#include <external/xorstr.hpp>
 
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>

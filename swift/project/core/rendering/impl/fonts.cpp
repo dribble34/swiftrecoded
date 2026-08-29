@@ -2,11 +2,14 @@
 #include <core/resources/fonts/font_awesome.hpp>
 #include "../rendering.hpp"
 
+#include <core/resources/fonts/burbank.hpp>
+
 namespace rendering {
 
 	void fonts::initialize( )
 	{
 		this->load_family( this->sfpro_bold, std::as_bytes( std::span{ embedded_font } ), { 13.0f, 16.0f, 48.0f, 20.0f, 24.0f, 36.0f } );
+		this->load_family( this->burbank_bold, std::as_bytes( std::span{ resources::fonts::burbank::bold } ), { 13.0f, 16.0f, 48.0f, 20.0f, 24.0f, 36.0f } );
 		this->fa_solid = xdraw::load_font( std::as_bytes( std::span{ resources::fonts::font_awesome::solid } ), 18.0f );
 		this->fa_solid_small = xdraw::load_font( std::as_bytes( std::span{ resources::fonts::font_awesome::solid } ), 14.0f );
 	}

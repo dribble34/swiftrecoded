@@ -107,6 +107,7 @@ namespace rendering {
 		if ( xui::begin_child( "##ragebot_antiaim", col_w ) )
 		{
 			xui::checkbox( "anti aim", aa.enabled );
+			xui::checkbox( "at target", aa.at_target );
 
 			xui::combo( "pitch", aa.pitch.value, detail::pitch_items, 4 );
 				if ( aa.pitch.value == settings::combat::antiaim::pitch_mode::custom )
@@ -130,7 +131,14 @@ namespace rendering {
 
 			if ( xui::begin_popup( "##aa_indicator", 220.0f ) )
 			{
-				xui::color_picker( "color##aa_ind", aa.direction_indicator_color );
+				constexpr const char* ind_styles[]{ "arrows", "half circle" };
+				xui::combo( "style##aa_ind", aa.direction_indicator_style, ind_styles, 2 );
+				xui::color_picker( "active color##aa_ind", aa.direction_indicator_color );
+				xui::color_picker( "bg color##aa_ind", aa.direction_indicator_arc_color );
+				xui::slider_float( "distance##aa_ind", aa.direction_indicator_distance, 20.0f, 200.0f, "%.0fpx" );
+				xui::slider_float( "width / radius##aa_ind", aa.direction_indicator_width, 4.0f, 60.0f, "%.0fpx" );
+				xui::slider_float( "height / thickness##aa_ind", aa.direction_indicator_height, 4.0f, 40.0f, "%.0fpx" );
+				xui::checkbox( "fade animation##aa_ind", aa.direction_indicator_fade );
 				xui::checkbox( "glow##aa_ind", aa.direction_indicator_glow );
 				xui::slider_float( "glow strength##aa_ind", aa.direction_indicator_glow_strength, 0.1f, 1.0f, "%.2f" );
 				xui::end_popup( );

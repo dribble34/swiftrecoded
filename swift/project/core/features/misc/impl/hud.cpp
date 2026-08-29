@@ -33,7 +33,6 @@ namespace features::misc {
 
 		this->do_scope( draw_list, cx, cy, static_cast< float >( screen_h ), local.pawn );
 		this->do_crosshair( draw_list, cx, cy );
-		this->do_hat( draw_list, local.pawn );
 		this->do_velocity( );
 	}
 
@@ -76,6 +75,21 @@ namespace features::misc {
 		{
 			this->m_cached_spread_pixels = 0.0f;
 			this->m_scope_update_frame = 0;
+			return;
+		}
+
+		if ( cfg.style.value == settings::misc::hud::scope::style_type::classic )
+		{
+			constexpr auto thickness = 1.0f;
+			const auto alpha = static_cast< std::uint8_t >( cfg.color.value.a * this->m_scope_anim );
+			const auto col = xdraw::color{ cfg.color.value.r, cfg.color.value.g, cfg.color.value.b, alpha };
+
+			const auto [sw, sh] = xdraw::viewport_size( );
+			const float mid_x = std::floorf( static_cast<float>( sw ) * 0.5f );
+			const float mid_y = std::floorf( static_cast<float>( sh ) * 0.5f );
+
+			draw_list.line( mid_x, 0.0f, mid_x, static_cast<float>( sh ), col, thickness );
+			draw_list.line( 0.0f, mid_y, static_cast<float>( sw ), mid_y, col, thickness );
 			return;
 		}
 
@@ -163,9 +177,8 @@ namespace features::misc {
 			}
 		}
 
-		this->m_spread_smooth = std::lerp( this->m_spread_smooth, this->m_cached_spread_pixels, std::min( xdraw::delta_time( ) * 50.0f, 1.0f ) );
-
-		const auto gap = std::max( cfg.gap.value, this->m_spread_smooth ) + ( 40.0f * ( 1.0f - this->m_scope_anim ) );
+		// Fixed gap without spread recoil movement
+		const auto gap = cfg.gap.value + ( 40.0f * ( 1.0f - this->m_scope_anim ) );
 		const auto length = cfg.line_length * this->m_scope_anim;
 		const auto alpha = static_cast< std::uint8_t >( cfg.color.value.a * this->m_scope_anim );
 
@@ -216,361 +229,14 @@ namespace features::misc {
 		draw_line( cx, cy + gap, cx, cy + gap + length );
 		draw_line( cx - gap, cy, cx - gap - length, cy );
 		draw_line( cx + gap, cy, cx + gap + length, cy );
-	}
 
-	void hud::do_hat( xdraw::draw_list& draw_list, std::uintptr_t local_pawn ) const
-	{
-		const auto& cfg = settings::g_misc.m_hud.m_hat;
-		if ( !cfg.enabled || !systems::g_frame_data.valid( ) || !settings::g_misc.m_camera.thirdperson.value )
+		if ( cfg.spread_circle )
 		{
-			return;
-		}
+			const auto spread_radius = std::lerp( this->m_spread_smooth, this->m_cached_spread_pixels, std::min( xdraw::delta_time( ) * 50.0f, 1.0f ) );
 
-		const auto& primary_col = cfg.color.value;
-		const auto& secondary_col = cfg.secondary_color.value;
+			const auto col = xdraw::color{ cfg.color.value.r, cfg.color.value.g, cfg.color.value.b, static_cast< std::uint8_t >( cfg.color.value.a * 0.5f ) };
 
-		const auto game_scene_node = memory::read<std::uintptr_t>( local_pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
-		if ( !game_scene_node )
-		{
-			return;
-		}
-
-		const auto hitbox_set = systems::g_hitboxes.query( game_scene_node, false );
-		if ( hitbox_set.count < 1 || hitbox_set.entries[ 0 ].bone < 0 || hitbox_set.entries[ 0 ].bone >= 27 )
-		{
-			return;
-		}
-
-		const auto& head_hb = hitbox_set.entries[ 0 ];
-		if ( head_hb.bone < 0 || head_hb.bone >= 27 )
-		{
-			return;
-		}
-
-		const auto head_bone = systems::g_bones.get( local_pawn, cstypes::bone_ids::head );
-		if ( head_bone.position.length_sqr( ) < 1.0f )
-		{
-			return;
-		}
-
-		const auto hb_mid = ( head_hb.mins + head_hb.maxs ) * 0.5f;
-		const auto center = head_bone.rotation.rotate_vector( hb_mid ) + head_bone.position;
-
-		const auto capsule_a = head_bone.rotation.rotate_vector( head_hb.mins - hb_mid ) + center;
-		const auto capsule_b = head_bone.rotation.rotate_vector( head_hb.maxs - hb_mid ) + center;
-		const auto top_cap = ( capsule_a.z > capsule_b.z ) ? capsule_a : capsule_b;
-		const auto up_world = ( top_cap - center ).normalized( );
-
-		auto right_world = up_world.cross( math::vector3{ 0.0f, 1.0f, 0.0f } );
-		if ( right_world.length_sqr( ) < 0.001f )
-		{
-			right_world = math::vector3{ 1.0f, 0.0f, 0.0f };
-		}
-		else
-		{
-			right_world = right_world.normalized( );
-		}
-
-		const auto forward_world = up_world.cross( right_world ).normalized( );
-		const auto hat_origin = top_cap + up_world * 0.55f;
-
-		constexpr auto segments{ 32 };
-
-		auto project_ring = [ & ]( const math::vector3& ring_center, float radius, math::vector2* out, int count ) -> bool
-			{
-				for ( auto i = 0; i < count; ++i )
-				{
-					const auto angle = ( static_cast< float >( i ) / static_cast< float >( count ) ) * 2.0f * std::numbers::pi_v< float >;
-					const auto world_pt = ring_center + right_world * ( std::cosf( angle ) * radius ) + forward_world * ( std::sinf( angle ) * radius );
-
-					const auto sp = systems::g_view.project( world_pt );
-					if ( !systems::g_view.projection_valid( sp ) )
-					{
-						return false;
-					}
-
-					out[ i ] = { sp.x, sp.y };
-				}
-
-				return true;
-			};
-
-		auto draw_ring = [ & ]( const math::vector2* pts, int count, const xdraw::color& col, float thickness )
-			{
-				for ( auto i = 0; i < count; ++i )
-				{
-					const auto next = ( i + 1 ) % count;
-					draw_list.line( pts[ i ].x, pts[ i ].y, pts[ next ].x, pts[ next ].y, col, thickness );
-				}
-			};
-
-		if ( cfg.type == settings::misc::hud::hat::hat_type::kasa )
-		{
-			constexpr auto base_radius{ 10.0f };
-			constexpr auto rim_points{ 24 };
-			constexpr auto spokes{ 24 };
-
-			const auto peak_world = hat_origin + up_world * 7.0f;
-			const auto peak_sp = systems::g_view.project( peak_world );
-
-			if ( !systems::g_view.projection_valid( peak_sp ) )
-			{
-				return;
-			}
-
-			const math::vector2 peak{ peak_sp.x, peak_sp.y };
-			math::vector2 base[ rim_points ];
-
-			for ( auto i = 0; i < rim_points; ++i )
-			{
-				const auto angle = ( static_cast< float >( i ) / static_cast< float >( rim_points ) ) * 2.0f * std::numbers::pi_v< float >;
-				const auto world_pt = hat_origin + right_world * ( std::cosf( angle ) * base_radius ) + forward_world * ( std::sinf( angle ) * base_radius );
-
-				const auto sp = systems::g_view.project( world_pt );
-				if ( !systems::g_view.projection_valid( sp ) )
-				{
-					return;
-				}
-
-				base[ i ] = { sp.x, sp.y };
-			}
-
-			if ( cfg.glow )
-			{
-				auto& glow = xdraw::get_glow( );
-				const auto ga = static_cast< std::uint8_t >( static_cast< float >( primary_col.a ) * cfg.glow_strength );
-				const auto glow_col = xdraw::color{ primary_col.r, primary_col.g, primary_col.b, ga };
-
-				for ( auto i = 0; i < rim_points; ++i )
-				{
-					const auto next = ( i + 1 ) % rim_points;
-					glow.line( base[ i ].x, base[ i ].y, base[ next ].x, base[ next ].y, glow_col, 3.0f );
-				}
-
-				const auto spoke_ga = static_cast< std::uint8_t >( static_cast< float >( secondary_col.a ) * cfg.glow_strength );
-				const auto spoke_glow_col = xdraw::color{ secondary_col.r, secondary_col.g, secondary_col.b, spoke_ga };
-
-				for ( auto i = 0; i < spokes; ++i )
-				{
-					const auto idx = ( i * rim_points ) / spokes;
-					glow.line( base[ idx ].x, base[ idx ].y, peak.x, peak.y, spoke_glow_col, 2.0f );
-				}
-			}
-
-			for ( auto i = 0; i < rim_points; ++i )
-			{
-				const auto next = ( i + 1 ) % rim_points;
-				draw_list.line( base[ i ].x, base[ i ].y, base[ next ].x, base[ next ].y, primary_col, 1.2f );
-			}
-
-			for ( auto i = 0; i < spokes; ++i )
-			{
-				const auto idx = ( i * rim_points ) / spokes;
-				draw_list.line( base[ idx ].x, base[ idx ].y, peak.x, peak.y, secondary_col, 0.75f );
-			}
-
-			return;
-		}
-
-		constexpr auto brim_radius{ 6.5f };
-		constexpr auto crown_base_radius{ 5.0f };
-		constexpr auto crown_top_radius{ 4.2f };
-		constexpr auto crown_height{ 3.0f };
-		constexpr auto brim_droop{ 1.5f };
-		constexpr auto dome_height{ 1.8f };
-
-		constexpr auto crown_stitches{ 2 };
-		constexpr auto brim_stitches{ 4 };
-		constexpr auto stitch_dash_on{ 3.0f };
-		constexpr auto stitch_dash_off{ 3.0f };
-
-		const auto junction_center = hat_origin;
-		const auto crown_top_center = junction_center + up_world * crown_height;
-		const auto brim_edge_center = junction_center - up_world * brim_droop;
-
-		auto draw_ring_dashed = [ & ]( const math::vector2* pts, int count, const xdraw::color& col, float thickness, float dash_on, float dash_off )
-			{
-				auto accum{ 0.0f };
-				auto drawing{ true };
-
-				for ( auto i = 0; i < count; ++i )
-				{
-					const auto next = ( i + 1 ) % count;
-					const auto dx = pts[ next ].x - pts[ i ].x;
-					const auto dy = pts[ next ].y - pts[ i ].y;
-					const auto seg_len = std::sqrtf( dx * dx + dy * dy );
-
-					if ( seg_len < 0.001f )
-					{
-						continue;
-					}
-
-					auto t_start{ 0.0f };
-
-					while ( t_start < 1.0f )
-					{
-						const auto budget = drawing ? dash_on : dash_off;
-						const auto remaining = budget - accum;
-						const auto t_step = remaining / seg_len;
-						const auto t_end = std::min( t_start + t_step, 1.0f );
-
-						if ( drawing )
-						{
-							const auto x0 = pts[ i ].x + dx * t_start;
-							const auto y0 = pts[ i ].y + dy * t_start;
-							const auto x1 = pts[ i ].x + dx * t_end;
-							const auto y1 = pts[ i ].y + dy * t_end;
-							draw_list.line( x0, y0, x1, y1, col, thickness );
-						}
-
-						accum += ( t_end - t_start ) * seg_len;
-
-						if ( accum >= budget - 0.01f )
-						{
-							drawing = !drawing;
-							accum = 0.0f;
-						}
-
-						t_start = t_end;
-					}
-				}
-			};
-
-		auto find_extremes = [ & ]( const math::vector2* pts, int count, int& out_left, int& out_right )
-			{
-				auto min_x = std::numeric_limits< float >::max( );
-				auto max_x = std::numeric_limits< float >::lowest( );
-				out_left = 0;
-				out_right = 0;
-
-				for ( auto i = 0; i < count; ++i )
-				{
-					if ( pts[ i ].x < min_x ) { min_x = pts[ i ].x; out_left = i; }
-					if ( pts[ i ].x > max_x ) { max_x = pts[ i ].x; out_right = i; }
-				}
-			};
-
-		math::vector2 brim_pts[ segments ];
-		math::vector2 junction_pts[ segments ];
-		math::vector2 crown_top_pts[ segments ];
-
-		if ( !project_ring( brim_edge_center, brim_radius, brim_pts, segments ) )
-		{
-			return;
-		}
-
-		if ( !project_ring( junction_center, crown_base_radius, junction_pts, segments ) )
-		{
-			return;
-		}
-
-		if ( !project_ring( crown_top_center, crown_top_radius, crown_top_pts, segments ) )
-		{
-			return;
-		}
-
-		const auto pole_world = crown_top_center + up_world * dome_height;
-		const auto pole_sp = systems::g_view.project( pole_world );
-
-		if ( !systems::g_view.projection_valid( pole_sp ) )
-		{
-			return;
-		}
-
-		int brim_l{}, brim_r{}, junc_l{}, junc_r{}, top_l{}, top_r{};
-		find_extremes( brim_pts, segments, brim_l, brim_r );
-		find_extremes( junction_pts, segments, junc_l, junc_r );
-		find_extremes( crown_top_pts, segments, top_l, top_r );
-
-		constexpr auto arc_steps{ 16 };
-		math::vector2 arc_left[ arc_steps + 1 ];
-		math::vector2 arc_right[ arc_steps + 1 ];
-
-		const auto left_azimuth = ( static_cast< float >( top_l ) / static_cast< float >( segments ) ) * 2.0f * std::numbers::pi_v< float >;
-		const auto right_azimuth = ( static_cast< float >( top_r ) / static_cast< float >( segments ) ) * 2.0f * std::numbers::pi_v< float >;
-
-		for ( auto i = 0; i <= arc_steps; ++i )
-		{
-			const auto t = static_cast< float >( i ) / static_cast< float >( arc_steps );
-			const auto phi = t * ( std::numbers::pi_v< float > *0.5f );
-			const auto r = crown_top_radius * std::cosf( phi );
-			const auto h = std::sinf( phi ) * dome_height;
-
-			const auto left_world = crown_top_center + up_world * h + right_world * ( std::cosf( left_azimuth ) * r ) + forward_world * ( std::sinf( left_azimuth ) * r );
-			const auto right_world_pt = crown_top_center + up_world * h + right_world * ( std::cosf( right_azimuth ) * r ) + forward_world * ( std::sinf( right_azimuth ) * r );
-
-			const auto lsp = systems::g_view.project( left_world );
-			const auto rsp = systems::g_view.project( right_world_pt );
-
-			arc_left[ i ] = { lsp.x, lsp.y };
-			arc_right[ i ] = { rsp.x, rsp.y };
-		}
-
-		if ( cfg.glow )
-		{
-			auto& glow = xdraw::get_glow( );
-			const auto ga = static_cast< std::uint8_t >( static_cast< float >( primary_col.a ) * cfg.glow_strength );
-			const auto glow_col = xdraw::color{ primary_col.r, primary_col.g, primary_col.b, ga };
-
-			for ( auto i = 0; i < segments; ++i )
-			{
-				const auto next = ( i + 1 ) % segments;
-				glow.line( brim_pts[ i ].x, brim_pts[ i ].y, brim_pts[ next ].x, brim_pts[ next ].y, glow_col, 3.0f );
-			}
-
-			for ( auto i = 0; i < arc_steps; ++i )
-			{
-				glow.line( arc_left[ i ].x, arc_left[ i ].y, arc_left[ i + 1 ].x, arc_left[ i + 1 ].y, glow_col, 3.0f );
-				glow.line( arc_right[ i ].x, arc_right[ i ].y, arc_right[ i + 1 ].x, arc_right[ i + 1 ].y, glow_col, 3.0f );
-			}
-		}
-
-		draw_ring( brim_pts, segments, primary_col, 1.4f );
-		draw_ring( junction_pts, segments, primary_col, 1.2f );
-
-		draw_list.line( brim_pts[ brim_l ].x, brim_pts[ brim_l ].y, junction_pts[ junc_l ].x, junction_pts[ junc_l ].y, primary_col, 1.4f );
-		draw_list.line( brim_pts[ brim_r ].x, brim_pts[ brim_r ].y, junction_pts[ junc_r ].x, junction_pts[ junc_r ].y, primary_col, 1.4f );
-
-		draw_list.line( junction_pts[ junc_l ].x, junction_pts[ junc_l ].y, crown_top_pts[ top_l ].x, crown_top_pts[ top_l ].y, primary_col, 1.2f );
-		draw_list.line( junction_pts[ junc_r ].x, junction_pts[ junc_r ].y, crown_top_pts[ top_r ].x, crown_top_pts[ top_r ].y, primary_col, 1.2f );
-
-		for ( auto i = 0; i < arc_steps; ++i )
-		{
-			draw_list.line( arc_left[ i ].x, arc_left[ i ].y, arc_left[ i + 1 ].x, arc_left[ i + 1 ].y, primary_col, 1.2f );
-			draw_list.line( arc_right[ i ].x, arc_right[ i ].y, arc_right[ i + 1 ].x, arc_right[ i + 1 ].y, primary_col, 1.2f );
-		}
-
-		const auto stitch_a = static_cast< std::uint8_t >( static_cast< float >( secondary_col.a ) * 0.7f );
-		const auto stitch_draw_col = xdraw::color{ secondary_col.r, secondary_col.g, secondary_col.b, stitch_a };
-
-		for ( auto s = 1; s <= crown_stitches; ++s )
-		{
-			const auto t = static_cast< float >( s ) / static_cast< float >( crown_stitches + 1 );
-			const auto lerp_center = junction_center + ( crown_top_center - junction_center ) * t;
-			const auto lerp_radius = crown_base_radius + ( crown_top_radius - crown_base_radius ) * t;
-
-			math::vector2 stitch_ring[ segments ];
-			if ( !project_ring( lerp_center, lerp_radius, stitch_ring, segments ) )
-			{
-				continue;
-			}
-
-			draw_ring_dashed( stitch_ring, segments, stitch_draw_col, 0.6f, stitch_dash_on, stitch_dash_off );
-		}
-
-		for ( auto s = 1; s <= brim_stitches; ++s )
-		{
-			const auto t = static_cast< float >( s ) / static_cast< float >( brim_stitches + 1 );
-			const auto lerp_center = junction_center + ( brim_edge_center - junction_center ) * t;
-			const auto lerp_radius = crown_base_radius + ( brim_radius - crown_base_radius ) * t;
-
-			math::vector2 stitch_ring[ segments ];
-			if ( !project_ring( lerp_center, lerp_radius, stitch_ring, segments ) )
-			{
-				continue;
-			}
-
-			draw_ring_dashed( stitch_ring, segments, stitch_draw_col, 0.6f, stitch_dash_on, stitch_dash_off );
+			draw_list.circle_filled( cx, cy, spread_radius, col, 200 );
 		}
 	}
 

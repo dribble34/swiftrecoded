@@ -235,6 +235,7 @@ namespace features::esp {
 		private:
 			void add_bomb( xdraw::draw_list& draw_list );
 			void add_spectators( xdraw::draw_list& draw_list );
+			void add_direction_indicator( xdraw::draw_list& draw_list );
 		};
 
 	} 

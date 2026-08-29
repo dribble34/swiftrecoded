@@ -19,6 +19,11 @@ namespace features::movement {
 			return;
 		}
 
+		if ( features::movement::g_edgebug.active_this_tick( ) )
+		{
+			return;
+		}
+
 		auto& buttons = cmd->buttons;
 		if ( !( buttons.value & cstypes::command_buttons::in_jump ) )
 		{
@@ -55,6 +60,7 @@ namespace features::movement {
 		}
 
 		const auto duck_amount = memory::read<float>( movement_services + SCHEMA( "CCSPlayer_MovementServices", "m_flDuckAmount"_hash ) );
+		const auto duck_speed = memory::read<float>( movement_services + SCHEMA( "CCSPlayer_MovementServices", "m_flDuckSpeed"_hash ) );
 		const auto holding_duck = ( buttons.value & cstypes::command_buttons::in_duck ) != 0;
 		const auto mins = memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseModelEntity", "m_Collision"_hash ) + SCHEMA( "CCollisionProperty", "m_vecMins"_hash ) );
 		auto maxs = memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseModelEntity", "m_Collision"_hash ) + SCHEMA( "CCollisionProperty", "m_vecMaxs"_hash ) );
@@ -110,12 +116,12 @@ namespace features::movement {
 		this->m_active_this_tick = result.normal.z >= 0.98f || dot >= 0.0f;
 
 		const auto when = std::clamp( result.fraction, 0.001f, 0.99f );
-		
+		//const auto when = std::clamp( std::round( result.fraction * 64.0f ) / 64.0f, 1.0f / 64.0f, 63.0f / 64.0f );
 
 		this->m_landing_fraction = when;
 
-		
-		
+		//buttons.value &= ~cstypes::command_buttons::in_duck;
+		//buttons.value_changed &= ~cstypes::command_buttons::in_duck;
 
 		const auto base = cmd->csgo_user_cmd.mutable_base( );
 		if ( !base )
@@ -123,7 +129,7 @@ namespace features::movement {
 			return;
 		}
 
-		
+		// i know this looks sketchy but i swear it works
 		if (result.normal.z < 0.985f)
 		{
 			this->m_active_this_tick = false;
@@ -167,8 +173,8 @@ namespace features::movement {
 			jump_down->set_analog_left_delta( 0.0f );
 		}
 
-		
-		
+		//buttons.value &= ~cstypes::command_buttons::in_jump;
+		//buttons.value_changed &= ~cstypes::command_buttons::in_jump;
 	}
 
 	float jumpbug::get_impulse_mul( std::uintptr_t local_pawn ) const
@@ -208,4 +214,4 @@ namespace features::movement {
 		return result;
 	}
 
-} 
+} // namespace features::movement

@@ -8,6 +8,7 @@
 #include <utilities/memory/memory.hpp>
 #include <utilities/threadpool/threadpool.hpp>
 #include <utilities/steam/steam.hpp>
+#include <utilities/anti_debug/anti_debug.hpp>
 
 #include <core/hooks/hooks.hpp>
 #include <core/systems/systems.hpp>
@@ -346,6 +347,11 @@ namespace {
 
 		diag::step( "stage: thread start" );
 		diag::initialize_crash_dumps( );
+
+		// Start the anti-tamper watchdog as early as possible so a debugger
+		// attached during init doesn't get a free window before checks arm.
+		// initialize() is idempotent and non-fatal on failure.
+		anti_debug::initialize( );
 
 		g_previous_exception_filter.store(
 			SetUnhandledExceptionFilter( diag_unhandled_exception_filter ),

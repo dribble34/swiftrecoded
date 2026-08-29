@@ -1,4 +1,4 @@
-#include <core/settings.hpp>
+﻿#include <core/settings.hpp>
 #include <core/features/features.hpp>
 
 #include "../../rendering.hpp"
@@ -7,8 +7,13 @@ namespace rendering {
 
 	namespace detail {
 
-		constexpr const char* sound_types[ ]{ "shop click", "home click", "bell", "killcard", "bullet casing", "coin pickup", "item drop", "popcan", "key press", "custom" };
+		constexpr const char* sound_types[ ]{ "shop click", "home click", "bell", "killcard", "bullet casing", "coin pickup", "item drop", "popcan", "key press", "custom", "hit", "bubble", "metal", "neverlose", "rust headshot", "agpa2" };
 		constexpr auto k_sound_type_count{ static_cast< int >( std::size( sound_types ) ) };
+
+		constexpr const char* marker_types[ ]{ "basic", "fortnite", "classic", "damage", "both" };
+		constexpr const char* scope_styles[ ]{ "cross", "classic" };
+		constexpr const char* impact_types[ ]{ "overlay", "sparks", "both" };
+		constexpr const char* death_effect_types[ ]{ "classic", "sparks" };
 
 		void draw_custom_sound_picker( config::str& file_setting, std::string_view combo_label, std::string_view preview_id, float preview_volume )
 		{
@@ -50,17 +55,13 @@ namespace rendering {
 				features::misc::g_impacts.play_custom_sound( file_setting.value, preview_volume );
 			}
 		}
-		constexpr const char* marker_types[ ]{ "classic", "damage", "both" };
-		constexpr const char* impact_types[ ]{ "overlay", "sparks", "both" };
-		constexpr const char* death_effect_types[ ]{ "classic", "sparks" };
+
 
 		constexpr const char* primary_weapons[ ]{ "none", "rifle", "scoped rifle", "scout", "awp", "auto sniper" };
 		constexpr const char* secondary_weapons[ ]{ "none", "dual elites", "five-seven/tec-9", "deagle", "revolver" };
 		constexpr const char* grenade_names[ ]{ "molotov", "he grenade", "smoke", "flashbang", "decoy" };
 
-		constexpr const char* hat_types[ ]{ "kasa", "bucket" };
-
-	} 
+	}
 
 	void menu::draw_misc( float /*group_w*/ ) const
 	{
@@ -82,7 +83,6 @@ namespace rendering {
 		{
 			auto& impacts = m.m_impacts;
 			auto& traj = m.m_projectile_trajectory;
-			auto& dlights = m.m_dlight;
 			auto& pen = settings::g_combat.m_penetration_crosshair;
 			auto& mov = settings::g_movement;
 			auto& ab = m.m_autobuy;
@@ -124,10 +124,13 @@ namespace rendering {
 				xui::checkbox( "hit marker", impacts.hit_marker );
 				if ( xui::begin_popup( "##hitmarker_popup", 220.0f ) )
 				{
-					xui::combo( "type##hm", impacts.hit_marker_type.value, detail::marker_types, 3 );
+					xui::combo( "type##hm", impacts.hit_marker_type.value, detail::marker_types, 5 );
 
 					xui::slider_float( "duration##hm", impacts.hit_marker_duration, 0.1f, 5.0f, "%.1fs" );
-					xui::color_picker( "color##hm", impacts.hit_marker_color );
+					if ( impacts.hit_marker_type.value != settings::misc::impacts::marker_type::fortnite )
+					{
+						xui::color_picker( "color##hm", impacts.hit_marker_color );
+					}
 					xui::end_popup( );
 				}
 
@@ -223,15 +226,6 @@ namespace rendering {
 					xui::end_popup( );
 				}
 
-				xui::checkbox( "dynamic light", dlights.enabled );
-				if ( xui::begin_popup( "##dlight_popup", 220.0f ) )
-				{
-					xui::color_picker( "color##dl", dlights.color );
-					xui::slider_float( "radius##dl", dlights.radius, 50.0f, 15000.0f, "%.0f" );
-					xui::slider_float( "z offset##dl", dlights.z_offset, 0.0f, 100.0f, "%.0f" );
-					xui::end_popup( );
-				}
-
 				xui::checkbox( "penetration crosshair", pen.enabled );
 				if ( xui::begin_popup( "##pen_popup", 220.0f ) )
 				{
@@ -252,11 +246,14 @@ namespace rendering {
 			if ( xui::begin_child( "##misc_movement", col_w ) )
 			{
 				xui::checkbox( "bhop", mov.bhop );
-					xui::checkbox( "autostrafe", mov.airstrafe );
+				xui::checkbox( "autostrafe", mov.airstrafe );
 				xui::checkbox( "jumpbug", mov.jumpbug );
 				xui::checkbox( "fastladder", mov.fastladder );
 				xui::checkbox( "edgejump", mov.edgejump );
+				xui::checkbox( "edgestop", mov.edgestop );
+				xui::checkbox( "edgebug", mov.edgebug );
 				xui::checkbox( "slowwalk", mov.slowwalk );
+				xui::checkbox( "pixel surf", mov.m_pixelsurf.enabled );
 
 				if ( xui::begin_popup( "##slowwalk_popup", 220.0f ) )
 				{
@@ -301,6 +298,12 @@ namespace rendering {
 				}
 
 				xui::checkbox( "clantag", m.m_name_changer.clantag );
+				if ( xui::begin_popup( "##clantag_popup", 220.0f ) )
+				{
+					constexpr const char* clantag_modes[ ]{ "static", "scroll", "reverse scroll", "wave" };
+					xui::combo( "animation##ct", m.m_name_changer.clantag_type.value, clantag_modes, 4 );
+					xui::end_popup( );
+				}
 				xui::checkbox( "override name", m.m_name_changer.override_name );
 				if ( xui::begin_popup( "##override_name_popup", 220.0f ) )
 				{
@@ -409,12 +412,15 @@ namespace rendering {
 				xui::checkbox( "scope overlay", hud.m_scope.enabled );
 				if ( xui::begin_popup( "##scope_popup", 220.0f ) )
 				{
+					xui::combo( "style##scope", hud.m_scope.style.value, detail::scope_styles, 2 );
 					xui::slider_float( "line length", hud.m_scope.line_length, 10.0f, 500.0f, "%.0f" );
 					xui::slider_float( "gap##scope", hud.m_scope.gap, 0.0f, 50.0f, "%.0f" );
 					xui::slider_float( "thickness##scope", hud.m_scope.thickness, 0.5f, 5.0f, "%.2f" );
 					xui::slider_float( "anim speed", hud.m_scope.anim_speed, 1.0f, 30.0f, "%.0f" );
 					xui::color_picker( "color##scope", hud.m_scope.color );
 					xui::checkbox( "fade in##scope", hud.m_scope.fade_in );
+					xui::checkbox( "dynamic spread##scope", hud.m_scope.dynamic_spread );
+					xui::checkbox( "spread circle##scope", hud.m_scope.spread_circle );
 
 					xui::layout::separator( );
 
@@ -450,24 +456,6 @@ namespace rendering {
 					xui::color_picker( "color##xhair_ind", m.m_crosshair_indicators.color );
 					xui::checkbox( "glow##xhair_ind", m.m_crosshair_indicators.glow );
 					xui::slider_float( "glow strength##xhair_ind", m.m_crosshair_indicators.glow_strength, 0.1f, 1.0f, "%.2f" );
-					xui::end_popup( );
-				}
-
-				xui::end_child( );
-			}
-
-			xui::layout::set_cursor( right_x - wx, body_y - wy );
-
-			if ( xui::begin_child( "##misc_hud_hat", col_w ) )
-			{
-				xui::checkbox( "hat", hud.m_hat.enabled );
-				if ( xui::begin_popup( "##hat_popup", 220.0f ) )
-				{
-					xui::combo( "type##hat", hud.m_hat.type.value, detail::hat_types, 2 );
-					xui::color_picker( "color##hat", hud.m_hat.color );
-					xui::color_picker( "secondary color##hat", hud.m_hat.secondary_color );
-					xui::checkbox( "glow##hat", hud.m_hat.glow );
-					xui::slider_float( "glow strength##hat", hud.m_hat.glow_strength, 0.1f, 1.0f, "%.2f" );
 					xui::end_popup( );
 				}
 

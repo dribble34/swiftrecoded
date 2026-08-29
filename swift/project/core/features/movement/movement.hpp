@@ -5,7 +5,10 @@ namespace features::movement {
 	class bhop
 	{
 	public:
-		void on_create_move( systems::input::usercmd* cmd ) const;
+		void on_create_move( systems::input::usercmd* cmd );
+
+	private:
+		bool m_stripped{};
 	};
 
 	class airstrafe
@@ -27,10 +30,12 @@ namespace features::movement {
 
 	class jumpbug
 	{
-	public:		void on_create_move( systems::input::usercmd* cmd );
+	public:
+		void on_create_move( systems::input::usercmd* cmd );
 		[[nodiscard]] bool active_this_tick( ) const { return this->m_active_this_tick; }
+		[[nodiscard]] float landing_fraction( ) const { return this->m_landing_fraction; }
 
-		private:
+	private:
 		[[nodiscard]] float get_impulse_mul( std::uintptr_t local_pawn ) const;
 
 		float m_landing_fraction{ 1.0f };
@@ -47,6 +52,24 @@ namespace features::movement {
 	{
 	public:
 		void on_create_move( systems::input::usercmd* cmd ) const;
+	};
+
+	class edgestop
+	{
+	public:
+		void on_create_move( systems::input::usercmd* cmd ) const;
+	};
+
+	class edgebug
+	{
+	public:
+		void on_create_move( systems::input::usercmd* cmd );
+		void on_render( xdraw::draw_list& draw_list );
+
+		[[nodiscard]] bool active_this_tick( ) const { return this->m_active_this_tick; }
+
+	private:
+		bool m_active_this_tick{ false };
 	};
 
 	class slowwalk
@@ -74,4 +97,28 @@ namespace features::movement {
 		bool m_handled_this_tick{};
 	};
 
-} 
+	class pixelsurf
+	{
+	public:
+		void on_create_move( systems::input::usercmd* cmd );
+
+		[[nodiscard]] bool active_this_tick( ) const { return this->m_was_active; }
+
+	private:
+		struct edge_result
+		{
+			bool found{};
+			std::uint8_t direction{};
+		};
+
+		[[nodiscard]] edge_result detect_pixel_edge( std::uintptr_t pawn, const systems::prediction::state& pre, float ledge_units ) const;
+		[[nodiscard]] float compute_target_yaw( const systems::prediction::state& pre ) const;
+		void reset( );
+
+		std::uint8_t m_edge_type{};
+		std::uint8_t m_edge_direction{};
+		bool m_is_slipping{};
+		bool m_was_active{};
+	};
+
+} // namespace features::movement

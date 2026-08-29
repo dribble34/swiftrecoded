@@ -68,7 +68,7 @@ namespace rendering {
 				return;
 			}
 
-			const auto backdrop_col = this->m_dark_mode ? xdraw::color{ 12, 13, 18, 190 } : xdraw::color{ 245, 246, 252, 210 };
+			const auto backdrop_col = xdraw::color{ 14, 14, 16, 255 }; // Solid 0x0E0E10
 			xdraw::backdrop( this->m_x, this->m_y, this->m_w, this->m_h, xdraw::corner_radius{ xui::ctx( ).style.window_rounding }, backdrop_col );
 
 			xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
@@ -180,13 +180,14 @@ namespace rendering {
 	{
 		if ( this->m_dark_mode )
 		{
-			tokens::col_accent = xdraw::color{ 240, 242, 255, 255 };
-			tokens::col_text = xdraw::color{ 250, 250, 252, 242 };
-			tokens::col_text_dim = xdraw::color{ 235, 235, 242, 150 };
-			tokens::col_card = xdraw::color{ 255, 255, 255, 34 };
-			tokens::col_elevated = xdraw::color{ 255, 255, 255, 50 };
-			tokens::col_dark = xdraw::color{ 12, 13, 17, 220 };
-			tokens::col_border = xdraw::color{ 255, 255, 255, 55 };
+			// Matching hpnrx45 swift-loader Theme
+			tokens::col_accent = xdraw::color{ 237, 237, 239, 255 };    // 0xEDEDEF
+			tokens::col_text = xdraw::color{ 242, 242, 243, 245 };      // 0xF2F2F3
+			tokens::col_text_dim = xdraw::color{ 161, 161, 166, 180 };  // 0xA1A1A6
+			tokens::col_card = xdraw::color{ 39, 39, 43, 230 };         // 0x27272B
+			tokens::col_elevated = xdraw::color{ 47, 47, 51, 240 };     // 0x2F2F33
+			tokens::col_dark = xdraw::color{ 14, 14, 16, 240 };         // 0x0E0E10
+			tokens::col_border = xdraw::color{ 255, 255, 255, 15 };     // 0xFFFFFF, 0.06f
 		}
 		else
 		{
@@ -270,8 +271,57 @@ namespace rendering {
 		auto& dl = xui::draw::current( );
 		const auto& input = xui::ctx( ).input;
 
-		dl.rect_filled( x, y, w, h, tokens::col_card.alpha( 18 ), xdraw::corner_radius::top( xui::ctx( ).style.window_rounding ) );
-		dl.line( x, y + h, x + w, y + h, tokens::col_border.alpha( 28 ), 1.0f );
+		// Exact loader titleBar background colors: 0x1A1A1E -> 0x232326 with full opacity
+		const auto bar_col1 = xdraw::color{ 26, 26, 30, 255 };  // 0x1A1A1E
+		const auto bar_col2 = xdraw::color{ 35, 35, 38, 255 };  // 0x232326
+
+		dl.rect_filled( x, y, w, h, bar_col1, xdraw::corner_radius::top( xui::ctx( ).style.window_rounding ) );
+		dl.rect_filled( x + w * 0.4f, y, w * 0.6f, h, bar_col2, xdraw::corner_radius::top( xui::ctx( ).style.window_rounding ) );
+		dl.line( x, y + h, x + w, y + h, xdraw::color{ 255, 255, 255, 15 }, 1.0f );
+
+		// Animated loader title bar stars effect
+		static float anim_time = 0.0f;
+		anim_time += xdraw::delta_time( );
+
+		struct star_t { float x, y, s, a, ph; };
+		static const star_t k_stars[] = {
+			{0.10f, 0.32f, 4.0f, 0.85f, 0.0f}, {0.34f, 0.68f, 2.8f, 0.55f, 1.8f},
+			{0.55f, 0.26f, 4.4f, 0.92f, 0.9f}, {0.78f, 0.64f, 3.0f, 0.62f, 2.6f},
+			{0.94f, 0.34f, 3.6f, 0.76f, 1.3f},
+		};
+		static const star_t k_dust[] = {
+			{0.04f, 0.66f, 0.9f, 0.35f, 0.4f}, {0.17f, 0.22f, 0.9f, 0.28f, 2.1f},
+			{0.24f, 0.74f, 1.0f, 0.38f, 1.2f}, {0.42f, 0.20f, 0.9f, 0.26f, 3.0f},
+			{0.47f, 0.76f, 0.9f, 0.32f, 0.7f}, {0.63f, 0.72f, 1.0f, 0.36f, 2.4f},
+			{0.68f, 0.22f, 0.9f, 0.24f, 1.6f}, {0.86f, 0.76f, 0.9f, 0.30f, 0.2f},
+			{0.90f, 0.18f, 0.9f, 0.28f, 2.8f},
+		};
+
+		dl.push_clip( x, y, w, h );
+		const float sx0 = x + 160.0f;
+		const float sx1 = x + w - 40.0f;
+		const float sw = sx1 - sx0;
+
+		if ( sw > 12.0f )
+		{
+			for ( const auto& d : k_dust )
+			{
+				const float twk = 0.45f + 0.55f * std::sin( anim_time * 0.62f + d.ph * 2.0f );
+				const auto alpha = static_cast<std::uint8_t>( 255.0f * d.a * twk * 0.32f );
+				dl.circle_filled( sx0 + sw * d.x, y + h * d.y, d.s * 0.85f, xdraw::color{ 255, 255, 255, alpha } );
+			}
+			for ( const auto& s : k_stars )
+			{
+				const float twk = 0.62f + 0.38f * std::sin( anim_time * 0.72f + s.ph );
+				const auto alpha = static_cast<std::uint8_t>( 255.0f * s.a * twk );
+				const float cx = sx0 + sw * s.x;
+				const float cy = y + h * s.y;
+				const float r = s.s * twk * 0.85f;
+				dl.line( cx - r, cy, cx + r, cy, xdraw::color{ 255, 255, 255, alpha }, 1.0f );
+				dl.line( cx, cy - r, cx, cy + r, xdraw::color{ 255, 255, 255, alpha }, 1.0f );
+			}
+		}
+		dl.pop_clip( );
 
 		const auto pad = tokens::gap;
 		const auto btn_size = h - pad * 2.0f;
@@ -279,26 +329,7 @@ namespace rendering {
 		xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::title ] );
 		const auto title = "swift";
 		const auto [ title_tw, title_th ] = xdraw::measure_text( title );
-		dl.text( x + pad, y + ( h - title_th ) * 0.5f, title, tokens::col_accent );
-		xdraw::pop_font( );
-
-		const auto theme_btn_x = x + w - pad - btn_size;
-
-		const auto theme_rect = xui::rect{ theme_btn_x, y + pad, btn_size, btn_size };
-		const auto theme_hovered = input.in_rect( theme_rect );
-		if ( theme_hovered && input.mouse_clicked && !xui::ctx( ).overlay_blocking( ) )
-		{
-			this->m_dark_mode = !this->m_dark_mode;
-		}
-
-		const auto theme_anim = xui::anim::lerp( xui::fnv1a( "top_theme" ), theme_hovered ? 1.0f : 0.0f, 14.0f );
-		dl.rect_filled( theme_rect.x, theme_rect.y, theme_rect.w, theme_rect.h,
-			xui::lerp( tokens::col_card, tokens::col_elevated, theme_anim ),
-			xdraw::corner_radius{ tokens::btn_rounding } );
-		xdraw::push_font( rendering::g_fonts.fa_solid_small );
-		const auto theme_icon = this->m_dark_mode ? "\xEF\x86\x86" : "\xEF\x86\x85";
-		const auto [ ti_w, ti_h ] = xdraw::measure_text( theme_icon );
-		dl.text( theme_rect.x + ( btn_size - ti_w ) * 0.5f, theme_rect.y + ( btn_size - ti_h ) * 0.5f, theme_icon, tokens::col_text );
+		dl.text( x + pad + 6.0f, y + ( h - title_th ) * 0.5f, title, xdraw::color{ 242, 242, 243, 255 } );
 		xdraw::pop_font( );
 	}
 

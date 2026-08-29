@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <array>
 #include <cstddef>
@@ -158,6 +158,7 @@ namespace rendering {
 		void initialize( );
 
 		family_t sfpro_bold{};
+		family_t burbank_bold{};
 		xdraw::font* fa_solid{ };
 		xdraw::font* fa_solid_small{ };
 

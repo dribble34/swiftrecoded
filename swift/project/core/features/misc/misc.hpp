@@ -178,6 +178,7 @@ namespace features::misc {
 			math::vector3 server_shoot_position{};
 			bool server_shoot_position_confirmed{};
 			math::vector3 target_velocity{};
+			bool forced{};
 			std::uint32_t weapon_type{};
 		};
 
@@ -200,6 +201,7 @@ namespace features::misc {
 			math::vector3 position{};
 			float time{};
 			int damage{};
+			int hitgroup{};
 		};
 
 		struct log
@@ -319,7 +321,6 @@ namespace features::misc {
 	private:
 		void do_crosshair( xdraw::draw_list& draw_list, float cx, float cy ) const;
 		void do_scope( xdraw::draw_list& draw_list, float cx, float cy, float screen_h, std::uintptr_t local_pawn );
-		void do_hat( xdraw::draw_list& draw_list, std::uintptr_t local_pawn ) const;
 		void do_velocity( );
 
 		float m_scope_anim{};
@@ -327,36 +328,6 @@ namespace features::misc {
 		std::uint32_t m_last_weapon{};
 		float m_cached_spread_pixels{};
 		int m_scope_update_frame{};
-	};
-
-	class dlight
-	{
-	public:
-		void on_present( );
-		void on_frame_stage_notify( );
-		void on_level_shutdown( );
-		void apply_scene_color( std::uintptr_t object ) const;
-
-	private:
-		struct config_snapshot
-		{
-			bool enabled{};
-			std::uint32_t packed_color{};
-			float radius{ 300.0f };
-			float z_offset{ 2.0f };
-		};
-
-		void retire_entry( );
-
-		std::mutex m_mutex{};
-		config_snapshot m_config{};
-		std::atomic<std::uintptr_t> m_scene_object{};
-		std::atomic<std::uint32_t> m_packed_color{};
-		std::atomic<float> m_scene_color_scale{};
-		std::uintptr_t m_manager{};
-		std::uintptr_t m_entry{};
-		bool m_logged_submission{};
-		bool m_logged_scene{};
 	};
 
 	class other

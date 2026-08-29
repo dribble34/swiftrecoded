@@ -845,30 +845,105 @@ namespace features::esp::player {
 		const auto width = cfg.width.value;
 		const auto height = cfg.height.value;
 
-		const auto fx = std::cosf( angle );
-		const auto fy = std::sinf( angle );
-		const auto px = -fy;
-		const auto py = fx;
-
-		const auto base_cx = tip_x - fx * height;
-		const auto base_cy = tip_y - fy * height;
-
-		const auto half_w = width * 0.5f;
-
-		const auto bl_x = base_cx - px * half_w;
-		const auto bl_y = base_cy - py * half_w;
-		const auto br_x = base_cx + px * half_w;
-		const auto br_y = base_cy + py * half_w;
-
-		draw_list.triangle_filled( tip_x, tip_y, bl_x, bl_y, br_x, br_y, color );
-
-		if ( cfg.glow )
+		if ( cfg.style.value == 1 )
 		{
-			auto& glow = xdraw::get_glow( );
-			const auto glow_a = static_cast< std::uint8_t >( static_cast< float >( color.value.a ) * cfg.glow_strength );
-			const auto glow_col = xdraw::color{ color.value.r, color.value.g, color.value.b, glow_a };
+			// Arc circle mode with a pointed triangle towards enemy
+			const float arc_span_rad = math::helpers::deg_to_rad( width ); // Width controls arc span angle in degrees (e.g. 40°)
+			const float start_angle = angle - arc_span_rad * 0.5f;
+			const float end_angle = angle + arc_span_rad * 0.5f;
+			const float r = ( rx + ry ) * 0.5f;
+			const bool is_sharp = cfg.sharp_borders.value;
 
-			glow.triangle_filled( tip_x, tip_y, bl_x, bl_y, br_x, br_y, glow_col );
+			constexpr int segments = 24;
+			for ( int i = 0; i < segments; ++i )
+			{
+				const float t1 = static_cast<float>( i ) / segments;
+				const float t2 = static_cast<float>( i + 1 ) / segments;
+
+				const float a1 = start_angle + ( end_angle - start_angle ) * t1;
+				const float a2 = start_angle + ( end_angle - start_angle ) * t2;
+
+				float inner_r1 = r - height * 0.5f;
+				float outer_r1 = r + height * 0.5f;
+				float inner_r2 = r - height * 0.5f;
+				float outer_r2 = r + height * 0.5f;
+
+				// If sharp borders is enabled, taper thickness to sharp points at the ends of the arc
+				if ( is_sharp )
+				{
+					const float factor1 = 1.0f - std::fabsf( t1 - 0.5f ) * 2.0f; // 0 at ends, 1 at center
+					const float factor2 = 1.0f - std::fabsf( t2 - 0.5f ) * 2.0f;
+
+					inner_r1 = r - ( height * 0.5f ) * factor1;
+					outer_r1 = r + ( height * 0.5f ) * factor1;
+					inner_r2 = r - ( height * 0.5f ) * factor2;
+					outer_r2 = r + ( height * 0.5f ) * factor2;
+				}
+
+				const float p1_x = center_x + std::cosf( a1 ) * inner_r1;
+				const float p1_y = center_y + std::sinf( a1 ) * inner_r1;
+				const float p2_x = center_x + std::cosf( a2 ) * inner_r2;
+				const float p2_y = center_y + std::sinf( a2 ) * inner_r2;
+				const float p3_x = center_x + std::cosf( a2 ) * outer_r2;
+				const float p3_y = center_y + std::sinf( a2 ) * outer_r2;
+				const float p4_x = center_x + std::cosf( a1 ) * outer_r1;
+				const float p4_y = center_y + std::sinf( a1 ) * outer_r1;
+
+				draw_list.triangle_filled( p1_x, p1_y, p2_x, p2_y, p3_x, p3_y, color );
+				draw_list.triangle_filled( p1_x, p1_y, p3_x, p3_y, p4_x, p4_y, color );
+			}
+
+			// Pointed peak/pointer towards the enemy at center of arc
+			const float tip_x = center_x + std::cosf( angle ) * ( r + height * 0.5f + 8.0f );
+			const float tip_y = center_y + std::sinf( angle ) * ( r + height * 0.5f + 8.0f );
+
+			const float base_left_angle = angle - math::helpers::deg_to_rad( 6.0f );
+			const float base_right_angle = angle + math::helpers::deg_to_rad( 6.0f );
+
+			const float bl_x = center_x + std::cosf( base_left_angle ) * ( r + height * 0.5f );
+			const float bl_y = center_y + std::sinf( base_left_angle ) * ( r + height * 0.5f );
+			const float br_x = center_x + std::cosf( base_right_angle ) * ( r + height * 0.5f );
+			const float br_y = center_y + std::sinf( base_right_angle ) * ( r + height * 0.5f );
+
+			draw_list.triangle_filled( tip_x, tip_y, bl_x, bl_y, br_x, br_y, color );
+
+			if ( cfg.glow )
+			{
+				auto& glow = xdraw::get_glow( );
+				const auto glow_a = static_cast< std::uint8_t >( static_cast< float >( color.value.a ) * cfg.glow_strength );
+				const auto glow_col = xdraw::color{ color.value.r, color.value.g, color.value.b, glow_a };
+
+				glow.triangle_filled( tip_x, tip_y, bl_x, bl_y, br_x, br_y, glow_col );
+			}
+		}
+		else
+		{
+			// Classic / Arrow mode
+			const auto fx = std::cosf( angle );
+			const auto fy = std::sinf( angle );
+			const auto px = -fy;
+			const auto py = fx;
+
+			const auto base_cx = tip_x - fx * height;
+			const auto base_cy = tip_y - fy * height;
+
+			const auto half_w = width * 0.5f;
+
+			const auto bl_x = base_cx - px * half_w;
+			const auto bl_y = base_cy - py * half_w;
+			const auto br_x = base_cx + px * half_w;
+			const auto br_y = base_cy + py * half_w;
+
+			draw_list.triangle_filled( tip_x, tip_y, bl_x, bl_y, br_x, br_y, color );
+
+			if ( cfg.glow )
+			{
+				auto& glow = xdraw::get_glow( );
+				const auto glow_a = static_cast< std::uint8_t >( static_cast< float >( color.value.a ) * cfg.glow_strength );
+				const auto glow_col = xdraw::color{ color.value.r, color.value.g, color.value.b, glow_a };
+
+				glow.triangle_filled( tip_x, tip_y, bl_x, bl_y, br_x, br_y, glow_col );
+			}
 		}
 	}
 

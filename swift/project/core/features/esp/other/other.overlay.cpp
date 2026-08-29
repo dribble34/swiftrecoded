@@ -154,6 +154,7 @@ namespace features::esp::other {
 	{
 		this->add_spectators( draw_list );
 		this->add_bomb( draw_list );
+		this->add_direction_indicator( draw_list );
 	}
 
 	void overlay::add_bomb( xdraw::draw_list& draw_list )
@@ -606,6 +607,279 @@ namespace features::esp::other {
 			draw_list.text( x + pad_x + avatar_size + pad_x, current_y + ( row_h - nh ) * 0.5f, e.name, tokens::col_text );
 
 			current_y += row_h + row_spacing;
+		}
+	}
+
+	void overlay::add_direction_indicator( xdraw::draw_list& draw_list )
+	{
+		const auto& aa = settings::g_combat.m_antiaim;
+		if ( !aa.enabled.value || !aa.direction_indicator.value )
+		{
+			return;
+		}
+
+		const auto local = systems::g_local.get( );
+		if ( !local.is_valid( ) || !local.is_alive )
+		{
+			return;
+		}
+
+		// Calculate target angle based on current antiaim state or mouse override
+		const auto view_angles = systems::g_input.get_view_angles( );
+		float target_yaw = view_angles.y;
+
+		if ( aa.mouse_override.value || aa.mouse_override_has_set )
+		{
+			target_yaw = aa.mouse_override_yaw.value;
+		}
+		else if ( aa.manual_left.value )
+		{
+			target_yaw = view_angles.y - 90.0f;
+		}
+		else if ( aa.manual_right.value )
+		{
+			target_yaw = view_angles.y + 90.0f;
+		}
+		else if ( aa.yaw.value == settings::combat::antiaim::yaw_mode::backwards )
+		{
+			target_yaw = view_angles.y + 180.0f;
+		}
+		else if ( aa.yaw.value == settings::combat::antiaim::yaw_mode::custom )
+		{
+			target_yaw = view_angles.y - aa.custom_yaw.value;
+		}
+
+		// Relative angle from view
+		float rel_yaw = math::helpers::normalize_yaw( target_yaw - view_angles.y );
+
+		// Smooth slide animation (interpolating current indicator position towards target_yaw)
+		static float current_anim_yaw = rel_yaw;
+		static float last_change_time = 0.0f;
+		static float prev_rel_yaw = rel_yaw;
+
+		const float dt = xdraw::delta_time( );
+		const float current_clock = static_cast< float >( GetTickCount64( ) ) * 0.001f;
+
+		if ( std::fabsf( math::helpers::normalize_yaw( rel_yaw - prev_rel_yaw ) ) > 1.0f )
+		{
+			last_change_time = current_clock;
+			prev_rel_yaw = rel_yaw;
+		}
+
+		// Smooth lerp (slide movement)
+		float diff = math::helpers::normalize_yaw( rel_yaw - current_anim_yaw );
+		const float lerp_speed = aa.mouse_override.value ? 60.0f : 30.0f;
+		current_anim_yaw = math::helpers::normalize_yaw( current_anim_yaw + diff * std::min( lerp_speed * dt, 1.0f ) );
+
+		// Fade Out timer calculation
+		static float fade_alpha = 1.0f;
+		if ( aa.direction_indicator_fade.value )
+		{
+			const float delay = aa.direction_indicator_fade_delay.value;
+			const float idle_time = current_clock - last_change_time;
+
+			if ( aa.mouse_override.value )
+			{
+				fade_alpha = 1.0f; // Always active while holding mouse override
+				last_change_time = current_clock;
+			}
+			else if ( idle_time > delay )
+			{
+				fade_alpha -= dt * 2.0f;
+				if ( fade_alpha < 0.0f ) fade_alpha = 0.0f;
+			}
+			else
+			{
+				fade_alpha += dt * 5.0f;
+				if ( fade_alpha > 1.0f ) fade_alpha = 1.0f;
+			}
+		}
+		else
+		{
+			fade_alpha = 1.0f;
+		}
+
+		if ( fade_alpha <= 0.0f )
+		{
+			return;
+		}
+
+		const auto [screen_w, screen_h] = xdraw::viewport_size( );
+		const float center_x = static_cast< float >( screen_w ) * 0.5f;
+		const float center_y = static_cast< float >( screen_h ) * 0.5f;
+
+		const auto base_col = aa.direction_indicator_color.value;
+		const std::uint8_t alpha = static_cast< std::uint8_t >( static_cast< float >( base_col.a ) * fade_alpha );
+		if ( alpha <= 0 )
+		{
+			return;
+		}
+
+		const auto col = xdraw::color{ base_col.r, base_col.g, base_col.b, alpha };
+		const auto col_inactive = xdraw::color{ 255, 255, 255, static_cast< std::uint8_t >( 50.0f * fade_alpha ) };
+
+		const float distance = aa.direction_indicator_distance.value;
+		const float radius = aa.direction_indicator_width.value; // Radius / Width
+		const float thickness = aa.direction_indicator_height.value; // Thickness / Height
+
+		if ( aa.direction_indicator_style.value == 1 )
+		{
+			// Mode 1: Half Circle (demi cercle) at crosshair
+			// Grand demi-cercle (Background)
+			const auto bg_base_col = aa.direction_indicator_arc_color.value;
+			const auto bg_alpha = static_cast< std::uint8_t >( static_cast< float >( bg_base_col.a ) * fade_alpha );
+			const auto bg_col = xdraw::color{ bg_base_col.r, bg_base_col.g, bg_base_col.b, bg_alpha };
+
+			// Semi-circle background facing downwards (angles from -pi/2 to pi/2, or bottom half)
+			constexpr int segments = 32;
+			// Compute ring arc boundaries (ensure thickness does not collapse inner radius to zero)
+			const float effective_thick = std::min( thickness, radius * 0.75f );
+			const float inner_r = std::max( 2.0f, radius - effective_thick * 0.5f );
+			const float outer_r = radius + effective_thick * 0.5f;
+
+			// Draw full background semi-circle arc (spanning 180° around crosshair)
+			for ( int i = 0; i < segments; ++i )
+			{
+				const float a1 = ( std::numbers::pi_v<float> * 0.0f ) + ( std::numbers::pi_v<float> * ( static_cast<float>( i ) / segments ) );
+				const float a2 = ( std::numbers::pi_v<float> * 0.0f ) + ( std::numbers::pi_v<float> * ( static_cast<float>( i + 1 ) / segments ) );
+
+				const float p1_x = center_x + std::cosf( a1 ) * inner_r;
+				const float p1_y = center_y + std::sinf( a1 ) * inner_r;
+				const float p2_x = center_x + std::cosf( a2 ) * inner_r;
+				const float p2_y = center_y + std::sinf( a2 ) * inner_r;
+				const float p3_x = center_x + std::cosf( a2 ) * outer_r;
+				const float p3_y = center_y + std::sinf( a2 ) * outer_r;
+				const float p4_x = center_x + std::cosf( a1 ) * outer_r;
+				const float p4_y = center_y + std::sinf( a1 ) * outer_r;
+
+				draw_list.triangle_filled( p1_x, p1_y, p2_x, p2_y, p3_x, p3_y, bg_col );
+				draw_list.triangle_filled( p1_x, p1_y, p3_x, p3_y, p4_x, p4_y, bg_col );
+			}
+
+			// Active 1/3 segment (spanning 60° = 1/3 of 180°) sliding to left (150°), center (90°), or right (30°)
+			// rel_yaw: -90° (left), 90° (right), 180° / -180° / 0° (center/backwards)
+			float active_center_angle = std::numbers::pi_v<float> * 0.5f; // Center (90°)
+			if ( rel_yaw < -45.0f && rel_yaw > -135.0f )
+			{
+				active_center_angle = std::numbers::pi_v<float> * 0.833f; // Left (150°)
+			}
+			else if ( rel_yaw > 45.0f && rel_yaw < 135.0f )
+			{
+				active_center_angle = std::numbers::pi_v<float> * 0.167f; // Right (30°)
+			}
+
+			static float anim_active_angle = active_center_angle;
+			const float angle_diff = active_center_angle - anim_active_angle;
+			anim_active_angle += angle_diff * std::min( 20.0f * dt, 1.0f ); // Smooth slide animation
+
+			const float active_span = std::numbers::pi_v<float> / 3.0f; // 1/3 of semicircle = 60°
+			const float active_start = anim_active_angle - active_span * 0.5f;
+			const float active_end = anim_active_angle + active_span * 0.5f;
+
+			constexpr int active_segments = 16;
+			for ( int i = 0; i < active_segments; ++i )
+			{
+				const float a1 = active_start + ( active_end - active_start ) * ( static_cast<float>( i ) / active_segments );
+				const float a2 = active_start + ( active_end - active_start ) * ( static_cast<float>( i + 1 ) / active_segments );
+
+				const float p1_x = center_x + std::cosf( a1 ) * inner_r;
+				const float p1_y = center_y + std::sinf( a1 ) * inner_r;
+				const float p2_x = center_x + std::cosf( a2 ) * inner_r;
+				const float p2_y = center_y + std::sinf( a2 ) * inner_r;
+				const float p3_x = center_x + std::cosf( a2 ) * outer_r;
+				const float p3_y = center_y + std::sinf( a2 ) * outer_r;
+				const float p4_x = center_x + std::cosf( a1 ) * outer_r;
+				const float p4_y = center_y + std::sinf( a1 ) * outer_r;
+
+				draw_list.triangle_filled( p1_x, p1_y, p2_x, p2_y, p3_x, p3_y, col );
+				draw_list.triangle_filled( p1_x, p1_y, p3_x, p3_y, p4_x, p4_y, col );
+			}
+
+			if ( aa.direction_indicator_glow.value )
+			{
+				auto& glow = xdraw::get_glow( );
+				const auto glow_a = static_cast< std::uint8_t >( static_cast< float >( alpha ) * aa.direction_indicator_glow_strength.value );
+				const auto glow_col = xdraw::color{ base_col.r, base_col.g, base_col.b, glow_a };
+
+				for ( int i = 0; i < active_segments; ++i )
+				{
+					const float a1 = active_start + ( active_end - active_start ) * ( static_cast<float>( i ) / active_segments );
+					const float a2 = active_start + ( active_end - active_start ) * ( static_cast<float>( i + 1 ) / active_segments );
+
+					const float p1_x = center_x + std::cosf( a1 ) * inner_r;
+					const float p1_y = center_y + std::sinf( a1 ) * inner_r;
+					const float p2_x = center_x + std::cosf( a2 ) * inner_r;
+					const float p2_y = center_y + std::sinf( a2 ) * inner_r;
+					const float p3_x = center_x + std::cosf( a2 ) * outer_r;
+					const float p3_y = center_y + std::sinf( a2 ) * outer_r;
+					const float p4_x = center_x + std::cosf( a1 ) * outer_r;
+					const float p4_y = center_y + std::sinf( a1 ) * outer_r;
+
+					glow.triangle_filled( p1_x, p1_y, p2_x, p2_y, p3_x, p3_y, glow_col );
+					glow.triangle_filled( p1_x, p1_y, p3_x, p3_y, p4_x, p4_y, glow_col );
+				}
+			}
+		}
+		else
+		{
+			// Mode 0: Arrows style (2D screen overlay arrows, no ground visualizer)
+			const float arrow_w = aa.direction_indicator_width.value;
+			const float arrow_h = aa.direction_indicator_height.value;
+
+			auto draw_single_arrow = [ & ]( float angle_deg, xdraw::color arrow_col )
+			{
+				const float rad = ( angle_deg - 90.0f ) * ( std::numbers::pi_v<float> / 180.0f );
+				const float perp_rad = angle_deg * ( std::numbers::pi_v<float> / 180.0f );
+
+				const float tip_x = center_x + std::cosf( rad ) * ( distance + arrow_h );
+				const float tip_y = center_y + std::sinf( rad ) * ( distance + arrow_h );
+
+				const float base_center_x = center_x + std::cosf( rad ) * distance;
+				const float base_center_y = center_y + std::sinf( rad ) * distance;
+
+				const float base1_x = base_center_x + std::cosf( perp_rad ) * ( arrow_w * 0.5f );
+				const float base1_y = base_center_y + std::sinf( perp_rad ) * ( arrow_w * 0.5f );
+
+				const float base2_x = base_center_x - std::cosf( perp_rad ) * ( arrow_w * 0.5f );
+				const float base2_y = base_center_y - std::sinf( perp_rad ) * ( arrow_w * 0.5f );
+
+				draw_list.triangle_filled( tip_x, tip_y, base1_x, base1_y, base2_x, base2_y, arrow_col );
+				const float outline_pts[ ]{ tip_x, tip_y, base1_x, base1_y, base2_x, base2_y };
+				draw_list.polyline( outline_pts, xdraw::color{ 0, 0, 0, arrow_col.a }, true, 1.2f );
+			};
+
+			// Draw 4 static directional arrows
+			draw_single_arrow( -90.0f, col_inactive ); // Left
+			draw_single_arrow( 90.0f,  col_inactive ); // Right
+			draw_single_arrow( 180.0f, col_inactive ); // Back
+			draw_single_arrow( 0.0f,   col_inactive ); // Front
+
+			// Draw active sliding arrow at current_anim_yaw
+			draw_single_arrow( current_anim_yaw, col );
+
+			if ( aa.direction_indicator_glow.value )
+			{
+				auto& glow = xdraw::get_glow( );
+				const auto glow_a = static_cast< std::uint8_t >( static_cast< float >( alpha ) * aa.direction_indicator_glow_strength.value );
+				const auto glow_col = xdraw::color{ base_col.r, base_col.g, base_col.b, glow_a };
+
+				const float rad = ( current_anim_yaw - 90.0f ) * ( std::numbers::pi_v<float> / 180.0f );
+				const float perp_rad = current_anim_yaw * ( std::numbers::pi_v<float> / 180.0f );
+
+				const float tip_x = center_x + std::cosf( rad ) * ( distance + arrow_h );
+				const float tip_y = center_y + std::sinf( rad ) * ( distance + arrow_h );
+
+				const float base_center_x = center_x + std::cosf( rad ) * distance;
+				const float base_center_y = center_y + std::sinf( rad ) * distance;
+
+				const float base1_x = base_center_x + std::cosf( perp_rad ) * ( arrow_w * 0.5f );
+				const float base1_y = base_center_y + std::sinf( perp_rad ) * ( arrow_w * 0.5f );
+
+				const float base2_x = base_center_x - std::cosf( perp_rad ) * ( arrow_w * 0.5f );
+				const float base2_y = base_center_y - std::sinf( perp_rad ) * ( arrow_w * 0.5f );
+
+				glow.triangle_filled( tip_x, tip_y, base1_x, base1_y, base2_x, base2_y, glow_col );
+			}
 		}
 	}
 

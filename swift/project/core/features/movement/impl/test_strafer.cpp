@@ -1,5 +1,3 @@
-#include <numbers>
-
 #include <utilities/memory/memory.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
@@ -113,7 +111,7 @@ namespace features::movement {
 			vel_y += wish_dir_y * step;
 		}
 
-	} 
+	} // namespace
 
 	[[nodiscard]] bool test_strafer::is_active( ) const
 	{
@@ -351,4 +349,4 @@ namespace features::movement {
 		}
 	}
 
-} 
+} // namespace features::movement

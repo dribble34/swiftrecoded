@@ -1,4 +1,4 @@
-#include <utilities/math/math.hpp>
+﻿#include <utilities/math/math.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <core/systems/systems.hpp>
@@ -76,41 +76,35 @@ namespace rendering {
 		}
 
 
-		const auto inner_h     = h - inner_pad * 2.0f;
+		// Single top-bar style watermark matching loader theme
+		const auto bar_col1 = xdraw::color{ 26, 26, 30, 255 };  // 0x1A1A1E
+		const auto bar_col2 = xdraw::color{ 35, 35, 38, 255 };  // 0x232326
+		const auto border_col = xdraw::color{ 255, 255, 255, 20 };
+		const auto text_bright = xdraw::color{ 242, 242, 243, 255 }; // 0xF2F2F3
+		const auto text_dim    = xdraw::color{ 161, 161, 166, 255 }; // 0xA1A1A6
 
-		
 		const auto [name_tw, name_th] = xdraw::measure_text( "swift.fly" );
 		const auto [user_tw, user_th] = xdraw::measure_text( "developer" );
 		const auto [ping_vw, ping_vh] = xdraw::measure_text( ping_val );
-		const auto [ping_uw, ping_uh] = xdraw::measure_text( " ms" );
 		const auto [fps_vw,  fps_vh]  = xdraw::measure_text( fps_val );
-		const auto [fps_uw,  fps_uh]  = xdraw::measure_text( " fps" );
 		const auto [time_tw, time_th] = xdraw::measure_text( time_buf );
 
-		float vel_vw{}, vel_vh{}, vel_uw{}, vel_uh{};
+		float vel_vw{}, vel_vh{};
 		if ( has_velocity )
 		{
 			std::tie( vel_vw, vel_vh ) = xdraw::measure_text( vel_val );
-			std::tie( vel_uw, vel_uh ) = xdraw::measure_text( " u/s" );
 		}
 
+		constexpr auto pad_x{ 14.0f };
+		constexpr auto separator_spacing{ 12.0f };
 
-		
-		const auto logo_pill_w = logo_icon_pad + name_tw + text_pad_x;
-		const auto user_pill_w = user_tw + text_pad_x * 2.0f;
-		const auto ping_pill_w = ping_vw + ping_uw + text_pad_x * 2.0f;
-		const auto fps_pill_w  = fps_vw  + fps_uw  + text_pad_x * 2.0f;
-		const auto time_pill_w = time_tw + text_pad_x * 2.0f;
-		const auto vel_pill_w  = vel_vw + vel_uw + text_pad_x * 2.0f;
-
-		
-		float target_w = inner_pad + logo_pill_w + section_spacing;
-		if ( wm.show_user.value ) target_w += user_pill_w + section_spacing;
-		if ( wm.show_ping.value ) target_w += ping_pill_w + section_spacing;
-		if ( has_velocity )       target_w += vel_pill_w  + section_spacing;
-		if ( wm.show_fps.value )  target_w += fps_pill_w  + section_spacing;
-		if ( wm.show_time.value ) target_w += time_pill_w + section_spacing;
-		target_w = target_w - section_spacing + inner_pad;
+		float target_w = pad_x + name_tw;
+		if ( wm.show_user.value ) target_w += separator_spacing + user_tw;
+		if ( wm.show_ping.value ) target_w += separator_spacing + ping_vw + xdraw::measure_text( "ms" ).first;
+		if ( has_velocity )       target_w += separator_spacing + vel_vw  + xdraw::measure_text( "u/s" ).first;
+		if ( wm.show_fps.value )  target_w += separator_spacing + fps_vw  + xdraw::measure_text( "fps" ).first;
+		if ( wm.show_time.value ) target_w += separator_spacing + time_tw;
+		target_w += pad_x;
 
 		static auto smoothed_w{ 0.0f };
 		if ( smoothed_w == 0.0f ) smoothed_w = target_w;
@@ -120,83 +114,65 @@ namespace rendering {
 		const auto x = static_cast<float>( screen_w ) - w - margin;
 		const auto y = margin;
 
-		static float liquid_t{ 0.0f };
-		liquid_t += xdraw::delta_time( );
+		static float anim_time{ 0.0f };
+		anim_time += xdraw::delta_time( );
 
-		const auto breathe = 0.5f + 0.5f * std::sin( liquid_t * 1.4f );
+		draw_list.rect_filled( x, y, w, h, bar_col1, xdraw::corner_radius{ 0.0f } );
+		draw_list.rect_filled( x + w * 0.4f, y, w * 0.6f, h, bar_col2, xdraw::corner_radius{ 0.0f } );
+		draw_list.rect( x, y, w, h, border_col, xdraw::corner_radius{ 0.0f }, 1.0f );
 
-		const auto glass_tint  = xdraw::color{ 255, 255, 255, 128 };
-		const auto glass_base  = xdraw::color{ 255, 255, 255, 66 };
-		const auto sheen_top   = xdraw::color{ 255, 255, 255, static_cast< std::uint8_t >( 74 + 18.0f * breathe ) };
-		const auto sheen_mid   = xdraw::color{ 255, 255, 255, static_cast< std::uint8_t >( 32 + 8.0f * breathe ) };
-		const auto glass_edge  = xdraw::color{ 255, 255, 255, 132 };
-		const auto glass_fine  = xdraw::color{ 255, 255, 255, 44 };
-		const auto pill_base   = xdraw::color{ 255, 255, 255, 40 };
-		const auto pill_sheen  = xdraw::color{ 255, 255, 255, 58 };
-		const auto pill_edge   = xdraw::color{ 255, 255, 255, 90 };
-		const auto col_value   = xdraw::color{ 0, 0, 0, 255 };
-		const auto col_unit    = xdraw::color{ 0, 0, 0, 255 };
-		const auto col_soft    = xdraw::color{ 0, 0, 0, 255 };
+		// Animated loader title bar stars background (only on left section like loader)
+		struct star_t { float x, y, s, a, ph; };
+		static const star_t k_stars[] = {
+			{0.15f, 0.35f, 3.5f, 0.85f, 0.0f}, {0.45f, 0.65f, 2.5f, 0.55f, 1.8f},
+			{0.75f, 0.30f, 3.8f, 0.90f, 0.9f}
+		};
+		static const star_t k_dust[] = {
+			{0.08f, 0.60f, 0.9f, 0.35f, 0.4f}, {0.30f, 0.25f, 0.9f, 0.28f, 2.1f},
+			{0.60f, 0.75f, 1.0f, 0.36f, 1.2f}, {0.85f, 0.22f, 0.9f, 0.26f, 2.8f}
+		};
 
-		xdraw::backdrop( x, y, w, h, xdraw::corner_radius{ r }, glass_tint );
+		draw_list.push_clip( x, y, w * 0.4f, h );
+		for ( const auto& d : k_dust )
+		{
+			const float twk = 0.45f + 0.55f * std::sin( anim_time * 0.62f + d.ph * 2.0f );
+			const auto alpha = static_cast<std::uint8_t>( 255.0f * d.a * twk * 0.30f );
+			draw_list.circle_filled( x + ( w * 0.4f ) * d.x, y + h * d.y, d.s * 0.85f, xdraw::color{ 255, 255, 255, alpha } );
+		}
+		for ( const auto& s : k_stars )
+		{
+			const float twk = 0.62f + 0.38f * std::sin( anim_time * 0.72f + s.ph );
+			const auto alpha = static_cast<std::uint8_t>( 255.0f * s.a * twk * 0.65f );
+			const float cx_s = x + ( w * 0.4f ) * s.x;
+			const float cy_s = y + h * s.y;
+			const float r_s = s.s * twk * 0.75f;
+			draw_list.line( cx_s - r_s, cy_s, cx_s + r_s, cy_s, xdraw::color{ 255, 255, 255, alpha }, 1.0f );
+			draw_list.line( cx_s, cy_s - r_s, cx_s, cy_s + r_s, xdraw::color{ 255, 255, 255, alpha }, 1.0f );
+		}
+		draw_list.pop_clip( );
 
-		draw_list.rect_filled( x, y, w, h, glass_base, xdraw::corner_radius{ r } );
+		float cx = x + pad_x;
 
-		draw_list.rect_filled_gradient( x, y, w, h * 0.5f,
-			sheen_top, sheen_mid,
-			xdraw::color{ 255, 255, 255, 0 }, xdraw::color{ 255, 255, 255, 0 },
-			xdraw::corner_radius::top( r ) );
+		// swift.fly Title
+		draw_list.text( cx, y + ( h - name_th ) * 0.5f, "swift.fly", text_bright );
+		cx += name_tw;
 
-		draw_list.rect_filled_gradient( x, y + h * 0.72f, w, h * 0.28f,
-			xdraw::color{ 255, 255, 255, 0 }, xdraw::color{ 255, 255, 255, 0 },
-			xdraw::color{ 0, 0, 0, 16 }, xdraw::color{ 0, 0, 0, 16 },
-			xdraw::corner_radius::bottom( r ) );
-
-		draw_list.rect( x, y, w, h, glass_edge, xdraw::corner_radius{ r }, 1.0f );
-		draw_list.rect( x + 2.5f, y + 2.5f, w - 5.0f, h - 5.0f, glass_fine, xdraw::corner_radius{ r - 2.5f }, 1.0f );
-
-		auto cx = x + inner_pad;
-
-		auto draw_split_pill = [ & ]( const char* value, float vw, float vh, const char* unit, float /*uw*/, float uh, float pill_w )
+		auto draw_item = [&]( const char* val, const char* unit, float val_w, float val_h )
+		{
+			cx += separator_spacing;
+			draw_list.text( cx, y + ( h - val_h ) * 0.5f, val, text_bright );
+			if ( unit && *unit )
 			{
-				draw_list.rect_filled( cx, y + inner_pad, pill_w, inner_h, pill_base, xdraw::corner_radius{ inner_r } );
-				draw_list.rect_filled_gradient( cx, y + inner_pad, pill_w, inner_h * 0.55f,
-					pill_sheen, xdraw::color{ 255, 255, 255, 26 },
-					xdraw::color{ 255, 255, 255, 0 }, xdraw::color{ 255, 255, 255, 0 },
-					xdraw::corner_radius::top( inner_r ) );
-				draw_list.rect( cx, y + inner_pad, pill_w, inner_h, pill_edge, xdraw::corner_radius{ inner_r }, 1.0f );
-				draw_list.text( cx + text_pad_x, y + ( h - vh ) * 0.5f + text_nudge, value, col_value );
-				draw_list.text( cx + text_pad_x + vw, y + ( h - uh ) * 0.5f + text_nudge, unit, col_unit );
-				cx += pill_w + section_spacing;
-			};
+				draw_list.text( cx + val_w + 2.0f, y + ( h - val_h ) * 0.5f, unit, text_dim );
+			}
+			cx += val_w + ( unit && *unit ? xdraw::measure_text( unit ).first + 2.0f : 0.0f );
+		};
 
-		auto draw_pill = [ & ]( const char* text, float /*tw*/, float th, float pill_w )
-			{
-				draw_list.rect_filled( cx, y + inner_pad, pill_w, inner_h, pill_base, xdraw::corner_radius{ inner_r } );
-				draw_list.rect_filled_gradient( cx, y + inner_pad, pill_w, inner_h * 0.55f,
-					pill_sheen, xdraw::color{ 255, 255, 255, 26 },
-					xdraw::color{ 255, 255, 255, 0 }, xdraw::color{ 255, 255, 255, 0 },
-					xdraw::corner_radius::top( inner_r ) );
-				draw_list.rect( cx, y + inner_pad, pill_w, inner_h, pill_edge, xdraw::corner_radius{ inner_r }, 1.0f );
-				draw_list.text( cx + text_pad_x, y + ( h - th ) * 0.5f + text_nudge, text, col_soft );
-				cx += pill_w + section_spacing;
-			};
-
-		draw_list.rect_filled( cx, y + inner_pad, logo_pill_w, inner_h, pill_base, xdraw::corner_radius{ inner_r } );
-		draw_list.rect_filled_gradient( cx, y + inner_pad, logo_pill_w, inner_h * 0.55f,
-			pill_sheen, xdraw::color{ 255, 255, 255, 26 },
-			xdraw::color{ 255, 255, 255, 0 }, xdraw::color{ 255, 255, 255, 0 },
-			xdraw::corner_radius::top( inner_r ) );
-		draw_list.rect( cx, y + inner_pad, logo_pill_w, inner_h, pill_edge, xdraw::corner_radius{ inner_r }, 1.0f );
-		draw_list.text( cx + logo_icon_pad,
-			y + ( h - name_th ) * 0.5f + text_nudge, "swift.fly", col_value );
-		cx += logo_pill_w + section_spacing;
-
-		if ( wm.show_user.value ) draw_pill( "developer", user_tw, user_th, user_pill_w );
-		if ( wm.show_ping.value ) draw_split_pill( ping_val, ping_vw, ping_vh, " ms",   ping_uw, ping_uh, ping_pill_w );
-		if ( has_velocity )       draw_split_pill( vel_val,  vel_vw,  vel_vh,  " u/s",  vel_uw,  vel_uh,  vel_pill_w );
-		if ( wm.show_fps.value )  draw_split_pill( fps_val,  fps_vw,  fps_vh,  " fps",  fps_uw,  fps_uh,  fps_pill_w );
-		if ( wm.show_time.value ) draw_pill( time_buf, time_tw, time_th, time_pill_w );
+		if ( wm.show_user.value ) draw_item( "developer", "", user_tw, user_th );
+		if ( wm.show_ping.value ) draw_item( ping_val, "ms", ping_vw, ping_vh );
+		if ( has_velocity )       draw_item( vel_val, "u/s", vel_vw, vel_vh );
+		if ( wm.show_fps.value )  draw_item( fps_val, "fps", fps_vw, fps_vh );
+		if ( wm.show_time.value ) draw_item( time_buf, "", time_tw, time_th );
 	}
 
 	void widgets::keybinds( xdraw::draw_list& draw_list )
@@ -430,13 +406,11 @@ namespace rendering {
 		const auto w = max_w;
 
 		
-		const auto dark = rendering::g_menu.is_dark( );
+		// Loader theme background: 0x0E0E10 solid container, 0x27272B card, 0xFFFFFF border opacity
+		const auto backdrop_col = xdraw::color{ 14, 14, 16, 255 };  // 0x0E0E10
+		const auto fill_col = xdraw::color{ 39, 39, 43, 240 };       // 0x27272B
+		const auto border_col = xdraw::color{ 255, 255, 255, 20 };
 
-		const auto backdrop_col = dark ? tokens::col_dark : xdraw::color{ 245, 246, 252, 210 };
-		const auto fill_col = dark ? tokens::col_card.alpha( 110 ) : xdraw::color{ 255, 255, 255, 120 };
-		const auto border_col = dark ? tokens::col_border.alpha( 35 ) : xdraw::color{ 24, 26, 38, 40 };
-
-		xdraw::backdrop( x, base_ry, w, total_h, xdraw::corner_radius{ r }, backdrop_col );
 		draw_list.rect_filled( x, base_ry, w, total_h, fill_col, xdraw::corner_radius{ r } );
 		draw_list.rect( x, base_ry, w, total_h, border_col, xdraw::corner_radius{ r } );
 
@@ -688,35 +662,15 @@ namespace rendering {
 				const auto row_w = row_widths[ i ];
 				const auto is_active = e.setting->value || e.force_active;
 
-const auto row_alpha_byte = static_cast< std::uint8_t >( 255.0f * row_alpha );
-			const auto dark_rows = rendering::g_menu.is_dark( );
-
-			const auto row_backdrop = dark_rows ? tokens::col_dark : xdraw::color{ 250, 251, 255, 225 };
-			const auto row_fill_base = dark_rows ? tokens::col_card.alpha( static_cast< std::uint8_t >( 24.0f * row_alpha ) ) : xdraw::color{ 24, 26, 38, static_cast< std::uint8_t >( 16.0f * row_alpha ) };
-			const auto row_fill_active = dark_rows ? tokens::col_card.alpha( static_cast< std::uint8_t >( 40.0f * row_alpha ) ) : xdraw::color{ 24, 26, 38, static_cast< std::uint8_t >( 34.0f * row_alpha ) };
-			const auto row_border = dark_rows ? tokens::col_border.alpha( static_cast< std::uint8_t >( 45.0f * row_alpha ) ) : xdraw::color{ 24, 26, 38, static_cast< std::uint8_t >( 45.0f * row_alpha ) };
-
-			xdraw::backdrop( widget_x, current_y, row_w, row_h, xdraw::corner_radius{ 12.0f }, row_backdrop );
-
-			auto bg = is_active ? row_fill_active : row_fill_base;
-			draw_list.rect_filled( widget_x, current_y, row_w, row_h, bg, xdraw::corner_radius{ 12.0f } );
-			draw_list.rect( widget_x, current_y, row_w, row_h, row_border, xdraw::corner_radius{ 12.0f } );
-
-				auto icon_col = tokens::col_text_dim.alpha( static_cast< std::uint8_t >( 255.0f * row_alpha ) );
-				if ( is_active )
-					icon_col = tokens::col_accent.alpha( static_cast< std::uint8_t >( 255.0f * row_alpha ) );
-
-				const auto icon_size = xdraw::measure_text( e.icon, rendering::g_fonts.fa_solid );
-				draw_list.text( row_x + icon_gap, current_y + ( row_h - icon_size.second ) * 0.5f, e.icon, icon_col, rendering::g_fonts.fa_solid );
-
-				auto text_col = tokens::col_text.alpha( static_cast< std::uint8_t >( 235.0f * row_alpha ) );
-				if ( is_active )
-					text_col = tokens::col_text.alpha( static_cast< std::uint8_t >( 255.0f * row_alpha ) );
+				// Clean text-only notification style (no background, no border, no icon)
+				auto text_col = xdraw::color{ 242, 242, 243, static_cast< std::uint8_t >( 255.0f * row_alpha ) };
+				if ( !is_active )
+					text_col = xdraw::color{ 161, 161, 166, static_cast< std::uint8_t >( 180.0f * row_alpha ) };
 
 				const auto label_size = xdraw::measure_text( e.label, rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
-				draw_list.text( row_x + icon_gap + static_cast< float >( icon_size.first ) + icon_gap, current_y + ( row_h - label_size.second ) * 0.5f, e.label, text_col, rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
+				draw_list.text( widget_x, current_y + ( row_h - label_size.second ) * 0.5f, e.label, text_col, rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 
-				current_y += row_h + row_spacing;
+				current_y += row_h * 0.75f;
 			}
 		}
 

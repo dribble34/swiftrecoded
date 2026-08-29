@@ -53,7 +53,6 @@ namespace features {
 	namespace misc {
 
 		inline projectile_trajectory g_projectile_trajectory{};
-		inline dlight g_dlight{};
 		inline impacts g_impacts{};
 		inline removals g_removals{};
 		inline camera g_camera{};
@@ -72,7 +71,10 @@ namespace features {
 		inline jumpbug g_jumpbug{};
 		inline fastladder g_fastladder{};
 		inline edgejump g_edgejump{};
+		inline edgestop g_edgestop{};
+		inline edgebug g_edgebug{};
 		inline slowwalk g_slowwalk{};
+		inline pixelsurf g_pixelsurf{};
 
 	} 
 

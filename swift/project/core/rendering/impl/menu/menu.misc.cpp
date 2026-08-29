@@ -89,6 +89,9 @@ namespace rendering {
 
 			if ( xui::begin_child( "##misc_impacts", col_w ) )
 			{
+				static const char* k_log_modes[ ]{ "screen text", "screen widget", "console" };
+				xui::combo( "log mode", impacts.log_display_mode.value, k_log_modes, 3 );
+
 				xui::checkbox( "hit logs", impacts.hit_log );
 				if ( xui::begin_popup( "##hitlog_popup", 220.0f ) )
 				{
@@ -317,6 +320,12 @@ namespace rendering {
 				}
 
 				xui::checkbox( "keybinds", m.keybinds_enabled );
+				if ( xui::begin_popup( "##keybinds_popup", 180.0f ) )
+				{
+					static const char* k_keybind_scales[ ]{ "50%", "75%", "100%", "150%" };
+					xui::combo( "scale##kb", m.keybind_scale_value.value, k_keybind_scales, 4 );
+					xui::end_popup( );
+				}
 
 				xui::end_child( );
 			}
@@ -434,6 +443,15 @@ namespace rendering {
 				}
 
 				xui::checkbox( "indicators", m.indicators_enabled );
+
+				xui::checkbox( "crosshair indicators", m.m_crosshair_indicators.enabled );
+				if ( xui::begin_popup( "##crosshair_indicators_popup", 220.0f ) )
+				{
+					xui::color_picker( "color##xhair_ind", m.m_crosshair_indicators.color );
+					xui::checkbox( "glow##xhair_ind", m.m_crosshair_indicators.glow );
+					xui::slider_float( "glow strength##xhair_ind", m.m_crosshair_indicators.glow_strength, 0.1f, 1.0f, "%.2f" );
+					xui::end_popup( );
+				}
 
 				xui::end_child( );
 			}

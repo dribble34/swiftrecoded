@@ -955,10 +955,10 @@ namespace features::combat {
 
 		
 		
-		// use whatever fraction of full input actually cancels the remaining
-		// speed, tapering only once it drops below one tick of acceleration.
-		// scaling by speed / weapon_max_speed is a different quantity and ran
-		// the stop at a fraction of the available deceleration.
+		// use whatever fraction of full input cancels the remaining speed,
+		// tapering only once it drops below one tick of acceleration. don't
+		// scale by speed / weapon_max_speed - that runs the stop at a fraction
+		// of the available deceleration.
 		auto move_magnitude = max_decel > 0.0f
 			? std::clamp( speed / max_decel, 0.0f, 1.0f )
 			: 1.0f;

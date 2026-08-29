@@ -7,7 +7,7 @@
 
 /*
 * @info
-* All patterns live in protection/patterns.hpp — update signatures there 1:1.
+* All patterns live in protection/patterns.hpp - update signatures there 1:1.
 * PATTERN ( patterns::name )
 * MODULE ( "MODULE" )
 * INTERFACE_ ( "MODULE:INTERFACE_NAME" )

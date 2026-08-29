@@ -137,8 +137,8 @@ namespace features::combat {
 			return std::nullopt;
 		}
 
-		// acceleration estimate from the last two record intervals — lets the
-		// extrapolation track targets that are speeding up or slowing down
+		// acceleration estimate from the last two record intervals, so the
+		// extrapolation tracks targets that are speeding up or slowing down
 		math::vector3 acceleration{};
 		if ( it->second.size( ) > 2 )
 		{
@@ -262,7 +262,7 @@ namespace features::combat {
 
 			const auto rad = data.direction * ( 3.14159265f / 180.0f );
 
-			// accel nudges the planar velocity, decayed — low confidence fast
+			// accel nudges the planar velocity, decayed (low confidence)
 			data.velocity.x += acceleration.x * cstypes::tick_interval;
 			data.velocity.y += acceleration.y * cstypes::tick_interval;
 			acceleration *= 0.85f;

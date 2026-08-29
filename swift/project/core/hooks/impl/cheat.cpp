@@ -421,8 +421,8 @@ namespace hooks {
 				features::misc::g_projectile_trajectory.on_create_move( current_cmd );
 			}
 
-			// last, so it strips the movement every other feature has already
-			// written -- the pawn must stay put while the camera flies.
+			// last, so it strips the movement every other feature wrote:
+			// the pawn must stay put while the camera flies
 			features::misc::g_camera.on_create_move( current_cmd );
 			if ( trace )
 			{
@@ -597,11 +597,9 @@ namespace hooks {
 			return srv;
 		}
 
-		// the texture name field is not a valid pointer for every texture type;
-		// reading it can fault, and on a bad pointer strstr() would scan an
-		// unbounded amount of mapped memory before faulting - a seconds-long
-		// freeze on every texture load (inject/connect). validate the pointer
-		// and bound the scan instead; SEH stays as a last-resort backstop
+		// the texture name field isn't a valid pointer for every texture type,
+		// and an unbounded strstr() on a bad one can freeze for seconds on every
+		// texture load. validate the pointer and bound the scan; SEH backstops.
 		__try
 		{
 			const auto current = static_cast< ID3D11ShaderResourceView* >( systems::g_model_preview.texture( ) );
@@ -859,7 +857,7 @@ namespace hooks {
 
 		// only ever touch the target's transforms. for anything else (world,
 		// props, other players) the sanity reads below fail and returning
-		// false aborts the whole trace — walls go invisible to autowall
+		// false aborts the whole trace, so walls go invisible to autowall
 		if ( a1 != record->pawn && a1 != record->game_scene_node )
 		{
 			return m_get_transforms_for_hitbox_list.call<bool>( a1, a2, a3 );

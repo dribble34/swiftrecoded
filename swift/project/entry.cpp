@@ -30,16 +30,13 @@ namespace {
 
 	LONG WINAPI diag_unhandled_exception_filter( EXCEPTION_POINTERS* info );
 
-	// Registers this module's own .pdata with the process so x64 SEH
-	// (__try/__except, vectored/unhandled exception filters) works inside
-	// it even when the module never went through the Windows loader --
-	// RtlLookupFunctionEntry has no way to find unwind info for a
-	// manually mapped module otherwise. Must run before any code in this
-	// module relies on __try/__except, including the CRT init below and
-	// any C++ static initializer it runs, so it's the very first thing
-	// `entry` does. Calling this on a normally LoadLibrary'd module is
-	// harmless: it just adds a redundant dynamic table entry alongside
-	// the loader's own static registration.
+	// registers this module's .pdata so x64 SEH (__try/__except, vectored/
+	// unhandled filters) works when the module never went through the Windows
+	// loader - RtlLookupFunctionEntry can't find unwind info for a manually
+	// mapped module otherwise. must run before anything here uses __try/__except
+	// (CRT init below and its static initializers included), so it's the first
+	// thing `entry` does. harmless on a LoadLibrary'd module - just a redundant
+	// dynamic table entry.
 	void register_exception_table( HMODULE module_handle )
 	{
 		const auto base = reinterpret_cast<std::uintptr_t>( module_handle );

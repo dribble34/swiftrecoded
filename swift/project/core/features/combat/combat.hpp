@@ -132,8 +132,8 @@ namespace features::combat {
 				bool penetrated{};
 			};
 
-			// hard gates from client.dll: either one zeroes the penetration
-			// counter and stops the bullet. the distance bound is not scaled by
+			// hard gates from client.dll: either one zeroes the penetration counter
+			// and stops the bullet. the distance bound isn't scaled by
 			// m_flPenetration, so nothing penetrates past it.
 			static constexpr auto k_max_penetration_distance{ 3000.0f };
 			static constexpr auto k_min_surface_modifier{ 0.1f };
@@ -236,13 +236,20 @@ namespace features::combat {
 		[[nodiscard]] std::uint32_t get_spread_seed( const math::vector3& angles, int tick ) const;
 		[[nodiscard]] math::vector2 calculate_spread( int seed, float accuracy, float spread, float recoil_index, int item_def_idx, int num_bullets ) const;
 		[[nodiscard]] math::vector3 get_aim_punch( std::uintptr_t local_pawn ) const;
-		[[nodiscard]] float calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples = 256, float needed = 0.0f ) const;
+		// estimate over exactly `samples` fixed spread samples, so results are
+		// comparable between calls and safe to rank on. abort_below stops
+		// sampling once the result can't reach that fraction, returning only a
+		// lower bound - pass it only when a result below it can't affect the
+		// outcome (see rage::select_best). 0 always evaluates every sample.
+		[[nodiscard]] float calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples = 256, float abort_below = 0.0f ) const;
 		// out_error: 0 on an exact fixed point, else the residual spread error
 		[[nodiscard]] math::vector3 find_spread_correction( const math::vector3& aim_angle, int tick, float* out_error = nullptr ) const;
 		[[nodiscard]] math::vector3 get_eye_position( std::uintptr_t local_pawn ) const;
 		[[nodiscard]] math::vector3 get_shoot_position( ) const;
 		[[nodiscard]] math::vector3 get_interpolated_shoot_position( std::uintptr_t local_pawn, bool newest = false ) const;
-		[[nodiscard]] int calculate_stop_ticks( const math::vector3& velocity, float max_speed, std::uintptr_t local_pawn ) const;
+		// the stop simulation lives in rage::predict_stop (it needs displacement
+		// and end velocity, not just a tick count). don't add a second friction
+		// loop here - the two disagreeing is what broke autostop's position.
 		[[nodiscard]] float get_spread( ) const;
 		[[nodiscard]] float get_inaccuracy( bool update_accuracy_penalty ) const;
 		[[nodiscard]] float get_inaccuracy_at_velocity( std::uintptr_t local_pawn, const math::vector3& velocity ) const;
@@ -261,7 +268,7 @@ namespace features::combat {
 		shoot_history m_sh{};
 
 		
-		// Parallel rage workers must not overwrite each other's trace record.
+		// parallel rage workers must not overwrite each other's trace record
 		inline static tls::dynamic_tls<bool> m_autowalling{};
 		inline static tls::dynamic_tls<lagcomp::record*> m_current_autowall_record{};
 
@@ -469,7 +476,10 @@ namespace features::combat {
 
 		[[nodiscard]] std::vector<scan_hit> scan_players( const math::vector3& eye, float inaccuracy, const aim_context& ctx, std::vector<candidate>& candidates, const systems::local::snapshot& local ) const;
 		[[nodiscard]] player_scan_state prepare_player( candidate& cand ) const;
-		[[nodiscard]] std::vector<scan_hit> scan_record( const player_scan_state& state, const math::vector3& eye, float inaccuracy, const aim_context& ctx, candidate& cand, shared::lagcomp::record* record, const systems::local::snapshot& local ) const;
+		// appends every viable hit on `record` to `out`; returns true if any of
+		// them was a direct (non-penetrating) hit, which lets the caller stop
+		// working through older records
+		bool scan_record( const player_scan_state& state, const math::vector3& eye, float inaccuracy, const aim_context& ctx, candidate& cand, shared::lagcomp::record* record, const systems::local::snapshot& local, std::vector<scan_hit>& out ) const;
 		[[nodiscard]] target select_best( const aim_context& aim_ctx, const std::vector<scan_hit>& hits, float eval_inaccuracy ) const;
 
 		[[nodiscard]] shared::shoot_history::eye_candidates get_eye_candidates( ) const;

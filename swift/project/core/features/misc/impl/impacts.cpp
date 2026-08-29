@@ -437,9 +437,8 @@ namespace features::misc {
 
 		std::unique_lock lock( this->m_mtx );
 
-		// the same shot can occasionally be registered twice (e.g. the same command
-		// being processed again for the same tick at low fps) — keep a single
-		// record per fired tick so one bullet can never produce two miss logs
+		// the same command can be processed twice for one tick at low fps; keep
+		// one record per fired tick so a bullet can't produce two miss logs
 		for ( const auto& existing : this->m_pending_shots )
 		{
 			if ( !existing.resolved && existing.victim_pawn == victim_pawn && existing.tick_base == tick_base )
@@ -520,9 +519,8 @@ namespace features::misc {
 	const auto dot = ideal_forward.dot( impact_dir );
 	const auto angular_deviation = std::acosf( std::clamp( dot, -1.0f, 1.0f ) );
 
-	// angular size of the spread cone the bullet was expected to land in:
-	// a deviation inside it is ordinary spread, far beyond it means the aim
-	// or the no-spread correction itself was off
+	// spread cone the bullet was expected to land in: a deviation inside it is
+	// ordinary spread, far beyond it means the aim or correction was off
 	const auto spread_cone = std::atanf( std::max( inaccuracy, 0.0f ) + std::max( shot.predicted_spread, 0.0f ) );
 
 	const auto hitbox_dist = this->distance_to_nearest_hitbox( shot );
@@ -540,7 +538,7 @@ namespace features::misc {
 	// crosses, or the target's position when the aim ray misses entirely
 	const auto hit_distance = aim_hits_target ? ideal_hit_dist : target_dist;
 
-	// signed reach — how far the bullet travelled relative to that point:
+	// signed reach: how far the bullet travelled past that point.
 	// negative = it stopped short (wall/cover), positive = it went past
 	const auto reach = impact_dist - hit_distance;
 
@@ -555,16 +553,14 @@ namespace features::misc {
 
 	if ( bullet_on_target && reach < -reach_margin )
 	{
-		// the bullet was flying at the target but stopped well before it — a
-		// wall/prop swallowed it, i.e. the shot was not actually clear (or the
-		// penetration sim overestimated what the bullet could get through)
+		// aimed at the target but stopped well short: a wall/prop swallowed it,
+		// or the penetration sim overestimated what the bullet could get through
 		reason = "wall";
 	}
 	else if ( bullet_on_target && reach > reach_margin )
 	{
-		// the bullet flew through where the target's hitboxes were without
-		// connecting — the target was not there on the server (desync, a wrong
-		// record pose, or a mismatched impact event)
+		// flew through where the hitboxes were without connecting: the target
+		// wasn't there server-side (desync, wrong record pose, bad impact event)
 		reason = "past";
 	}
 	else if ( !bullet_on_target )
@@ -1087,6 +1083,12 @@ namespace features::misc {
 		entry.hitgroup = systems::g_hitboxes.hitgroup_to_name( data.hitgroup );
 		entry.weapon_type = data.weapon_type;
 
+		if ( cfg.log_display_mode.value == settings::misc::impacts::log_mode::console )
+		{
+			logging::console::print( "[hit] {} for {} in {} ({} hp left)", entry.name, entry.damage, entry.hitgroup, entry.health );
+			return;
+		}
+
 		this->m_logs.insert( this->m_logs.begin( ), std::move( entry ) );
 
 		if ( this->m_logs.size( ) > 5 )
@@ -1123,6 +1125,12 @@ namespace features::misc {
 		entry.is_miss = true;
 		entry.duration = settings::g_misc.m_impacts.miss_log_duration;
 		entry.weapon_type = shot.weapon_type;
+
+		if ( cfg.log_display_mode.value == settings::misc::impacts::log_mode::console )
+		{
+			logging::console::print( "[miss] {} - {}", entry.name, entry.reason );
+			return;
+		}
 
 		this->m_logs.insert( this->m_logs.begin( ), std::move( entry ) );
 
@@ -1172,17 +1180,16 @@ namespace features::misc {
 
 					if ( !it->impact_confirmed )
 					{
-						// the bullet never registered an impact — the shot never happened
-						// server-side. if we are dead, we were killed before it fired
+						// no impact registered, so the shot never happened server-side;
+						// if we're dead, we were killed before it fired
 						if ( !local.is_alive )
 						{
 							reason = "death";
 						}
 						else
 						{
-							// a duplicate record of a shot that already registered an impact
-							// (e.g. the same command processed twice) — skip it so one bullet
-							// can never produce two miss logs
+							// skip a duplicate of a shot that already registered an
+							// impact so one bullet can't produce two miss logs
 							const auto has_impacted_sibling = std::any_of( this->m_pending_shots.begin( ), this->m_pending_shots.end( ), [ & ]( const auto& other )
 								{
 									return &other != &( *it ) && other.victim_pawn == it->victim_pawn
@@ -1357,6 +1364,14 @@ namespace features::misc {
 
 		const auto& s = xui::ctx( ).style;
 
+		const auto display_mode = settings::g_misc.m_impacts.log_display_mode.value;
+		if ( display_mode == settings::misc::impacts::log_mode::console )
+		{
+			return;
+		}
+
+		const auto text_mode = display_mode == settings::misc::impacts::log_mode::screen_text;
+
 		constexpr auto fade_ratio{ 0.8f };
 		constexpr auto entry_spacing{ 3.0f };
 		constexpr auto base_x{ 15.0f };
@@ -1505,27 +1520,43 @@ namespace features::misc {
 					text_h = std::max( text_h, span.h );
 				}
 
-				const auto text_pill_w = text_total_w + text_pad_x * 2.0f;
-				const auto total_w = inner_pad + text_pill_w + inner_pad;
-
-				const auto x = base_x + slide_x;
-				const auto y = base_y + y_offset;
-
-				draw_list.rect_filled( x, y, total_w, h, scale_alpha( s.window_bg ), xdraw::corner_radius{ r } );
-
-				const auto tp_x = x + inner_pad;
-				draw_list.rect_filled( tp_x, y + inner_pad, text_pill_w, inner_h, scale_alpha( s.child_bg ), xdraw::corner_radius{ inner_r } );
-
-				auto tx = tp_x + text_pad_x;
-				const auto ty = y + ( h - text_h ) * 0.5f + text_nudge;
-
-				for ( const auto& span : spans )
+				if ( text_mode )
 				{
-					draw_list.text( tx, ty, span.text, span.accent ? accent_col : dim_col );
-					tx += span.w;
-				}
+					auto tx = base_x + slide_x;
+					const auto ty = base_y + y_offset;
 
-				y_offset += h + entry_spacing;
+					for ( const auto& span : spans )
+					{
+						draw_list.text( tx, ty, span.text, span.accent ? accent_col : dim_col, xdraw::text_style::shadowed );
+						tx += span.w;
+					}
+
+					y_offset += text_h + entry_spacing;
+				}
+				else
+				{
+					const auto text_pill_w = text_total_w + text_pad_x * 2.0f;
+					const auto total_w = inner_pad + text_pill_w + inner_pad;
+
+					const auto x = base_x + slide_x;
+					const auto y = base_y + y_offset;
+
+					draw_list.rect_filled( x, y, total_w, h, scale_alpha( s.window_bg ), xdraw::corner_radius{ r } );
+
+					const auto tp_x = x + inner_pad;
+					draw_list.rect_filled( tp_x, y + inner_pad, text_pill_w, inner_h, scale_alpha( s.child_bg ), xdraw::corner_radius{ inner_r } );
+
+					auto tx = tp_x + text_pad_x;
+					const auto ty = y + ( h - text_h ) * 0.5f + text_nudge;
+
+					for ( const auto& span : spans )
+					{
+						draw_list.text( tx, ty, span.text, span.accent ? accent_col : dim_col );
+						tx += span.w;
+					}
+
+					y_offset += h + entry_spacing;
+				}
 			}
 
 			++it;

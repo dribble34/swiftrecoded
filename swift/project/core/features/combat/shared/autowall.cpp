@@ -12,32 +12,30 @@ namespace features::combat {
 
 	namespace detail {
 
-		// every fraction from the trace is normalized over this span
 		// 4, not 8: hit_elements is 0xc0 bytes = 8 records, and each penetration
 		// can emit a solid span plus an air gap
 		inline constexpr auto k_max_penetrations{ 4 };
 		inline constexpr auto k_trace_range{ 8192.0f };
 
-		// layout verified against client.dll
+		// layout matches client.dll
 		struct bullet_trace_record
 		{
 			// fractions over the full trace ray
 			float enter_fraction;
 			float exit_fraction;
 
-			// damage still carried AFTER this span, not damage dealt at it.
-			// zeroed on the record where the bullet dies.
+			// damage still carried after this span, not damage dealt at it;
+			// zeroed on the record where the bullet dies
 			float damage_applied;
 
-			// penetrations left in the budget (was mislabelled team_at_contact)
+			// penetrations left in the budget
 			int penetrations_remaining;
 
 			// indices into the surface array; entity handle at element + 0x2c
 			std::uint16_t enter_contact_ix;
 			std::uint16_t exit_contact_ix;
 
-			// bit 0 set = span inside solid material, clear = air gap.
-			// really "is solid", not "can be penetrated".
+			// bit 0 set = span inside solid material, clear = air gap
 			std::uint8_t can_penetrate;
 			std::uint8_t pad[ 3 ];
 		};
@@ -154,8 +152,7 @@ namespace features::combat {
 				return false;
 			}
 
-			// entry is parameterized over delta, so it is directly comparable to
-			// the engine's enter_fraction
+			// entry is parameterized over delta, comparable to enter_fraction
 			out_fraction = std::clamp( entry, 0.0f, 1.0f );
 			return true;
 		}
@@ -293,10 +290,9 @@ bool shared::penetration::run( const math::vector3& start, const math::vector3& 
 		return false;
 	}
 
-	// nearest hitbox along the ray, nearest centre as fallback. do NOT match
-	// against the record's enter_fraction: on a penetrating shot that marks
-	// where the air gap after the wall began, so it diverges by the
-	// wall-to-target distance and kills long wallbangs.
+	// nearest hitbox along the ray, nearest centre as fallback. don't match on
+	// the record's enter_fraction: on a penetrating shot it marks the air gap
+	// after the wall, which kills long wallbangs.
 	auto actual_hitbox{ -1 };
 	auto fallback_hitbox{ -1 };
 	auto closest_hitbox_fraction{ 1.0f };
@@ -359,8 +355,7 @@ bool shared::penetration::run( const math::vector3& start, const math::vector3& 
 			break;
 		}
 
-		// players are found on the cleared-bit records -- matching them on the
-		// set-bit ones instead made the ragebot stop finding targets entirely.
+		// players are found on the cleared-bit records, not the set-bit ones
 		if ( ( hit.can_penetrate & 1 ) != 0 )
 		{
 			penetrated = true;
@@ -436,12 +431,9 @@ bool shared::penetration::can( const math::vector3& start, const math::vector3& 
 
 		if ( ( hit.can_penetrate & 1 ) != 0 )
 		{
-			// Pure "can this shot get through the wall" check: don't treat
-			// "this was the last recorded surface" as blocked -- that's
-			// just as true for a bare wall with nothing behind it as it is
-			// for one that fully absorbed the shot, and the two need to be
-			// told apart by can_penetrate, not by whether anything further
-			// was in the trace.
+			// pure "can this shot get through the wall" check: a last recorded
+			// surface isn't blocked - tell the two apart by can_penetrate, not
+			// by whether anything further was in the trace
 			if ( hit.damage_applied < 0.03f )
 			{
 				return false;
@@ -457,23 +449,20 @@ bool shared::penetration::can( const math::vector3& start, const math::vector3& 
 
 	float shared::penetration::penetration_cost( float damage, float thickness, float surface_modifier, float damage_scale ) const
 	{
-		// Transcribed from client.dll's per-contact penetration handler:
+		// from client.dll's per-contact penetration handler:
 		//
 		//   m    = max( 0, 1 / S )
 		//   cost = 3m * max( 0, 3.75 / P )  +  k * D  +  ( T^2 * m ) / 24
 		//
-		// with D = damage carried in, P = the weapon's m_flPenetration,
-		// S = surface modifier, T = thickness, k = 0.16 by default. Note the
-		// T^2 term: penetration falls off quadratically with wall thickness,
-		// not linearly, which is why a wall being twice as thick costs far
-		// more than twice the damage.
+		// D = damage carried in, P = m_flPenetration, S = surface modifier,
+		// T = thickness, k = 0.16 by default. the T^2 term makes penetration
+		// fall off quadratically with wall thickness.
 		//
-		// The engine substitutes S and k for a handful of surface classes when
-		// the entry and exit materials match -- props 85/87 -> S 3.0, prop 76
-		// -> S 2.0, thin 71/89 -> S 3.0 with k 0.05, and a 0x2000-flagged pair
-		// -> S 32.0 with k 0.00001 when thin (glass, essentially free) or
-		// S 3.0 when thick. Callers that know the surface class should pass
-		// the substituted values rather than the raw ones.
+		// the engine substitutes S and k for some surface classes when entry
+		// and exit materials match: props 85/87 -> S 3.0, prop 76 -> S 2.0,
+		// thin 71/89 -> S 3.0 k 0.05, 0x2000-flagged pair -> S 32.0 k 0.00001
+		// when thin (glass) or S 3.0 when thick. callers that know the surface
+		// class should pass the substituted values.
 		if ( surface_modifier < k_min_surface_modifier || this->m_weapon_data.penetration <= 0.0f )
 		{
 			return std::numeric_limits<float>::max( );

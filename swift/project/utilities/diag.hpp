@@ -32,10 +32,9 @@ namespace diag {
 	inline std::uintptr_t g_module_end{};
 	inline tls::dynamic_tls<std::uint32_t> g_exception_scope_depth{};
 	inline tls::dynamic_tls<std::uint32_t> g_probe_scope_depth{};
-	// Per-thread default is nullptr rather than "none": every read site
-	// only dereferences this while g_exception_scope_depth is nonzero,
-	// which is only true once exception_scope's constructor has already
-	// assigned a real phase string on this thread.
+	// per-thread default is nullptr: read sites only deref this while
+	// g_exception_scope_depth is nonzero, i.e. after exception_scope's
+	// constructor has assigned a real phase string on this thread
 	inline tls::dynamic_tls<const char*> g_exception_phase{};
 
 #if defined( DEV )
@@ -246,11 +245,10 @@ namespace diag {
 	{
 		g_module = module_handle;
 
-		// Parse the module's own headers unconditionally and first: under
-		// a generic manual map the module has no entry in the loader's
-		// module list, so GetModuleFileNameW below can fail, and
-		// everything that depends on g_module_end (is_module_address, the
-		// VEH's own-module check) must keep working regardless.
+		// parse the module's own headers first and unconditionally: under a
+		// manual map there's no loader module-list entry, so GetModuleFileNameW
+		// can fail, but g_module_end (is_module_address, the VEH own-module
+		// check) must still work
 		const auto* dos_header =
 			reinterpret_cast<const IMAGE_DOS_HEADER*>( module_handle );
 		if ( dos_header->e_magic == IMAGE_DOS_SIGNATURE )
@@ -272,9 +270,8 @@ namespace diag {
 			GetModuleFileNameW( module_handle, directory, MAX_PATH );
 		if ( !path_length || path_length >= MAX_PATH )
 		{
-			// Not registered with the loader (manual map). Fall back to
-			// the current directory so logging still works instead of
-			// silently staying disabled.
+			// not registered with the loader (manual map); fall back to the
+			// current directory so logging still works
 			const DWORD cwd_length =
 				GetCurrentDirectoryW( MAX_PATH, directory );
 			if ( !cwd_length || cwd_length >= MAX_PATH )
@@ -405,9 +402,9 @@ namespace diag {
 		const char* m_previous_phase;
 	};
 
-	// Suppresses expected first-chance exceptions from an explicit SEH probe.
-	// Construct this in a caller of the function containing __try; MSVC does not
-	// permit unwindable C++ locals in the same function as SEH.
+	// suppresses expected first-chance exceptions from an explicit SEH probe.
+	// construct in a caller of the function containing __try; MSVC doesn't
+	// allow unwindable C++ locals in the same function as SEH.
 	class probe_scope
 	{
 	public:

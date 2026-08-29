@@ -976,6 +976,9 @@ namespace settings {
 			enum class marker_type : int { classic, damage, both };
 			enum class bullet_impact_type : int { overlay, sparks, both };
 			enum class death_effect_type : int { classic, sparks };
+			enum class log_mode : int { screen_text, screen_widget, console };
+
+			config::enm<log_mode> log_display_mode{ log_mode::screen_widget, "impacts", "log display mode" };
 
 			xui::setting hit_log{ true, {}, "hit logs", "impacts" };
 			config::val<float> hit_log_duration{ 3.5f, "impacts", "hit log duration" };
@@ -1050,7 +1053,7 @@ namespace settings {
 			config::val<float> thirdperson_hull_size{ 12.0f, "camera", "thirdperson hull size" };
 
 			xui::setting freecam{ false, { VK_XBUTTON2, xui::bind_mode::toggle }, "freecam", "camera" };
-			// units per second -- running is roughly 250 for reference
+			// units per second (running is ~250 for reference)
 			config::val<float> freecam_speed{ 300.0f, "camera", "freecam speed" };
 
 			xui::setting change_aspect_ratio{ false, {}, "custom aspect ratio", "camera" };
@@ -1151,8 +1154,19 @@ namespace settings {
 			xui::setting show_velocity{ true, {}, "show velocity", "watermark" };
 		} m_watermark{};
 
+		enum class keybind_scale : std::uint8_t { half, three_quarter, full, one_half };
+
 		xui::setting keybinds_enabled{ true, {}, "keybinds", "widgets" };
+		config::enm<keybind_scale> keybind_scale_value{ keybind_scale::full, "widgets", "keybind scale" };
 		xui::setting indicators_enabled{ true, {}, "indicators", "widgets" };
+
+		struct crosshair_indicators_cfg
+		{
+			xui::setting enabled{ true, {}, "crosshair indicators", "widgets" };
+			config::col color{ { 173, 192, 255, 255 }, "widgets", "crosshair indicators color" };
+			xui::setting glow{ true, {}, "crosshair indicators glow", "widgets" };
+			config::val<float> glow_strength{ 0.55f, "widgets", "crosshair indicators glow strength" };
+		} m_crosshair_indicators{};
 	};
 
 	struct movement

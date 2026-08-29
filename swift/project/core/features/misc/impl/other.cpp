@@ -383,6 +383,43 @@ namespace features::misc {
 			return;
 		}
 
+		// writing m_value.fl directly bypasses any clamp the engine would apply on a
+		// console-style SetValue, but the game's own GetFloat() accessor still clamps
+		// against the convar's advertised m_min_value/m_max_value on every read, so a
+		// raw write past those bounds is silently clamped back down each frame. null
+		// the bound pointers once so our full slider range actually takes effect.
+		static bool bounds_cleared{ false };
+		if ( !bounds_cleared )
+		{
+			constexpr std::uint32_t bound_hashes[ ]
+			{
+				"viewmodel_offset_x"_hash,
+				"viewmodel_offset_y"_hash,
+				"viewmodel_offset_z"_hash,
+				"viewmodel_fov"_hash,
+			};
+
+			auto all_cleared{ true };
+			for ( const auto hash : bound_hashes )
+			{
+				const auto cvar = addresses::globals::cvar->find( hash );
+				if ( !cvar )
+				{
+					all_cleared = false;
+					continue;
+				}
+
+				const auto base = reinterpret_cast<std::uintptr_t>( cvar );
+				if ( !memory::safe_write<const void*>( base + offsetof( c_convar, m_min_value ), nullptr ) ||
+					 !memory::safe_write<const void*>( base + offsetof( c_convar, m_max_value ), nullptr ) )
+				{
+					all_cleared = false;
+				}
+			}
+
+			bounds_cleared = all_cleared;
+		}
+
 		const auto set_float_cvar = [ ]( std::uint32_t hash, float value )
 			{
 			addresses::globals::cvar->find(hash)->m_value.fl = value;

@@ -1,5 +1,6 @@
 #include <external/xorstr.hpp>
 
+#include <numbers>
 #include <ShlObj.h>
 #include <filesystem>
 
@@ -185,7 +186,7 @@ namespace features::misc {
 
 			if ( has_position )
 			{
-				this->m_hitmarkers.push_back( { position, current_time, data.damage } );
+				this->m_hitmarkers.push_back( { position, current_time, data.damage, data.hitgroup } );
 
 				if ( this->m_hitmarkers.size( ) > 10 )
 				{
@@ -1252,8 +1253,10 @@ namespace features::misc {
 
 			const auto x = screen.x, y = screen.y;
 
+			const auto show_basic   = cfg.hit_marker_type == settings::misc::impacts::marker_type::basic;
+			const auto show_fortnite = cfg.hit_marker_type == settings::misc::impacts::marker_type::fortnite;
 			const auto show_classic = cfg.hit_marker_type == settings::misc::impacts::marker_type::classic || cfg.hit_marker_type == settings::misc::impacts::marker_type::both;
-			const auto show_damage = cfg.hit_marker_type == settings::misc::impacts::marker_type::damage || cfg.hit_marker_type == settings::misc::impacts::marker_type::both;
+			const auto show_damage  = cfg.hit_marker_type == settings::misc::impacts::marker_type::damage  || cfg.hit_marker_type == settings::misc::impacts::marker_type::both;
 
 			auto size{ 0.0f };
 			auto gap{ 0.0f };
@@ -1298,7 +1301,7 @@ namespace features::misc {
 			auto draw_x{ 0.0f };
 			auto draw_y{ 0.0f };
 
-			if ( show_damage )
+			if ( show_basic || show_damage )
 			{
 				const auto base_offset = show_classic ? 20.0f : 0.0f;
 
@@ -1316,7 +1319,68 @@ namespace features::misc {
 				draw_y = text_y + shake_y;
 			}
 
-			if ( cfg.hit_marker_glow && alpha > 0 )
+			if ( show_fortnite )
+			{
+				damage_text = std::to_string( it->damage );
+				const bool is_headshot = ( it->hitgroup == 1 ); // Hitgroup 1 = Head
+
+				// Colors: Bright White for normal, Vibrant Fortnite Gold/Yellow for headshots
+				const auto main_col = is_headshot
+					? xdraw::color{ 255, 230, 0, alpha }   // Fortnite Gold/Yellow
+					: xdraw::color{ 255, 255, 255, alpha }; // Fortnite White
+
+				const auto black_outline = xdraw::color{ 0, 0, 0, alpha };
+
+				// Fortnite Pop-Jump-Fall Animation curve with scale pop:
+				// Phase 1 (0 to 0.12s): Explosive upward pop & scale expansion
+				// Phase 2 (0.12s+): Gravity arc falling down with smooth fade
+				float anim_y_offset = 0.0f;
+				float scale_pop = 1.0f;
+
+				if ( elapsed < 0.12f )
+				{
+					const float t = elapsed / 0.12f;
+					anim_y_offset = -40.0f * ( 1.0f - ( 1.0f - t ) * ( 1.0f - t ) ); // Jump up
+					scale_pop = 1.0f + 0.35f * std::sin( t * std::numbers::pi_v<float> ); // Scale pop up to 1.35x
+				}
+				else
+				{
+					const float t = elapsed - 0.12f;
+					anim_y_offset = -40.0f + ( 45.0f * t * t ); // Fall down with acceleration
+					scale_pop = 1.0f;
+				}
+
+				auto font_burbank = ( is_headshot || scale_pop > 1.1f )
+					? rendering::g_fonts.burbank_bold[ rendering::fonts::size::title ]
+					: rendering::g_fonts.burbank_bold[ rendering::fonts::size::big ];
+
+				const float text_w = damage_text.length( ) * 16.0f * scale_pop;
+				const float current_digit_x = x - ( text_w * 0.5f );
+				const float current_digit_y = y + anim_y_offset - 16.0f;
+
+				for ( std::size_t d = 0; d < damage_text.length( ); ++d )
+				{
+					const std::string digit_str( 1, damage_text[ d ] );
+					const float digit_sep = static_cast< float >( d ) * 18.0f * scale_pop;
+					const float digit_x = current_digit_x + digit_sep;
+
+					// 8-directional thick black outline
+					constexpr float o = 2.0f;
+					draw_list.text( digit_x - o, current_digit_y - o, digit_str, black_outline, font_burbank );
+					draw_list.text( digit_x + o, current_digit_y - o, digit_str, black_outline, font_burbank );
+					draw_list.text( digit_x - o, current_digit_y + o, digit_str, black_outline, font_burbank );
+					draw_list.text( digit_x + o, current_digit_y + o, digit_str, black_outline, font_burbank );
+					draw_list.text( digit_x - o, current_digit_y,     digit_str, black_outline, font_burbank );
+					draw_list.text( digit_x + o, current_digit_y,     digit_str, black_outline, font_burbank );
+					draw_list.text( digit_x,     current_digit_y - o, digit_str, black_outline, font_burbank );
+					draw_list.text( digit_x,     current_digit_y + o, digit_str, black_outline, font_burbank );
+
+					// Inner filled number text
+					draw_list.text( digit_x, current_digit_y, digit_str, main_col, font_burbank );
+				}
+			}
+
+			if ( cfg.hit_marker_glow && alpha > 0 && !show_fortnite )
 			{
 				auto& glow = xdraw::get_glow( );
 				const auto glow_a = static_cast< std::uint8_t >( static_cast< float >( alpha ) * cfg.hit_marker_glow_strength );
@@ -1335,7 +1399,7 @@ namespace features::misc {
 					}
 				}
 
-				if ( show_damage )
+				if ( show_basic || show_damage )
 				{
 					glow.text( draw_x, draw_y, damage_text, glow_col );
 				}
@@ -1349,7 +1413,7 @@ namespace features::misc {
 				draw_arm( draw_list, x + size, y + size, x + gap, y + gap, color, thickness );
 			}
 
-			if ( show_damage )
+			if ( show_basic || show_damage )
 			{
 				draw_list.text( draw_x, draw_y, damage_text, color );
 			}

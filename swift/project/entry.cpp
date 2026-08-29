@@ -351,7 +351,9 @@ namespace {
 		// Start the anti-tamper watchdog as early as possible so a debugger
 		// attached during init doesn't get a free window before checks arm.
 		// initialize() is idempotent and non-fatal on failure.
-		anti_debug::initialize( );
+		// TEMPORARILY DISABLED for diagnosis (insta-close / freeze-then-close on
+		// inject) — re-enable once the real cause is confirmed.
+		// anti_debug::initialize( );
 
 		g_previous_exception_filter.store(
 			SetUnhandledExceptionFilter( diag_unhandled_exception_filter ),

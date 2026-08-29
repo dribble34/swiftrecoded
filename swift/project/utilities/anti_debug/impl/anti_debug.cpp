@@ -15,6 +15,12 @@
 #include <cstring>
 #include <atomic>
 
+// TEMPORARY diagnostic instrumentation to find a false-positive kill.
+// Pulls in diag.hpp, which breaks this file's normal self-contained /
+// portable-by-copy design (see the header comment) — remove this include
+// and the diag::writef calls below once the cause is confirmed.
+#include <utilities/diag.hpp>
+
 // -----------------------------------------------------------------------------
 // C linkage: the MASM trampoline reads this global and calls out to it.
 // Named at file scope so MASM's EXTRN resolves cleanly.
@@ -668,6 +674,7 @@ namespace {
 			30ull * cycles_per_second_upper;
 
 		std::uint32_t seed = static_cast<std::uint32_t>( __rdtsc( ) ) | 1u;
+		diag::write( diag::level::info, "anti_debug: watchdog loop starting" );
 		for ( ;; ) {
 			std::uint64_t now = __rdtsc( );
 			g_watchdog_beat.store( now, std::memory_order_relaxed );
@@ -675,19 +682,25 @@ namespace {
 			// Run the cheap checks every pass, never short-circuiting, so
 			// the number of ticks / order of execution doesn't fingerprint
 			// which check fired.
-			bool hit = vm_hit;
-			hit |= check_debug_port( );
-			hit |= check_debug_object( );
-			hit |= check_debug_flags( );
-			hit |= check_kernel_debugger( );
-			hit |= check_peb_flags( );
-			hit |= check_hardware_breakpoints_all_threads( );
-			hit |= check_timing_stall( );
+			// TEMP: named instead of OR'd blind so we can log the culprit.
+			const bool r_vm = vm_hit;
+			const bool r_debug_port = check_debug_port( );
+			const bool r_debug_object = check_debug_object( );
+			const bool r_debug_flags = check_debug_flags( );
+			const bool r_kernel_debugger = check_kernel_debugger( );
+			const bool r_peb_flags = check_peb_flags( );
+			const bool r_hwbp = check_hardware_breakpoints_all_threads( );
+			const bool r_timing_stall = check_timing_stall( );
+
+			bool hit = r_vm || r_debug_port || r_debug_object || r_debug_flags ||
+				r_kernel_debugger || r_peb_flags || r_hwbp || r_timing_stall;
 
 			// Handle scan runs on its own schedule.
+			bool r_foreign_handle = false;
 			if ( now - last_handle_scan > handle_scan_interval ) {
 				last_handle_scan = now;
-				if ( check_foreign_process_handles( ) )
+				r_foreign_handle = check_foreign_process_handles( );
+				if ( r_foreign_handle )
 					hit = true;
 			}
 
@@ -695,18 +708,31 @@ namespace {
 			// enforcing main-thread liveness once tick() has been called
 			// at least once, so this doesn't nuke the process during
 			// early init before hot paths are running.
+			bool r_main_stall = false;
 			std::uint64_t main_last = g_main_beat.load( std::memory_order_relaxed );
 			if ( main_last != 0 ) {
 				std::uint64_t elapsed = now - main_last;
 				// 15 seconds — game/frame threads can stall on I/O, so
 				// keep the threshold loose. Anything past this is an
 				// attacker-suspended main thread.
-				if ( elapsed > 15ull * cycles_per_second_upper )
+				if ( elapsed > 15ull * cycles_per_second_upper ) {
+					r_main_stall = true;
 					hit = true;
+				}
 			}
 
-			if ( hit )
+			if ( hit ) {
+				diag::writef(
+					diag::level::fatal,
+					"anti_debug: WATCHDOG KILL vm=%d debug_port=%d debug_object=%d "
+					"debug_flags=%d kernel_debugger=%d peb_flags=%d hwbp=%d "
+					"timing_stall=%d foreign_handle=%d main_stall=%d",
+					r_vm ? 1 : 0, r_debug_port ? 1 : 0, r_debug_object ? 1 : 0,
+					r_debug_flags ? 1 : 0, r_kernel_debugger ? 1 : 0,
+					r_peb_flags ? 1 : 0, r_hwbp ? 1 : 0, r_timing_stall ? 1 : 0,
+					r_foreign_handle ? 1 : 0, r_main_stall ? 1 : 0 );
 				TerminateProcess( GetCurrentProcess( ), 0xC0000005 );
+			}
 
 			// Randomised 6–25 ms sleep — a fixed period is itself a
 			// fingerprint.
@@ -726,12 +752,17 @@ void initialize( ) {
 			expected, true, std::memory_order_acq_rel ) )
 		return;
 
-	if ( !resolve_syscalls( ) )
+	if ( !resolve_syscalls( ) ) {
+		diag::write( diag::level::warning, "anti_debug: resolve_syscalls failed, watchdog not started" );
 		return;
+	}
 
 	HANDLE h = CreateThread( nullptr, 0, watchdog, nullptr, 0, nullptr );
-	if ( !h )
+	if ( !h ) {
+		diag::write( diag::level::warning, "anti_debug: CreateThread failed, watchdog not started" );
 		return;
+	}
+	diag::write( diag::level::info, "anti_debug: watchdog thread created" );
 	CloseHandle( h );
 
 	g_ready.store( true, std::memory_order_release );
@@ -754,8 +785,15 @@ void tick( ) {
 	// Cheap per-thread checks with no syscall cost — safe on hot paths.
 	// The this-thread DR variant is deliberate here: HW BPs are per-thread
 	// and this runs on whatever hot-path thread called tick().
-	if ( check_hardware_breakpoints_this_thread( ) || check_peb_flags( ) )
+	const bool r_hwbp_this = check_hardware_breakpoints_this_thread( );
+	const bool r_peb = check_peb_flags( );
+	if ( r_hwbp_this || r_peb ) {
+		diag::writef(
+			diag::level::fatal,
+			"anti_debug: TICK KILL hwbp_this=%d peb_flags=%d",
+			r_hwbp_this ? 1 : 0, r_peb ? 1 : 0 );
 		TerminateProcess( GetCurrentProcess( ), 0xC0000005 );
+	}
 
 	// Enforce watchdog liveness. If it's been suspended, we terminate
 	// here from the main thread. Tight threshold (2 seconds) — the
@@ -764,8 +802,13 @@ void tick( ) {
 	std::uint64_t wd_last = g_watchdog_beat.load( std::memory_order_relaxed );
 	if ( wd_last != 0 ) {
 		std::uint64_t elapsed = now - wd_last;
-		if ( elapsed > 2ull * cycles_per_second_upper )
+		if ( elapsed > 2ull * cycles_per_second_upper ) {
+			diag::writef(
+				diag::level::fatal,
+				"anti_debug: TICK KILL watchdog_stale elapsed_cycles=%llu",
+				static_cast<unsigned long long>( elapsed ) );
 			TerminateProcess( GetCurrentProcess( ), 0xC0000005 );
+		}
 	}
 }
 

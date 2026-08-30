@@ -25,7 +25,8 @@ namespace {
 		}
 	}
 
-	// angle_distance without the final sqrt; threshold compares fine squared
+	// same as math::helpers::angle_distance, but without the final sqrt —
+	// the comparison against a threshold is identical on the squared value.
 	float angle_distance_sqr( const math::vector3& from, const math::vector3& to )
 	{
 		const auto pitch = to.x - from.x;
@@ -33,203 +34,7 @@ namespace {
 		return pitch * pitch + yaw * yaw;
 	}
 
-	// hitbox index -> body part, matched to systems::hitboxes::hitgroup_from_hitbox.
-	// 7-12 are legs, 13-18 are arms here (reverse of the classic CS:GO layout),
-	// so check that table before "fixing" these. named hitbox_id to avoid
-	// shadowing by the hitbox_index locals elsewhere in this file.
-	namespace hitbox_id {
-
-		inline constexpr auto head{ 0 };
-
-		inline constexpr std::array chest{ 4, 5, 6 };
-		inline constexpr std::array stomach{ 3, 2 };
-		inline constexpr std::array arms{ 13, 14, 15, 16, 17, 18 };
-		inline constexpr std::array legs{ 7, 8, 9, 10 };
-		inline constexpr std::array feet{ 11, 12 };
-
-		// highest index in hitgroup_from_hitbox's table, plus one
-		inline constexpr auto count{ 19 };
-
-	}
-
-	// indices into the ragebot's `hitboxes` checkboxes; order matches
-	// detail::hitbox_names in menu.ragebot.cpp
-	namespace hitbox_toggle {
-
-		inline constexpr auto head{ 0 };
-		inline constexpr auto chest{ 1 };
-		inline constexpr auto stomach{ 2 };
-		inline constexpr auto arms{ 3 };
-		inline constexpr auto legs{ 4 };
-		inline constexpr auto feet{ 5 };
-
-	}
-
-	// bone count lagcomp::get_skeleton returns; every emitted bone index
-	// subscripts that array, so keep this as the single bound
-	inline constexpr auto k_skeleton_bones{ 27 };
-
-	// tie-breaker weight per hitbox, indexed by hitbox index. legs rank below
-	// arms on purpose - it's a tuning choice, not forced by the damage model.
-	inline constexpr std::array<float, hitbox_id::count> k_hitbox_priority
-	{
-		4.0f,                                       // head
-		3.0f, 3.0f, 3.0f, 3.0f, 3.0f, 3.0f,         // neck, stomach, chest
-		1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,         // legs
-		2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f          // arms
-	};
-
-	float hitbox_priority( int hitbox_index )
-	{
-		if ( hitbox_index < 0 || hitbox_index >= static_cast< int >( k_hitbox_priority.size( ) ) )
-		{
-			return 0.0f;
-		}
-
-		return k_hitbox_priority[ hitbox_index ];
-	}
-
-	// target-scoring weights. tier 1: any lethal hit outranks any non-lethal
-	// one (the lethal bonus alone beats the largest non-lethal score). tier 2:
-	// everything else, ordered by expected damage. within a tier: confidence,
-	// then hitbox, then tie-breakers.
-	namespace score_weight {
-
-		inline constexpr auto lethal{ 100000.0f };
-
-		// ~17 points of hitchance is worth one hitbox priority tier
-		inline constexpr auto lethal_hitchance{ 15000.0f };
-		inline constexpr auto lethal_priority{ 2500.0f };
-
-		// hitchance squared to discount marginal shots hard; flat term keeps
-		// damage meaningful when hitchance is near zero
-		inline constexpr auto damage_confidence{ 150.0f };
-		inline constexpr auto damage_flat{ 5.0f };
-
-		// prefer a clean line over a wallbang; sized to sit between the tiers
-		inline constexpr auto direct_hit{ 5000.0f };
-
-		// tie-breakers
-		inline constexpr auto center_point{ 50.0f };
-		inline constexpr auto priority{ 25.0f };
-		inline constexpr auto fov_penalty{ 0.1f };
-
-	}
-
-	// world-space centre of a hitbox on a posed skeleton
-	math::vector3 hitbox_center( const systems::hitboxes::entry& hitbox, const systems::bones::data& bone )
-	{
-		return bone.rotation.rotate_vector( ( hitbox.mins + hitbox.maxs ) * 0.5f ) + bone.position;
-	}
-
-	// usable only if the bone exists in both the skeleton array and this record's pose
-	bool bone_usable( const systems::hitboxes::entry& hitbox, const features::combat::shared::lagcomp::record& record )
-	{
-		return hitbox.bone >= 0
-			&& hitbox.bone < k_skeleton_bones
-			&& hitbox.bone < record.bone_count;
-	}
-
-	// squared fov gate. squaring loses the sign, so guard against a negative
-	// max_fov (a hand-edited config skips the slider's [1,180] clamp) which
-	// would otherwise read as its absolute value and re-enable a disabled bot.
-	float fov_gate_sqr( float max_fov )
-	{
-		return max_fov > 0.0f ? max_fov * max_fov : -1.0f;
-	}
-
-	bool aim_within_fov(
-		const math::vector3& eye,
-		const math::vector3& position,
-		const math::vector3& view_angles,
-		float max_fov_sq,
-		math::vector3& out_angle,
-		float& out_fov )
-	{
-		out_angle = math::helpers::calculate_angle( eye, position );
-
-		const auto fov_sq = angle_distance_sqr( view_angles, out_angle );
-		if ( fov_sq > max_fov_sq )
-		{
-			return false;
-		}
-
-		out_fov = std::sqrtf( fov_sq );
-		return true;
-	}
-
-	struct enemy_ref
-	{
-		std::uintptr_t pawn{};
-		std::uintptr_t game_scene_node{};
-		int health{};
-	};
-
-	// single definition of "an enemy the ragebot may act on", shared by target
-	// gathering and autostop. the callback returns false to stop the walk so a
-	// caller that's done doesn't keep paying the per-player filter cost.
-	template <typename callback_t>
-	void for_each_enemy( const systems::local::snapshot& local, callback_t&& callback )
-	{
-		for ( const auto& p : systems::g_entities.get_by_type( systems::entities::type::player ) )
-		{
-			if ( !p.ptr || p.ptr == local.controller )
-			{
-				continue;
-			}
-
-			if ( !memory::read<bool>( p.ptr + SCHEMA( "CCSPlayerController", "m_bPawnIsAlive"_hash ) ) )
-			{
-				continue;
-			}
-
-			const auto pawn_handle = memory::read<std::uint32_t>( p.ptr + SCHEMA( "CBasePlayerController", "m_hPawn"_hash ) );
-			const auto pawn = systems::g_entities.lookup( pawn_handle );
-
-			if ( !pawn || pawn == local.pawn )
-			{
-				continue;
-			}
-
-			const auto team = memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iTeamNum"_hash ) );
-			if ( !local.is_this_other_team( team ) )
-			{
-				continue;
-			}
-
-			const auto health = memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iHealth"_hash ) );
-			if ( health <= 0 )
-			{
-				continue;
-			}
-
-			if ( memory::read<bool>( pawn + SCHEMA( "C_CSPlayerPawn", "m_bGunGameImmunity"_hash ) ) )
-			{
-				continue;
-			}
-
-			// no scene node means no bones to resolve, so nothing can scan it
-			const auto game_scene_node = memory::read<std::uintptr_t>( pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
-			if ( !game_scene_node )
-			{
-				continue;
-			}
-
-			if constexpr ( std::is_same_v<decltype( callback( enemy_ref{} ) ), bool> )
-			{
-				if ( !callback( enemy_ref{ .pawn = pawn, .game_scene_node = game_scene_node, .health = health } ) )
-				{
-					return;
-				}
-			}
-			else
-			{
-				callback( enemy_ref{ .pawn = pawn, .game_scene_node = game_scene_node, .health = health } );
-			}
-		}
-	}
-
-}
+} 
 
 namespace features::combat {
 
@@ -244,11 +49,6 @@ namespace features::combat {
 			this->m_revolver_cock_ticks = 0;
 			return;
 		}
-
-		// hold the previous brake decision across ticks where can_shoot() bails
-		// before run_gun() runs (most ticks on cooldown), otherwise the bot
-		// never slows enough between shots to land follow-ups
-		const auto was_stopping = this->m_should_stop;
 
 		this->m_should_stop = false;
 		this->m_firing_this_tick = false;
@@ -288,8 +88,6 @@ namespace features::combat {
 
 			if ( !g_shared.can_shoot( cmd, local.controller ) )
 			{
-				// between shots: hold the brake, re-evaluate next fireable tick
-				this->m_should_stop = was_stopping;
 				return;
 			}
 		}
@@ -324,7 +122,8 @@ namespace features::combat {
 
 		aim_context out{};
 
-		// fallback if prediction is unavailable; zero would read as perfect accuracy
+		// fallback if prediction is unavailable; zero would read as perfect
+		// accuracy and fire everything
 		out.predicted_inaccuracy = g_shared.get_inaccuracy( true );
 
 		systems::g_prediction.simulate( cmd, local, [ & ]
@@ -334,8 +133,9 @@ namespace features::combat {
 				out.velocity = memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseEntity", "m_vecAbsVelocity"_hash ) );
 				out.spread = g_shared.get_spread( );
 
-				// sample inside simulate (post-move, pre-restore) so velocity/
-				// flags/duck are what the shot actually fires with
+				// must be sampled inside simulate: this runs post-move and
+				// pre-restore, so velocity/flags/duck are what the shot is
+				// actually fired with
 				out.predicted_inaccuracy = g_shared.get_inaccuracy( true );
 			} );
 
@@ -354,110 +154,139 @@ namespace features::combat {
 	std::vector<rage::candidate> rage::gather_candidates( const systems::local::snapshot& local, float max_fov, float max_distance_sq ) const
 	{
 		const auto& shared_ctx = g_shared.ctx( );
+		const auto players = systems::g_entities.get_by_type( systems::entities::type::player );
 
 		const auto eye = g_shared.get_eye_position( local.pawn );
 		const auto view_angles = systems::g_input.get_view_angles( );
 		const auto max_fov_sq = ( max_fov + 15.0f ) * ( max_fov + 15.0f );
 
-		// candidates hold raw pointers into m_extrapolated_records, so a realloc
-		// would dangle them - this reserve is load-bearing, not an optimisation
-		constexpr std::size_t k_max_extrapolated{ 64 };
-
 		std::vector<candidate> out;
-		out.reserve( k_max_extrapolated );
+		out.reserve( players.size( ) );
 
 		this->m_extrapolated_records.clear( );
-		this->m_extrapolated_records.reserve( k_max_extrapolated );
+		this->m_extrapolated_records.reserve( players.size( ) );
 
-		// guard against the real capacity, not k_max_extrapolated, so shrinking
-		// the reserve above can't quietly bring the dangling-pointer bug back
-		const auto extrapolated_capacity = this->m_extrapolated_records.capacity( );
-
-		for_each_enemy( local, [ & ]( const enemy_ref& enemy )
+		for ( const auto& p : players )
+		{
+			if ( !p.ptr || p.ptr == local.controller )
 			{
-				if ( max_fov < 180.0f )
-				{
-					const auto origin = memory::read<math::vector3>( enemy.game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
-					const auto aim = math::helpers::calculate_angle( eye, origin );
+				continue;
+			}
 
-					if ( angle_distance_sqr( view_angles, aim ) > max_fov_sq )
+			if ( !memory::read<bool>( p.ptr + SCHEMA( "CCSPlayerController", "m_bPawnIsAlive"_hash ) ) )
+			{
+				continue;
+			}
+
+			const auto pawn_handle = memory::read<std::uint32_t>( p.ptr + SCHEMA( "CBasePlayerController", "m_hPawn"_hash ) );
+			const auto pawn = systems::g_entities.lookup( pawn_handle );
+
+			if ( pawn == local.pawn )
+			{
+				continue;
+			}
+
+			const auto team = memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iTeamNum"_hash ) );
+			if ( !local.is_this_other_team( team ) )
+			{
+				continue;
+			}
+
+			const auto health = memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iHealth"_hash ) );
+			if ( health <= 0 )
+			{
+				continue;
+			}
+
+			if ( memory::read<bool>( pawn + SCHEMA( "C_CSPlayerPawn", "m_bGunGameImmunity"_hash ) ) )
+			{
+				continue;
+			}
+
+			if ( max_fov < 180.0f )
+			{
+				const auto game_scene_node = memory::read<std::uintptr_t>( pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+				if ( !game_scene_node )
+				{
+					continue;
+				}
+
+				const auto origin = memory::read<math::vector3>( game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+				const auto aim = math::helpers::calculate_angle( eye, origin );
+
+				if ( angle_distance_sqr( view_angles, aim ) > max_fov_sq )
+				{
+					continue;
+				}
+			}
+
+			auto records = g_shared.lc( ).get_valid_records( pawn );
+
+			if ( records.empty( ) )
+			{
+				// no usable history: fall back to extrapolation, then to a live
+				// snapshot, rather than dropping the candidate outright
+				auto extrap = g_shared.lc( ).extrapolate( pawn );
+
+				if ( extrap.has_value( ) )
+				{
+					this->m_extrapolated_records.push_back( std::move( *extrap ) );
+				}
+				else
+				{
+					// built in place: a record carries two 128-bone arrays, which
+					// is not something to hand around on the stack per player
+					this->m_extrapolated_records.emplace_back( );
+
+					if ( !this->m_extrapolated_records.back( ).setup( pawn ) )
 					{
-						return;
+						this->m_extrapolated_records.pop_back( );
+						continue;
 					}
 				}
 
-				auto records = g_shared.lc( ).get_valid_records( enemy.pawn );
+				records.push_back( &this->m_extrapolated_records.back( ) );
+			}
 
-				if ( records.empty( ) )
+			if ( max_distance_sq > 0.0f )
+			{
+				const auto& origin = systems::g_prediction.pre( ).origin;
+				auto closest_sq = ( records.front( )->origin - origin ).length_sqr( );
+
+				if ( records.size( ) > 1 )
 				{
-					if ( this->m_extrapolated_records.size( ) >= extrapolated_capacity )
-					{
-						return;
-					}
-
-					// no usable history: try extrapolation, then a live snapshot,
-					// before dropping the candidate
-					auto extrap = g_shared.lc( ).extrapolate( enemy.pawn );
-
-					if ( extrap.has_value( ) )
-					{
-						this->m_extrapolated_records.push_back( std::move( *extrap ) );
-					}
-					else
-					{
-						// built in place: a record carries two 128-bone arrays,
-						// too big to pass around on the stack per player
-						this->m_extrapolated_records.emplace_back( );
-
-						if ( !this->m_extrapolated_records.back( ).setup( enemy.pawn ) )
-						{
-							this->m_extrapolated_records.pop_back( );
-							return;
-						}
-					}
-
-					records.push_back( &this->m_extrapolated_records.back( ) );
+					closest_sq = std::min( closest_sq, ( records.back( )->origin - origin ).length_sqr( ) );
 				}
 
-				if ( max_distance_sq > 0.0f )
+				if ( closest_sq > max_distance_sq )
 				{
-					const auto& origin = systems::g_prediction.pre( ).origin;
-					auto closest_sq = ( records.front( )->origin - origin ).length_sqr( );
-
-					if ( records.size( ) > 1 )
-					{
-						closest_sq = std::min( closest_sq, ( records.back( )->origin - origin ).length_sqr( ) );
-					}
-
-					if ( closest_sq > max_distance_sq )
-					{
-						return;
-					}
+					continue;
 				}
+			}
 
-				candidate c{};
-				c.pawn = enemy.pawn;
-				c.health = enemy.health;
-				c.armor = memory::read<int>( enemy.pawn + SCHEMA( "C_CSPlayerPawn", "m_ArmorValue"_hash ) );
-				c.min_damage = 1.0f;
+			candidate c{};
+			c.pawn = pawn;
+			c.health = health;
+			c.armor = memory::read<int>( pawn + SCHEMA( "C_CSPlayerPawn", "m_ArmorValue"_hash ) );
+			c.min_damage = 1.0f;
 
-				c.records[ 0 ] = records[ 0 ];
-				c.record_count = 1;
+			c.records[ 0 ] = records[ 0 ];
+			c.record_count = 1;
 
-				if ( records.size( ) > 1 && ( records.front( )->origin - records.back( )->origin ).length_sqr( ) > 4.0f )
-				{
-					c.records[ 1 ] = records.back( );
-					c.record_count = 2;
-				}
+			if ( records.size( ) > 1 && ( records.front( )->origin - records.back( )->origin ).length_sqr( ) > 4.0f )
+			{
+				c.records[ 1 ] = records.back( );
+				c.record_count = 2;
+			}
 
-				if ( shared_ctx.weapon_type >= cstypes::weapon_type::pistol && shared_ctx.weapon_type <= cstypes::weapon_type::lmg )
-				{
-					const auto& config = settings::g_combat.m_ragebot.get_group( shared_ctx.weapon_type );
-					c.min_damage = this->get_min_damage( config, enemy.health, config.min_damage_override.value );
-				}
+			if ( shared_ctx.weapon_type >= cstypes::weapon_type::pistol && shared_ctx.weapon_type <= cstypes::weapon_type::lmg )
+			{
+				const auto& config = settings::g_combat.m_ragebot.get_group( shared_ctx.weapon_type );
+				c.min_damage = this->get_min_damage( config, health, config.min_damage_override.value );
+			}
 
-				out.push_back( c );
-			} );
+			out.push_back( c );
+		}
 
 		return out;
 	}
@@ -479,50 +308,74 @@ namespace features::combat {
 		{
 			this->m_release_duck_for_shot = false;
 
-			// autostop must not depend on lag-comp history, so walk the enemy
-			// list directly instead of gather_candidates
+			// autostop must not depend on lag-comp history. repeats the
+			// gather_candidates enemy filter minus the record requirement.
 			if ( autostop_enabled && this->should_stop_movement( ctx ) )
 			{
 				const auto eye = g_shared.get_eye_position( local.pawn );
 				const auto view_angles = systems::g_input.get_view_angles( );
 				const auto max_fov_sq = ( config.max_fov.value + 15.0f ) * ( config.max_fov.value + 15.0f );
 
-				for_each_enemy( local, [ & ]( const enemy_ref& enemy )
+				for ( const auto& p : systems::g_entities.get_by_type( systems::entities::type::player ) )
+				{
+					if ( !p.ptr || p.ptr == local.controller )
 					{
-						const auto origin = memory::read<math::vector3>( enemy.game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
-						const auto center = origin + math::vector3{ 0.0f, 0.0f, 45.0f };
+						continue;
+					}
 
-						if ( angle_distance_sqr( view_angles, math::helpers::calculate_angle( eye, center ) ) > max_fov_sq )
+					if ( !memory::read<bool>( p.ptr + SCHEMA( "CCSPlayerController", "m_bPawnIsAlive"_hash ) ) )
+					{
+						continue;
+					}
+
+					const auto pawn_handle = memory::read<std::uint32_t>( p.ptr + SCHEMA( "CBasePlayerController", "m_hPawn"_hash ) );
+					const auto pawn = systems::g_entities.lookup( pawn_handle );
+
+					if ( !pawn || pawn == local.pawn )
+					{
+						continue;
+					}
+
+					if ( !local.is_this_other_team( memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iTeamNum"_hash ) ) ) )
+					{
+						continue;
+					}
+
+					if ( memory::read<int>( pawn + SCHEMA( "C_BaseEntity", "m_iHealth"_hash ) ) <= 0 )
+					{
+						continue;
+					}
+
+					const auto game_scene_node = memory::read<std::uintptr_t>( pawn + SCHEMA( "C_BaseEntity", "m_pGameSceneNode"_hash ) );
+					if ( !game_scene_node )
+					{
+						continue;
+					}
+
+					const auto origin = memory::read<math::vector3>( game_scene_node + SCHEMA( "CGameSceneNode", "m_vecAbsOrigin"_hash ) );
+					const auto center = origin + math::vector3{ 0.0f, 0.0f, 45.0f };
+
+					if ( angle_distance_sqr( view_angles, math::helpers::calculate_angle( eye, center ) ) > max_fov_sq )
+					{
+						continue;
+					}
+
+					// only stop for someone actually shootable from here --
+					// max_fov is often the full 180 degrees
+					if ( !systems::g_tracing.is_visible( eye, center, pawn, local.pawn ) )
+					{
+						auto pen_damage{ 0.0f };
+						const auto direction = ( center - eye ).normalized( );
+
+						if ( !g_shared.pen( ).can( eye, direction, pen_damage, local ) )
 						{
-							return true;
+							continue;
 						}
+					}
 
-						// only stop for someone actually shootable from here
-						// (max_fov is often the full 180 degrees)
-						if ( !systems::g_tracing.is_visible( eye, center, enemy.pawn, local.pawn ) )
-						{
-							auto pen_damage{ 0.0f };
-							const auto direction = ( center - eye ).normalized( );
-
-							if ( !g_shared.pen( ).can( eye, direction, pen_damage, local ) )
-							{
-								return true;
-							}
-
-							// pen().can only says whether a bullet survives the
-							// wall - no hitbox, no armour/hitgroup scaling - so
-							// its damage is pre-scaling and optimistic. gate it on
-							// the configured minimum anyway so autostop doesn't
-							// brake for walls it can barely scratch.
-							if ( pen_damage < this->get_min_damage( config, enemy.health, config.min_damage_override.value ) )
-							{
-								return true;
-							}
-						}
-
-						this->m_should_stop = true;
-						return false;
-					} );
+					this->m_should_stop = true;
+					break;
+				}
 			}
 
 			return;
@@ -588,7 +441,7 @@ namespace features::combat {
 				return;
 			}
 
-			// duck-peek applies to no-spread too: stand up before the shot, duck again after
+			// Duck-peek и для no-spread: встаём перед выстрелом, приседаем сразу после.
 			const auto& prestate = systems::g_prediction.pre( );
 			const auto ducking = ( prestate.flags & cstypes::entity_flags::ducking ) != 0;
 			const auto duckpeek_active = settings::g_combat.m_duckpeek.enabled.value && ctx.on_ground;
@@ -655,23 +508,17 @@ namespace features::combat {
 				const auto inacc_floor = std::max( inacc_stand, 0.004f );
 				const auto real_inacc = g_shared.get_inaccuracy_at_velocity( local.pawn, real_vel );
 
-				// both samples share the same weapon state, so the recoil
-				// penalty cancels and what's left is the movement share of the
-				// inaccuracy - which is what this backstop gates. don't compare
-				// total inaccuracy here: it includes m_fAccuracyPenalty and would
-				// veto the whole recoil-recovery window, which is hitchance's job.
-				const auto stand_inacc = g_shared.get_inaccuracy_at_velocity( local.pawn, {} );
-				const auto movement_inacc = std::max( real_inacc - stand_inacc, 0.0f );
-
-				// coarse backstop only; hitchance already accounts for speed.
-				// raise for more aggression, lower for less.
-				const auto too_inaccurate = movement_inacc > inacc_floor * 5.0f + 0.010f;
+				// coarse backstop only -- hitchance already accounts for speed via
+				// the predicted inaccuracy. raise for more aggression, lower for less.
+				const auto too_inaccurate = real_inacc > inacc_floor * 5.0f + 0.010f;
 				const auto too_fast = ctx.weapon_max_speed > 0.0f && real_speed_2d > ctx.weapon_max_speed * 0.60f;
 
-				// airborne shots are only reliable near the jump apex. the
-				// reconstructed get_air_inaccuracy under-reads the engine value,
-				// so measure real airborne inaccuracy from the full velocity; a
-				// small tolerance keeps the bot off a single-tick window.
+				// airborne shots are only reliable right around the jump apex — the
+				// jump spread grows quickly away from it. the reconstructed
+				// get_air_inaccuracy under-estimates the real engine value (it
+				// reports ~0 until |vz| > ~19 u/s), so measure the real airborne
+				// inaccuracy with the full velocity instead. a small tolerance keeps
+				// the bot from being locked to a single tick of the jump
 				const auto airborne_unshootable = ( prestate.flags & cstypes::entity_flags::on_ground ) == 0
 					&& [ & ]( ) -> bool
 					{
@@ -680,7 +527,7 @@ namespace features::combat {
 						const auto min_air_inaccuracy = accuracy_penalty + inac_jump_apex;
 						const auto real_air_inaccuracy = g_shared.get_inaccuracy_at_velocity( local.pawn, full_vel );
 
-						// 0.003 pinned airborne shots to one tick of the arc
+						// 0.003 pinned airborne shots to one tick of the jump arc
 						constexpr auto air_tolerance{ 0.010f };
 						return real_air_inaccuracy > min_air_inaccuracy + air_tolerance;
 					}( );
@@ -721,9 +568,8 @@ namespace features::combat {
 			return;
 		}
 
-		// duck-peek: stay stood up while an accurate shot is available, re-duck
-		// after firing. the flag latches so hitchance wobble during the stand-up
-		// animation doesn't interrupt the peek.
+		// Duck-peek: держим ctrl отжатым (встаём), пока есть точный выстрел, и нажимаем его сразу после выстрела.
+		// Флаг защёлкивается, чтобы колебания hit-chance во время анимации вставания не прерывали его.
 		if ( duckpeek_active && allow_fire )
 		{
 			if ( shot_viable )
@@ -879,12 +725,7 @@ namespace features::combat {
 			return;
 		}
 
-		// the R8 primary "cocks" for a fixed wall-clock time before the shot
-		// releases (~0.203 s, i.e. 13 ticks at 64). derive the tick count from
-		// the tick interval so it still lines up on non-64 servers instead of
-		// releasing the button early and dropping the shot.
-		constexpr auto cock_time{ 0.203125f };
-		const auto cock_ticks{ std::max( 1, cstypes::time_to_ticks( cock_time ) ) };
+		constexpr auto cock_ticks{ 13 };
 		if ( this->m_revolver_cock_ticks >= cock_ticks )
 		{
 			set_command_button( cmd, cstypes::command_buttons::in_attack, false );
@@ -933,9 +774,18 @@ namespace features::combat {
 							continue;
 						}
 
-						const auto has_direct_hit = this->scan_record( state, eye, inaccuracy, ctx, cand, cand.records[ ri ], local, candidate_hits );
+						auto hits = this->scan_record( state, eye, inaccuracy, ctx, cand, cand.records[ ri ], local );
+						const auto has_direct_hit = std::any_of( hits.begin( ), hits.end( ), [ ]( const scan_hit& hit )
+							{
+								return !hit.penetrated;
+							} );
 
-						// freshest record is both more reliable and cheaper
+						for ( auto& h : hits )
+						{
+							candidate_hits.push_back( std::move( h ) );
+						}
+
+						// выстрел по свежей записи надёжнее и дешевле, чем перебор старых поз
 						if ( has_direct_hit )
 						{
 							break;
@@ -1012,54 +862,58 @@ namespace features::combat {
 		state.config = &settings::g_combat.m_ragebot.get_group( shared_ctx.weapon_type );
 		state.force_body = state.config->body_aim.value;
 
-		const auto add = [ &state ]( int hitbox )
-			{
-				if ( state.scan_count < static_cast< int >( state.scan_order.size( ) ) )
-				{
-					state.scan_order[ state.scan_count++ ] = hitbox;
-				}
-			};
-
-		const auto add_group = [ & ]( std::size_t toggle, const auto& group )
-			{
-				if ( state.config->hitboxes.values[ toggle ] )
-				{
-					for ( const auto hitbox : group )
-					{
-						add( hitbox );
-					}
-				}
-			};
-
-		// scan in priority order: head, torso, limbs, so downstream early-outs
-		// land on the highest-value boxes first
-		if ( !state.force_body && state.config->hitboxes.values[ hitbox_toggle::head ] )
+		if ( !state.force_body && state.config->hitboxes.values[ 0 ] )
 		{
-			add( hitbox_id::head );
+			state.scan_order[ state.scan_count++ ] = 0;
 		}
 
-		add_group( hitbox_toggle::chest, hitbox_id::chest );
-		add_group( hitbox_toggle::stomach, hitbox_id::stomach );
-		add_group( hitbox_toggle::arms, hitbox_id::arms );
-		add_group( hitbox_toggle::legs, hitbox_id::legs );
-		add_group( hitbox_toggle::feet, hitbox_id::feet );
+		if ( state.config->hitboxes.values[ 1 ] )
+		{
+			state.scan_order[ state.scan_count++ ] = 4;
+			state.scan_order[ state.scan_count++ ] = 5;
+			state.scan_order[ state.scan_count++ ] = 6;
+		}
 
-		// nothing enabled: fall back to head + torso so the bot still fires
+		if ( state.config->hitboxes.values[ 2 ] )
+		{
+			state.scan_order[ state.scan_count++ ] = 3;
+			state.scan_order[ state.scan_count++ ] = 2;
+		}
+
+		if ( state.config->hitboxes.values[ 3 ] )
+		{
+			for ( auto idx : { 13, 14, 15, 16, 17, 18 } )
+			{
+				state.scan_order[ state.scan_count++ ] = idx;
+			}
+		}
+
+		if ( state.config->hitboxes.values[ 4 ] )
+		{
+			for ( auto idx : { 7, 8, 9, 10 } )
+			{
+				state.scan_order[ state.scan_count++ ] = idx;
+			}
+		}
+
+		if ( state.config->hitboxes.values[ 5 ] )
+		{
+			for ( auto idx : { 11, 12 } )
+			{
+				state.scan_order[ state.scan_count++ ] = idx;
+			}
+		}
+
 		if ( state.scan_count == 0 )
 		{
 			if ( !state.force_body )
 			{
-				add( hitbox_id::head );
+				state.scan_order[ state.scan_count++ ] = 0;
 			}
 
-			for ( const auto hitbox : hitbox_id::chest )
+			for ( auto idx : { 4, 5, 6, 3, 2 } )
 			{
-				add( hitbox );
-			}
-
-			for ( const auto hitbox : hitbox_id::stomach )
-			{
-				add( hitbox );
+				state.scan_order[ state.scan_count++ ] = idx;
 			}
 		}
 
@@ -1068,89 +922,28 @@ namespace features::combat {
 		return state;
 	}
 
-	bool rage::scan_record( const player_scan_state& state, const math::vector3& eye, float inaccuracy, const aim_context& ctx, candidate& cand, shared::lagcomp::record* record, const systems::local::snapshot& local, std::vector<scan_hit>& out ) const
+	std::vector<rage::scan_hit> rage::scan_record( const player_scan_state& state, const math::vector3& eye, float inaccuracy, const aim_context& ctx, candidate& cand, shared::lagcomp::record* record, const systems::local::snapshot& local ) const
 	{
 		const auto& config = *state.config;
 		const auto skeleton = g_shared.lc( ).get_skeleton( *record );
 		const auto pen_ctx = g_shared.pen( ).prepare_target( cand.pawn, record, state.pen_static );
 
-		const auto max_fov_sq = fov_gate_sqr( config.max_fov );
+		struct trace_point
+		{
+			math::vector3 position;
+			int hitbox_index;
+			int bone_index;
+			systems::hitboxes::entry hitbox;
+			bool is_center;
+		};
+
+		const auto max_fov_sq = config.max_fov * config.max_fov;
+
+		std::vector<trace_point> points;
+		points.reserve( static_cast< std::size_t >( state.scan_count ) * 12 );
 
 		// reused across hitboxes to avoid an allocation per multipoint batch
 		std::vector<math::vector3> multipoints;
-
-		auto found_direct{ false };
-
-		// test one candidate point, append to `out` if viable
-		const auto test_point = [ & ](
-			const math::vector3& position,
-			const systems::hitboxes::entry& hitbox,
-			int hitbox_index,
-			bool is_center )
-			{
-				math::vector3 aim{};
-				auto fov{ 0.0f };
-
-				if ( !aim_within_fov( eye, position, ctx.view_angles, max_fov_sq, aim, fov ) )
-				{
-					return;
-				}
-
-				shared::penetration::result pen{};
-				if ( !g_shared.pen( ).run( eye, position, pen_ctx, local.pawn, local.team, pen ) )
-				{
-					return;
-				}
-
-				if ( pen.damage < cand.min_damage )
-				{
-					return;
-				}
-
-				// record whatever the engine says was hit, but keep aiming where
-				// we traced - retargeting to another hitbox's centre fires an
-				// unvalidated ray
-				auto resolved_hitbox = hitbox;
-				auto resolved_hitbox_index = hitbox_index;
-				auto resolved_bone_index = hitbox.bone;
-
-				if ( pen.hitbox != hitbox_index )
-				{
-					if ( pen.hitbox < 0 || pen.hitbox >= static_cast< int >( state.hitbox_by_index.size( ) ) || !state.hitbox_by_index[ pen.hitbox ].valid )
-					{
-						return;
-					}
-
-					const auto& actual_hitbox = state.hitbox_by_index[ pen.hitbox ].entry;
-					if ( !bone_usable( actual_hitbox, *record ) )
-					{
-						return;
-					}
-
-					resolved_hitbox = actual_hitbox;
-					resolved_hitbox_index = actual_hitbox.index;
-					resolved_bone_index = actual_hitbox.bone;
-				}
-
-				scan_hit h{};
-				h.position = position;
-				h.aim_angle = aim;
-				h.damage = pen.damage;
-				h.fov = fov;
-				h.hitbox_index = resolved_hitbox_index;
-				h.hitgroup = pen.hitgroup;
-				h.bone_index = resolved_bone_index;
-				h.hitbox = resolved_hitbox;
-				h.is_center = is_center && pen.hitbox == hitbox_index;
-				h.penetrated = pen.penetrated;
-				h.pawn = cand.pawn;
-				h.health = cand.health;
-				h.record = record;
-
-				found_direct = found_direct || !h.penetrated;
-
-				out.push_back( h );
-			};
 
 		for ( auto idx = 0; idx < state.scan_count; ++idx )
 		{
@@ -1161,15 +954,23 @@ namespace features::combat {
 			}
 
 			const auto& hb = state.hitbox_by_index[ hitbox_index ].entry;
-			if ( !bone_usable( hb, *record ) )
+			if ( hb.bone >= 27 || hb.bone >= record->bone_count )
 			{
 				continue;
 			}
 
 			const auto& bone = skeleton[ hb.bone ];
-			const auto center = hitbox_center( hb, bone );
 
-			test_point( center, hb, hitbox_index, true );
+			const auto hitbox_center = ( hb.mins + hb.maxs ) * 0.5f;
+			const auto center = bone.rotation.rotate_vector( hitbox_center ) + bone.position;
+
+			trace_point cp{};
+			cp.position = center;
+			cp.hitbox_index = hitbox_index;
+			cp.bone_index = hb.bone;
+			cp.hitbox = hb;
+			cp.is_center = true;
+			points.push_back( cp );
 
 			if ( config.pointscale > 0.0f )
 			{
@@ -1178,100 +979,132 @@ namespace features::combat {
 
 				for ( const auto& mp : multipoints )
 				{
-					test_point( mp, hb, hitbox_index, false );
+					trace_point tp{};
+					tp.position = mp;
+					tp.hitbox_index = hitbox_index;
+					tp.bone_index = hb.bone;
+					tp.hitbox = hb;
+					tp.is_center = false;
+					points.push_back( tp );
 				}
 			}
 		}
 
-		return found_direct;
+		if ( points.empty( ) )
+		{
+			return {};
+		}
+
+		std::vector<scan_hit> results;
+		results.reserve( points.size( ) );
+
+		for ( auto pi = 0u; pi < points.size( ); ++pi )
+		{
+			const auto& tp = points[ pi ];
+
+			const auto aim = math::helpers::calculate_angle( eye, tp.position );
+
+			if ( angle_distance_sqr( ctx.view_angles, aim ) > max_fov_sq )
+			{
+				continue;
+			}
+
+			shared::penetration::result pen{};
+			if ( !g_shared.pen( ).run( eye, tp.position, pen_ctx, local.pawn, local.team, pen ) )
+			{
+				continue;
+			}
+
+			if ( pen.damage < cand.min_damage )
+			{
+				continue;
+			}
+
+			// resolve the bookkeeping to whatever the engine says was hit, but
+			// keep aiming where we traced -- retargeting to another hitbox's
+			// centre fires a ray nothing validated
+			auto resolved_hitbox = tp.hitbox;
+			auto resolved_hitbox_index = tp.hitbox_index;
+			auto resolved_bone_index = tp.bone_index;
+
+			if ( pen.hitbox != tp.hitbox_index )
+			{
+				if ( pen.hitbox < 0 || pen.hitbox >= static_cast< int >( state.hitbox_by_index.size( ) ) || !state.hitbox_by_index[ pen.hitbox ].valid )
+				{
+					continue;
+				}
+
+				const auto& actual_hitbox = state.hitbox_by_index[ pen.hitbox ].entry;
+				if ( actual_hitbox.bone >= 27 || actual_hitbox.bone >= record->bone_count )
+				{
+					continue;
+				}
+
+				resolved_hitbox = actual_hitbox;
+				resolved_hitbox_index = actual_hitbox.index;
+				resolved_bone_index = actual_hitbox.bone;
+			}
+
+			scan_hit h{};
+			h.position = tp.position;
+			h.aim_angle = aim;
+			h.damage = pen.damage;
+			h.fov = math::helpers::angle_distance( ctx.view_angles, aim );
+			h.hitbox_index = resolved_hitbox_index;
+			h.hitgroup = pen.hitgroup;
+			h.bone_index = resolved_bone_index;
+			h.hitbox = resolved_hitbox;
+			h.is_center = tp.is_center && pen.hitbox == tp.hitbox_index;
+			h.penetrated = pen.penetrated;
+			h.pawn = cand.pawn;
+			h.health = cand.health;
+			h.record = record;
+
+			results.push_back( h );
+		}
+
+		return results;
 	}
 
 	rage::target rage::select_best( const aim_context& aim_ctx, const std::vector<scan_hit>& hits, float eval_inaccuracy ) const
 	{
+		static constexpr int hitgroup_priority_table[ 19 ] =
+		{
+			4,
+			3, 3, 3, 3, 3, 3,
+			1, 1, 1, 1,
+			1, 1,
+			2, 2, 2, 2, 2, 2
+		};
+
 		const auto& config = settings::g_combat.m_ragebot.get_group( g_shared.ctx( ).weapon_type );
 		const auto needed_hc = config.hitchance_override.value
 			? static_cast< float >( config.hitchance_override_value ) / 100.0f
 			: static_cast< float >( config.hitchance ) / 100.0f;
 
-		// hitchance-independent part of the score, shared by score_for and
-		// min_hitchance_to_beat so they can't drift apart
-		const auto score_constant = [ ]( const scan_hit& h )
+		const auto score_for = [ & ]( const scan_hit& h, float hc )
 		{
-			auto out{ 0.0f };
+			const auto priority = static_cast< float >( hitgroup_priority_table[ h.hitbox_index ] );
 
-			if ( !h.penetrated )
+			auto score = 1000000.0f;
+
+			if ( h.damage >= static_cast< float >( h.health ) )
 			{
-				out += score_weight::direct_hit;
-			}
-
-			if ( h.is_center )
-			{
-				out += score_weight::center_point;
-			}
-
-			out += hitbox_priority( h.hitbox_index ) * score_weight::priority;
-			out -= h.fov * score_weight::fov_penalty;
-
-			return out;
-		};
-
-		const auto score_for = [ &score_constant ]( const scan_hit& h, float hc )
-		{
-			const auto priority = hitbox_priority( h.hitbox_index );
-			const auto is_lethal = h.damage >= static_cast< float >( h.health );
-
-			// only relative ordering matters, so no base offset - a large one
-			// costs float precision and quantises the fov tie-breaker away
-			auto score = score_constant( h );
-
-			if ( is_lethal )
-			{
-				score += score_weight::lethal
-					+ hc * score_weight::lethal_hitchance
-					+ priority * score_weight::lethal_priority;
+				score += 100000.0f + hc * 15000.0f + priority * 2500.0f;
 			}
 			else
 			{
-				score += h.damage * hc * hc * score_weight::damage_confidence
-					+ h.damage * score_weight::damage_flat;
+				score += h.damage * hc * hc * 150.0f + h.damage * 5.0f;
 			}
+
+			score += h.penetrated ? 0.0f : 5000.0f;
+			score += h.is_center ? 50.0f : 0.0f;
+			score += priority * 25.0f;
+			score -= h.fov * 0.1f;
 
 			return score;
 		};
 
-		// smallest hitchance at which this hit could score above `target`.
-		// score_for increases monotonically in hc, so it inverts cleanly;
-		// a result above 1 means the hit can never get there.
-		const auto min_hitchance_to_beat = [ &score_constant ]( const scan_hit& h, float target )
-		{
-			const auto priority = hitbox_priority( h.hitbox_index );
-			const auto is_lethal = h.damage >= static_cast< float >( h.health );
-			const auto constant = score_constant( h );
-
-			if ( is_lethal )
-			{
-				const auto needed = target - score_weight::lethal - priority * score_weight::lethal_priority - constant;
-				return needed / score_weight::lethal_hitchance;
-			}
-
-			const auto scale = h.damage * score_weight::damage_confidence;
-			if ( scale <= 0.0f )
-			{
-				// no hitchance can lift a zero-damage hit above anything
-				return 2.0f;
-			}
-
-			const auto needed = target - h.damage * score_weight::damage_flat - constant;
-			if ( needed <= 0.0f )
-			{
-				return 0.0f;
-			}
-
-			return std::sqrt( needed / scale );
-		};
-
-		// best this hit could score; lets us skip hitchance sampling for
-		// candidates that can't win even at perfect confidence
 		const auto upper_bound_score = [ & ]( const scan_hit& h ) { return score_for( h, 1.0f ); };
 
 		target best{};
@@ -1284,7 +1117,7 @@ namespace features::combat {
 				continue;
 			}
 
-			if ( h.bone_index >= k_skeleton_bones || h.bone_index >= h.record->bone_count )
+			if ( h.bone_index >= 28 || h.bone_index >= h.record->bone_count )
 			{
 				continue;
 			}
@@ -1298,22 +1131,7 @@ namespace features::combat {
 			auto hc{ 1.0f };
 			if ( !config.no_spread.value )
 			{
-				// this hit only matters if it can become `best` (needs needed_hc
-				// and a score above best.score) or `best_any` (score above
-				// best_any.score). below the lower bar the sampler can stop
-				// early. best is not gated on best_any: while best is invalid,
-				// any hit clearing needed_hc becomes best regardless of score.
-				const auto bar_for_best = best.valid
-					? std::max( needed_hc, min_hitchance_to_beat( h, best.score ) )
-					: needed_hc;
-
-				const auto bar_for_any = best_any.valid
-					? min_hitchance_to_beat( h, best_any.score )
-					: 0.0f;
-
-				const auto abort_below = std::clamp( std::min( bar_for_best, bar_for_any ), 0.0f, 1.0f );
-
-				hc = g_shared.calculate_hitchance( h.source_eye.position, h.aim_angle, h.hitbox, bone, eval_inaccuracy, aim_ctx.spread, 256, abort_below );
+				hc = g_shared.calculate_hitchance( h.source_eye.position, h.aim_angle, h.hitbox, bone, eval_inaccuracy, aim_ctx.spread, 256, needed_hc );
 			}
 			const auto passes_hitchance = config.no_spread.value || hc >= needed_hc;
 
@@ -1343,28 +1161,23 @@ namespace features::combat {
 	{
 		auto eye_candidates = g_shared.sh( ).get_candidates( );
 
-		// a candidate is a matched pair: position and player_tick/player_frac
-		// both come from the same weapon-services ring sample, and the server
-		// reconstructs the bullet origin from that stamp. never substitute a
-		// position without fixing up (or suppressing) its stamp - the two come
-		// from different clocks and the mismatch shows up as aim and wall
-		// misses at range. use the entries unmodified, like the known-good tree.
-		if ( eye_candidates.count > 0 )
-		{
-			return eye_candidates;
-		}
-
-		// no usable ring sample. the fallback position has no matching stamp, so
-		// mark it uninterpolated - write_history_entry then keeps the engine's
-		// own player_tick_count instead of writing a mismatched one.
+		// the server uses the interpolated shoot position as the bullet origin; the
+		// raw eye (both the ring candidates and the plain fallback) can be up to a
+		// lerp worth of movement ahead of it on jumpscout / moving shots, which
+		// shifts the aim ray off the hitbox at range — so always aim from the
+		// interpolated position
 		const auto local_pawn = systems::g_local.get( ).pawn;
-		const auto fallback_eye = local_pawn
+		const auto interpolated_eye = local_pawn
 			? g_shared.get_interpolated_shoot_position( local_pawn )
 			: math::vector3{};
 
-		if ( fallback_eye.length_sqr( ) > 1.0f )
+		if ( eye_candidates.count > 0 )
 		{
-			eye_candidates.entries[ 0 ].position = fallback_eye;
+			eye_candidates.entries[ 0 ].position = interpolated_eye;
+		}
+		else if ( interpolated_eye.length_sqr( ) > 1.0f )
+		{
+			eye_candidates.entries[ 0 ].position = interpolated_eye;
 			eye_candidates.entries[ 0 ].is_uninterpolated = true;
 			eye_candidates.count = 1;
 		}
@@ -1395,21 +1208,10 @@ namespace features::combat {
 		const auto movement_services = memory::read<std::uintptr_t>( local.pawn + SCHEMA( "C_BasePlayerPawn", "m_pMovementServices"_hash ) );
 		const auto max_move_speed = movement_services ? memory::read<float>( movement_services + SCHEMA( "CPlayer_MovementServices", "m_flMaxspeed"_hash ) ) : 250.0f;
 
-		// accumulate displacement per tick over the window that ends when the
-		// shot becomes accurate, and sample inaccuracy from the velocity at
-		// that moment - not from a fixed 15-tick decay to a standstill
-
-		// scoped snipers are the exception: shared::is_max_accuracy only clears
-		// them at a standstill, everything else at the weapon's threshold
-		const auto scoped_sniper = shared_ctx.weapon_type == cstypes::weapon_type::sniper && shared_ctx.is_scoped;
-		const auto target_speed = scoped_sniper ? 0.1f : ctx.accurate_threshold;
-
-		math::vector3 displacement{};
-
 		for ( auto i = 0; i < 15; ++i )
 		{
 			const auto sim_speed = sim_vel.length_2d( );
-			if ( sim_speed <= target_speed || sim_speed < 1.0f )
+			if ( sim_speed < 1.0f )
 			{
 				break;
 			}
@@ -1441,24 +1243,20 @@ namespace features::combat {
 			else
 			{
 				sim_vel = {};
-			}
-
-			// the engine integrates position with the post-friction velocity,
-			// so the step is accumulated after the update, not before
-			displacement += sim_vel * cstypes::tick_interval;
-
-			if ( new_speed <= 0.0f )
-			{
 				break;
 			}
 		}
+
+		const auto avg_vel = ( prestate.networked_velocity + sim_vel ) * 0.5f;
+		const auto stop_ticks = g_shared.calculate_stop_ticks( prestate.networked_velocity, shared_ctx.weapon_max_speed, local.pawn );
+		const auto stop_time = static_cast< float >( stop_ticks ) * cstypes::tick_interval;
 
 		return stop_prediction
 		{
 			.eye =
 			{
-				current_eye.x + displacement.x,
-				current_eye.y + displacement.y,
+				current_eye.x + avg_vel.x * stop_time,
+				current_eye.y + avg_vel.y * stop_time,
 				current_eye.z
 			},
 			.inaccuracy = g_shared.get_inaccuracy_at_velocity( local.pawn, sim_vel )
@@ -1563,7 +1361,7 @@ namespace features::combat {
 
 	float rage::evaluate_hitchance( const scan_hit& hit, const aim_context& ctx, float inaccuracy ) const
 	{
-		if ( !hit.record || !hit.record->valid || hit.bone_index < 0 || hit.bone_index >= k_skeleton_bones )
+		if ( !hit.record || !hit.record->valid || hit.bone_index < 0 || hit.bone_index >= 28 )
 		{
 			return 0.0f;
 		}
@@ -1622,24 +1420,22 @@ namespace features::combat {
 
 				const auto skeleton = g_shared.lc( ).get_skeleton( *record );
 
-				const auto max_fov_sq = fov_gate_sqr( settings::g_combat.m_zeusbot.max_fov.value );
-
 				for ( auto i = 0; i < hitbox_set.count; ++i )
 				{
 					const auto& hb = hitbox_set.entries[ i ];
 
-					if ( !bone_usable( hb, *record ) )
+					if ( hb.bone >= 27 || hb.bone >= record->bone_count )
 					{
 						continue;
 					}
 
 					const auto& bone = skeleton[ hb.bone ];
-					const auto center = hitbox_center( hb, bone );
 
-					math::vector3 aim{};
-					auto fov{ 0.0f };
+					const auto center = bone.rotation.rotate_vector( ( hb.mins + hb.maxs ) * 0.5f ) + bone.position;
+					const auto aim = math::helpers::calculate_angle( eye, center );
+					const auto fov = math::helpers::angle_distance( ctx.view_angles, aim );
 
-					if ( !aim_within_fov( eye, center, ctx.view_angles, max_fov_sq, aim, fov ) )
+					if ( fov > settings::g_combat.m_zeusbot.max_fov )
 					{
 						continue;
 					}
@@ -1755,25 +1551,24 @@ namespace features::combat {
 
 				const auto wait_for_backstab = backstab && !frontal_can_kill;
 
-				const auto max_fov_sq = fov_gate_sqr( settings::g_combat.m_knifebot.max_fov.value );
-
 				for ( auto i = 0; i < hitbox_set.count; ++i )
 				{
 					const auto& hb = hitbox_set.entries[ i ];
 
-					if ( !bone_usable( hb, *record ) )
+					if ( hb.bone >= 27 || hb.bone >= record->bone_count )
 					{
 						continue;
 					}
 
 					const auto& bone = skeleton[ hb.bone ];
-					const auto center = hitbox_center( hb, bone );
+
+					const auto center = bone.rotation.rotate_vector( ( hb.mins + hb.maxs ) * 0.5f ) + bone.position;
 					const auto dist = ( center - eye ).length( );
 
-					math::vector3 aim{};
-					auto fov{ 0.0f };
+					const auto aim = math::helpers::calculate_angle( eye, center );
+					const auto fov = math::helpers::angle_distance( ctx.view_angles, aim );
 
-					if ( !aim_within_fov( eye, center, ctx.view_angles, max_fov_sq, aim, fov ) )
+					if ( fov > settings::g_combat.m_knifebot.max_fov )
 					{
 						continue;
 					}
@@ -1855,10 +1650,12 @@ namespace features::combat {
 
 		const auto record_time = cstypes::tick_fraction::from_value( tgt.hit.record->simulation_time / cstypes::tick_interval );
 
-		// seed tick = interpolated-eye player tick plus the lerp offset, written
-		// into the history as player_tick_count so the server derives the spread
-		// seed from a deterministic tick, not the live attack subtick (which
-		// flips between tick_base and tick_base-1 on dt==1 shots)
+		// the seed tick is the eye-stamp tick: the player tick of the
+		// interpolated eye plus the lerp offset. it is written into the history
+		// as player_tick_count so the server re-derives the spread seed from a
+		// deterministic tick instead of the live attack subtick, which flips
+		// between tick_base and tick_base - 1 for dt == 1 shots and voids the
+		// correction half the time
 		auto stamp_tick = tick_base;
 
 		if ( !tgt.hit.source_eye.is_uninterpolated )
@@ -1876,11 +1673,13 @@ namespace features::combat {
 
 		if ( config.no_spread.value )
 		{
-			// search the correction on the raw aim angle: the server re-adds the
-			// aim punch on top of what we write, so the seed check must match the
-			// post-punch view; the punch is subtracted only when writing the
-			// history/base angles. inaccuracy/spread come from the create-move
-			// accuracy state, same as the server rolls with on the fire tick.
+			// search the correction on the raw aim angle: the server re-applies
+			// the aim punch on top of the angles we write, so the seed check must
+			// match the view after the punch is added back — the punch is
+			// therefore subtracted only when writing the history/base angles.
+			// the inaccuracy and spread come from the weapon accuracy state
+			// captured at create move (m_ctx), the same state the server rolls
+			// the spread with on the fire tick
 			auto correction_error{ 0.0f };
 			const auto corrected = g_shared.find_spread_correction( aim_angle, stamp_tick, &correction_error );
 
@@ -1890,8 +1689,8 @@ namespace features::combat {
 				return;
 			}
 
-			// exact match returns zero error; otherwise accept the closest one
-			// if the leftover spread still lands inside the target
+			// exact fixed point returns zero error; otherwise take the closest
+			// approximation if the leftover spread still lands inside the target
 			if ( correction_error > 0.0f )
 			{
 				const auto distance = ( tgt.hit.position - shoot_eye ).length( );
@@ -1928,8 +1727,8 @@ namespace features::combat {
 				continue;
 			}
 
-			// history carries the corrected roll and the seed-tick stamp;
-			// the command angles keep the roll zeroed
+			// the history carries the corrected roll and the player tick stamp
+			// (seed tick); the command angles keep the roll zeroed
 			shared::write_history_entry( entry, history_angle, config.no_spread.value, record_time.tick + 1, &tgt.hit.source_eye );
 		}
 
@@ -1940,38 +1739,10 @@ namespace features::combat {
 			cmd->csgo_user_cmd.set_attack1_start_history_index( history_size - 1 );
 		}
 
-		// hide onshot: base->viewangles still holds the fake antiaim angle from
-		// earlier this tick. if it faces >~45deg off the target, sending the real
-		// shot angle as our view would look like a hard snap to spectators and
-		// resolvers. the bullet is unaffected (fixed by the history entries
-		// above) - this only changes the view direction sent on this command.
-		auto output_angle = command_angle;
-
-		if ( settings::g_combat.m_antiaim.enabled.value && settings::g_combat.m_antiaim.hide_shots.value )
-		{
-			math::vector3 current_view_angles{};
-			if ( const auto angles = base->viewangles( ) )
-			{
-				current_view_angles = { angles->x( ), angles->y( ), angles->z( ) };
-			}
-
-			math::vector3 forward{};
-			math::helpers::angle_vectors_left( current_view_angles, &forward );
-
-			const auto to_target = ( tgt.hit.record->origin - systems::g_prediction.pre( ).networked_origin ).normalized( );
-			const auto facing_away = forward.dot( to_target ) < 0.707107f;
-
-			if ( facing_away )
-			{
-				output_angle.x = 179.9f;
-				output_angle.y = std::remainderf( command_angle.y + 180.0f, 360.0f );
-			}
-		}
-
 		if ( const auto angles = base->mutable_viewangles( ) )
 		{
-			angles->set_x( output_angle.x );
-			angles->set_y( output_angle.y );
+			angles->set_x( command_angle.x );
+			angles->set_y( command_angle.y );
 
 			if ( config.no_spread.value )
 			{
@@ -1985,9 +1756,10 @@ namespace features::combat {
 		}
 		else if ( config.no_spread.value )
 		{
-			// the spread seed comes from the live CSGOInput view at serialize
-			// time, so even silent no-spread must push the corrected angle into
-			// the live view; restore the user's view at view setup afterwards
+			// the spread seed is derived from the live CSGOInput view at
+			// serialize time, so even silent no-spread must push the corrected
+			// angle into the live view — park the user's view here and restore it
+			// at view setup, after the command has been serialized
 			this->m_silent_restore_view = systems::g_input.get_view_angles( );
 			this->m_silent_restore_required = true;
 			systems::g_input.set_view_angles( command_angle );
@@ -2009,7 +1781,8 @@ namespace features::combat {
 			return;
 		}
 
-		// undo fire_gun's live-view write, in both the input and the view setup
+		// undo the live-view write from fire_gun: restore the user's view in the
+		// input (next command base) and in the view setup (camera angles)
 		systems::g_input.set_view_angles( this->m_silent_restore_view );
 		memory::write<math::vector3>( view_setup + 0x4b8, this->m_silent_restore_view );
 	}
@@ -2304,7 +2077,8 @@ namespace features::combat {
 		return result;
 	}
 
-	// auto lineup: finds wallbang positions, cached per map, checked incrementally
+	// auto lineup - finds positions for wallbangs
+		// optimized: cached positions per map, incremental checks per frame
 		void rage::init_auto_lineup( const systems::local::snapshot& local )
 		{
 			if ( !local.is_alive || !local.pawn )
@@ -2420,22 +2194,6 @@ namespace features::combat {
 				return false;
 			}
 
-			// independent of the record and eye being tested, so build it once
-			// (prepare_player re-queries the whole hitbox set and scan order)
-			auto& mutable_cand = const_cast< candidate& >( cand );
-			const auto scan_state = this->prepare_player( mutable_cand );
-
-			// prepare_player returns a null config for a pawn with no scene node
-			// and scan_record would deref it immediately
-			if ( scan_state.hitbox_set.count <= 0 || !scan_state.config )
-			{
-				return false;
-			}
-
-			const auto eye_candidates = this->get_eye_candidates( );
-
-			std::vector<scan_hit> hits;
-
 			for ( auto ri = 0; ri < cand.record_count; ++ri )
 			{
 				auto* record = cand.records[ ri ];
@@ -2444,12 +2202,12 @@ namespace features::combat {
 					continue;
 				}
 
+				const auto eye_candidates = this->get_eye_candidates( );
 				for ( auto ei = 0; ei < eye_candidates.count; ++ei )
 				{
 					const auto shoot_eye = eye_candidates.entries[ ei ].position;
 
-					hits.clear( );
-					this->scan_record( scan_state, shoot_eye, ctx.predicted_inaccuracy, ctx, mutable_cand, record, local, hits );
+					auto hits = this->scan_record( this->prepare_player( const_cast< candidate& >( cand ) ), shoot_eye, ctx.predicted_inaccuracy, ctx, const_cast< candidate& >( cand ), record, local );
 
 					for ( const auto& hit : hits )
 					{
@@ -2543,8 +2301,12 @@ namespace features::combat {
 		const auto [ screen_w, screen_h ] = xdraw::viewport_size( );
 		const auto cx = std::floorf( static_cast< float >( screen_w ) * 0.5f );
 		const auto cy = std::floorf( static_cast< float >( screen_h ) * 0.5f );
-		constexpr auto half_size{ 3.0f };
-		constexpr auto outline_size{ 1.0f };
+		const auto half_size = std::max( cfg.size.value, 1.0f );
+		const auto outline_size = std::max( cfg.outline_thickness.value, 0.0f );
+
+		const auto left = cx - half_size;
+		const auto top = cy - half_size;
+		const auto side = half_size * 2.0f;
 
 		if ( cfg.glow )
 		{
@@ -2552,13 +2314,16 @@ namespace features::combat {
 			const auto glow_a = static_cast< std::uint8_t >( static_cast< float >( outline.value.a ) * cfg.glow_strength );
 			const auto glow_col = xdraw::color{ outline.value.r, outline.value.g, outline.value.b, glow_a };
 
-			glow.rect_filled( cx - half_size - outline_size, cy - half_size - outline_size,
-				( half_size + outline_size ) * 2.0f, ( half_size + outline_size ) * 2.0f, glow_col );
+			glow.rect_filled( left - outline_size, top - outline_size,
+				side + outline_size * 2.0f, side + outline_size * 2.0f, glow_col );
 		}
 
-		draw_list.rect_filled( cx - half_size - outline_size, cy - half_size - outline_size,
-			( half_size + outline_size ) * 2.0f, ( half_size + outline_size ) * 2.0f, outline );
-		draw_list.rect_filled( cx - half_size, cy - half_size, half_size * 2.0f, half_size * 2.0f, fill );
+		draw_list.rect_filled( left, top, side, side, fill );
+
+		if ( outline_size > 0.0f )
+		{
+			draw_list.rect( left, top, side, side, outline.value, outline_size );
+		}
 	}
 
 } 

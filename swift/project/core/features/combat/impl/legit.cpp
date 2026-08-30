@@ -274,7 +274,11 @@ namespace features::combat {
 				continue;
 			}
 
-			if ( !visible && pen.damage < static_cast< float >( config.min_damage.value ) )
+			const auto effective_min_damage = config.min_damage_override.value
+				? config.min_damage_override_value.value
+				: config.min_damage.value;
+
+			if ( !visible && pen.damage < static_cast< float >( effective_min_damage ) )
 			{
 				continue;
 			}
@@ -639,13 +643,11 @@ namespace features::combat {
 			return;
 		}
 
-		if ( config.trigger_head_only.value && pen.hitgroup != 1 )
-		{
-			this->m_trigger_pending_pawn = 0;
-			return;
-		}
+		const auto effective_min_damage = config.min_damage_override.value
+			? config.min_damage_override_value.value
+			: config.min_damage.value;
 
-		if ( pen.penetrated && pen.damage < static_cast< float >( config.min_damage.value ) )
+		if ( pen.penetrated && pen.damage < static_cast< float >( effective_min_damage ) )
 		{
 			this->m_trigger_pending_pawn = 0;
 			return;
@@ -682,7 +684,16 @@ namespace features::combat {
 				}
 			}
 
-			const auto delay_ms = static_cast< float >( config.trigger_delay.value );
+			auto delay_ms = static_cast< float >( config.trigger_delay.value );
+			if ( config.trigger_delay_random.value > 0 )
+			{
+				static int rand_offset = 0;
+				if ( this->m_trigger_pending_pawn != hit_pawn )
+				{
+					rand_offset = random::integer( 0, config.trigger_delay_random.value );
+				}
+				delay_ms += static_cast< float >( rand_offset );
+			}
 
 			if ( this->m_trigger_pending_pawn != hit_pawn )
 			{

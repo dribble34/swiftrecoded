@@ -1,4 +1,4 @@
-﻿#include <core/settings.hpp>
+#include <core/settings.hpp>
 #include <core/systems/systems.hpp>
 
 #include "../../rendering.hpp"
@@ -40,8 +40,8 @@ namespace rendering {
 			draw_chams_layer( label_buf, popup_id, cfg.occluded );
 		}
 
-		// the preview uses MapPlayerPreviewPanel, so its own world->clip matrix
-		// is the only reliable projection for ESP drawn over the captured preview
+		// The preview uses MapPlayerPreviewPanel, so its own world->clip matrix is the
+		// only reliable projection for drawing ESP on top of the captured preview.
 		inline static void draw_model_preview( xdraw::draw_list& dl, float x, float y, float w, float h, const settings::esp::player::overlay& cfg )
 		{
 			auto& preview = systems::g_model_preview;
@@ -71,9 +71,10 @@ namespace rendering {
 				cstypes::bone_ids::right_hip, cstypes::bone_ids::right_knee, cstypes::bone_ids::right_foot
 			};
 
-			// composition texture is already rendered through the preview camera,
-			// so map the model's local bone bounds directly (X -> screen X,
-			// Z -> screen Y). stays stable when the Panorama camera matrix isn't.
+			// The composition texture is already rendered through the preview camera.
+			// For the overlay, use the preview model's local bone bounds directly:
+			// X -> screen X and Z -> screen Y. This keeps the skeleton stable even
+			// when the internal Panorama camera matrix is unavailable or changes.
 			const auto project = [ & ]( const math::vector3& p, float& sx, float& sy,
 								const math::vector3& min_world, const math::vector3& max_world ) -> bool
 			{
@@ -87,7 +88,7 @@ namespace rendering {
 				if ( !std::isfinite( nx ) || !std::isfinite( nz ) )
 					return false;
 
-				// small margin around the model inside the preview texture
+				// Leave a small margin around the model inside the preview texture.
 				constexpr float margin = 0.08f;
 				const float usable = 1.0f - margin * 2.0f;
 				sx = img_x + ( margin + nx * usable ) * side;
@@ -233,7 +234,7 @@ namespace rendering {
 				}
 			}
 
-			// name and weapon are centered on the ESP box, not its left edge
+			// Name and weapon are centered against the actual ESP box, not its left edge.
 			if ( cfg.m_name.enabled.value )
 			{
 				constexpr std::string_view preview_name = "https://t.me/blgcy";

@@ -100,7 +100,7 @@ namespace features::combat {
 		return out;
 	}
 
-	float shared::calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples, float abort_below ) const
+	float shared::calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples, float needed ) const
 	{
 		const auto total = spread + inaccuracy;
 		if ( total < 0.0001f )
@@ -189,15 +189,10 @@ namespace features::combat {
 		}
 		cache.count = std::max( cache.count, cached_samples );
 
-		// the denominator is always `samples` on every return path, so results
-		// are comparable between calls and safe to rank on. the only early exit
-		// is when the result can no longer reach `abort_below`; in that case the
-		// value returned is a lower bound and callers must not read it.
-		const auto abort_hits = abort_below > 0.0f
-			? static_cast< int >( std::ceil( std::clamp( abort_below, 0.0f, 1.0f ) * static_cast< float >( samples ) ) )
-			: 0;
-
 		auto hits{ 0 };
+		const auto needed_hits = needed > 0.0f
+			? static_cast< int >( std::ceil( std::clamp( needed, 0.0f, 1.0f ) * static_cast< float >( samples ) ) )
+			: 0;
 
 		for ( auto i = 0; i < samples; ++i )
 		{
@@ -223,11 +218,17 @@ namespace features::combat {
 				++hits;
 			}
 
-			// even if every remaining sample hit, the total could not reach the
-			// threshold the caller cares about
-			if ( abort_hits > 0 && hits + ( samples - i - 1 ) < abort_hits )
+			if ( needed_hits > 0 )
 			{
-				return static_cast< float >( hits ) / static_cast< float >( samples );
+				if ( hits >= needed_hits )
+				{
+					return static_cast< float >( hits ) / static_cast< float >( i + 1 );
+				}
+
+				if ( hits + ( samples - i - 1 ) < needed_hits )
+				{
+					return static_cast< float >( hits ) / static_cast< float >( samples );
+				}
 			}
 		}
 
@@ -237,9 +238,11 @@ namespace features::combat {
 	math::vector3 shared::find_spread_correction( const math::vector3& aim_angle, int tick, float* out_error ) const
 	{
 		// seed = SHA1( q(pitch), q(yaw), tick )[0], q() snapping to 0.5 deg
-		// steps; roll is never hashed. a fixed point needs the fired pitch in
-		// the same bucket as the cancelled seed, and the correction is well
-		// under a degree, so only adjacent buckets can match.
+		// steps; roll is never hashed.
+		//
+		// a fixed point needs the fired pitch to land in the same bucket as
+		// the seed we cancelled. the correction is well under a degree, so
+		// only buckets adjacent to the aim pitch can ever match.
 		constexpr auto k_bucket{ 0.5f };
 		constexpr auto k_window{ 6 };
 
@@ -377,6 +380,66 @@ namespace features::combat {
 		}
 
 		return this->get_shoot_position( );
+	}
+
+	int shared::calculate_stop_ticks( const math::vector3& velocity, float max_speed, std::uintptr_t local_pawn ) const
+	{
+		auto vel = velocity;
+		vel.z = 0.0f;
+
+		auto ticks{ 0 };
+		const auto sv_friction = CONVAR( "sv_friction" )->get<float>( );
+		const auto sv_stopspeed = CONVAR( "sv_stopspeed" )->get<float>( );
+		const auto sv_accelerate = CONVAR( "sv_accelerate" )->get<float>( );
+		const auto surface_friction = systems::g_prediction.pre( ).surface_friction;
+		const auto accurate_threshold = max_speed * 0.34f;
+
+		const auto is_scoped = this->m_ctx.is_scoped;
+		auto max_move_speed{ 250.0f };
+
+		if ( is_scoped && local_pawn )
+		{
+			const auto movement_services = memory::read<std::uintptr_t>( local_pawn + SCHEMA( "C_BasePlayerPawn", "m_pMovementServices"_hash ) );
+			if ( movement_services )
+			{
+				max_move_speed = memory::read<float>( movement_services + SCHEMA( "CPlayer_MovementServices", "m_flMaxspeed"_hash ) );
+			}
+		}
+
+		while ( vel.length_2d( ) > accurate_threshold && ticks < 15 )
+		{
+			const auto speed = vel.length_2d( );
+			if ( speed <= 0.0f )
+			{
+				break;
+			}
+
+			const auto control = std::fmaxf( speed, sv_stopspeed );
+			const auto drop = sv_friction * surface_friction * control * cstypes::tick_interval;
+			auto new_speed = std::fmaxf( speed - drop, 0.0f );
+
+			auto accel = sv_accelerate;
+
+			if ( is_scoped )
+			{
+				const auto weapon_ratio = std::fminf( 1.0f, max_speed / 250.0f );
+				const auto scoped_max = std::fmaxf( 250.0f, max_move_speed ) * weapon_ratio * 0.52f;
+
+				if ( new_speed > scoped_max - 5.0f )
+				{
+					const auto t = 1.0f - std::fmaxf( 0.0f, new_speed - ( scoped_max - 5.0f ) ) / std::fmaxf( 0.01f, 5.0f );
+					accel *= std::clamp( t, 0.0f, 1.0f );
+				}
+			}
+
+			const auto accel_speed = std::fminf( accel * max_speed * surface_friction * cstypes::tick_interval, new_speed );
+			new_speed = std::fmaxf( new_speed - accel_speed, 0.0f );
+
+			vel *= ( new_speed / speed );
+			ticks++;
+		}
+
+		return ticks;
 	}
 
 	float shared::get_spread( ) const

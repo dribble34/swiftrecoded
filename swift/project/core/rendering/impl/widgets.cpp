@@ -1,4 +1,4 @@
-﻿#include <utilities/math/math.hpp>
+#include <utilities/math/math.hpp>
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
 #include <core/systems/systems.hpp>
@@ -19,7 +19,6 @@ namespace rendering {
 
 		this->keybinds( dl );
 		this->indicators( dl );
-		this->crosshair_indicators( dl );
 	}
 
 	void widgets::watermark( xdraw::draw_list& draw_list )
@@ -121,7 +120,7 @@ namespace rendering {
 		draw_list.rect_filled( x + w * 0.4f, y, w * 0.6f, h, bar_col2, xdraw::corner_radius{ 0.0f } );
 		draw_list.rect( x, y, w, h, border_col, xdraw::corner_radius{ 0.0f }, 1.0f );
 
-		// Animated loader title bar stars background (only on left section like loader)
+		// Animated loader title bar stars background (matching top bar style)
 		struct star_t { float x, y, s, a, ph; };
 		static const star_t k_stars[] = {
 			{0.15f, 0.35f, 3.5f, 0.85f, 0.0f}, {0.45f, 0.65f, 2.5f, 0.55f, 1.8f},
@@ -132,18 +131,18 @@ namespace rendering {
 			{0.60f, 0.75f, 1.0f, 0.36f, 1.2f}, {0.85f, 0.22f, 0.9f, 0.26f, 2.8f}
 		};
 
-		draw_list.push_clip( x, y, w * 0.4f, h );
+		draw_list.push_clip( x, y, w, h );
 		for ( const auto& d : k_dust )
 		{
 			const float twk = 0.45f + 0.55f * std::sin( anim_time * 0.62f + d.ph * 2.0f );
 			const auto alpha = static_cast<std::uint8_t>( 255.0f * d.a * twk * 0.30f );
-			draw_list.circle_filled( x + ( w * 0.4f ) * d.x, y + h * d.y, d.s * 0.85f, xdraw::color{ 255, 255, 255, alpha } );
+			draw_list.circle_filled( x + w * d.x, y + h * d.y, d.s * 0.85f, xdraw::color{ 255, 255, 255, alpha } );
 		}
 		for ( const auto& s : k_stars )
 		{
 			const float twk = 0.62f + 0.38f * std::sin( anim_time * 0.72f + s.ph );
 			const auto alpha = static_cast<std::uint8_t>( 255.0f * s.a * twk * 0.65f );
-			const float cx_s = x + ( w * 0.4f ) * s.x;
+			const float cx_s = x + w * s.x;
 			const float cy_s = y + h * s.y;
 			const float r_s = s.s * twk * 0.75f;
 			draw_list.line( cx_s - r_s, cy_s, cx_s + r_s, cy_s, xdraw::color{ 255, 255, 255, alpha }, 1.0f );
@@ -194,25 +193,15 @@ namespace rendering {
 
 		const auto [screen_w, screen_h] = xdraw::viewport_size( );
 
-		auto scale{ 1.0f };
-		auto font_size{ rendering::fonts::size::normal };
-		switch ( settings::g_misc.keybind_scale_value.value )
-		{
-		case settings::misc::keybind_scale::half:         scale = 0.5f;  font_size = rendering::fonts::size::petite; break;
-		case settings::misc::keybind_scale::three_quarter: scale = 0.75f; font_size = rendering::fonts::size::petite; break;
-		case settings::misc::keybind_scale::full:         scale = 1.0f;  font_size = rendering::fonts::size::normal; break;
-		case settings::misc::keybind_scale::one_half:     scale = 1.5f;  font_size = rendering::fonts::size::big;    break;
-		}
-
-		const auto margin{ 10.0f * scale };
-		const auto row_spacing{ 4.0f * scale };
-		const auto row_h{ 20.0f * scale };
-		const auto header_h{ 32.0f * scale };
-		const auto r{ 10.0f * scale };
-		const auto pad_x{ 10.0f * scale };
-		const auto pad_y{ 8.0f * scale };
-		const auto underline_h{ 1.0f };
-		const auto min_w{ 200.0f * scale };
+		constexpr auto margin{ 10.0f };
+		constexpr auto row_spacing{ 4.0f };
+		constexpr auto row_h{ 22.0f };
+		constexpr auto header_h{ 38.0f }; 
+		constexpr auto r{ 10.0f };
+		constexpr auto pad_x{ 12.0f };
+		constexpr auto pad_y{ 8.0f };
+		constexpr auto underline_h{ 1.0f };
+		constexpr auto min_w{ 200.0f };
 
 		
 		static float drag_offset_x{ 0.0f };
@@ -358,7 +347,7 @@ namespace rendering {
 		
 		
 		float max_w = min_w;
-		xdraw::push_font( rendering::g_fonts.sfpro_bold[ font_size ] );
+		xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 		const auto [header_tw, header_th] = xdraw::measure_text( "keybinds" );
 		
 		for ( auto i = 0; i < count; ++i )
@@ -415,8 +404,8 @@ namespace rendering {
 		draw_list.rect( x, base_ry, w, total_h, border_col, xdraw::corner_radius{ r } );
 
 		
-		xdraw::push_font( rendering::g_fonts.sfpro_bold[ font_size ] );
-		const auto header_text_x = x + ( w - header_tw ) * 0.5f;
+		xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
+		const auto header_text_x = x + ( w - header_tw ) * 0.5f; 
 		draw_list.text( header_text_x, base_ry + ( header_h - header_th ) * 0.5f, "keybinds", tokens::col_accent.alpha( static_cast< std::uint8_t >( tokens::col_accent.a * master_alpha ) ) );
 		xdraw::pop_font( );
 		
@@ -457,7 +446,7 @@ namespace rendering {
 			state.active_this_frame = false;
 
 		float current_y = base_ry + header_h + pad_y;
-		xdraw::push_font( rendering::g_fonts.sfpro_bold[ font_size ] );
+		xdraw::push_font( rendering::g_fonts.sfpro_bold[ rendering::fonts::size::normal ] );
 		for ( auto i = 0; i < count; ++i )
 		{
 			const auto& e = entries[ i ];
@@ -674,184 +663,4 @@ namespace rendering {
 			}
 		}
 
-		void widgets::crosshair_indicators( xdraw::draw_list& draw_list )
-		{
-			const auto& cfg = settings::g_misc.m_crosshair_indicators;
-			if ( !cfg.enabled.value )
-				return;
-
-			const auto local = systems::g_local.get( );
-			if ( !local.is_alive || systems::g_local.is_in_cinematic( ) || systems::g_local.is_in_time_freeze( ) )
-				return;
-
-			struct entry_t
-			{
-				bool active{ false };
-				std::string label{};
-			};
-
-			constexpr auto max_count{ 5 };
-			entry_t entries[ max_count ]{};
-
-			const auto& ctx = features::combat::g_shared.ctx( );
-			const auto has_weapon = ctx.valid && ctx.weapon_type >= cstypes::weapon_type::pistol && ctx.weapon_type <= cstypes::weapon_type::lmg;
-
-			const auto& rage = settings::g_combat.m_ragebot;
-			const auto rage_ready = rage.enabled.value && has_weapon;
-
-
-			if ( rage_ready )
-			{
-				const auto& g = rage.get_group( ctx.weapon_type );
-
-				if ( g.hitchance_override.value || g.hitchance_override.bind.active )
-				{
-					entries[ 0 ].active = true;
-					entries[ 0 ].label = "HC " + std::to_string( g.hitchance_override_value.value );
-				}
-
-				if ( g.min_damage_override.value || g.min_damage_override.bind.active )
-				{
-					const auto v = g.min_damage_override_value.value;
-					entries[ 1 ].active = true;
-
-					if ( v == settings::combat::ragebot::k_lethal_min_damage )
-						entries[ 1 ].label = "MD FL";
-					else if ( v > 100 && v < settings::combat::ragebot::k_lethal_min_damage )
-						entries[ 1 ].label = "MD HP+" + std::to_string( v - 100 );
-					else
-						entries[ 1 ].label = "MD " + std::to_string( v );
-				}
-
-				if ( g.force_shot.value || g.force_shot.bind.active )
-				{
-					entries[ 3 ].active = true;
-					entries[ 3 ].label = "FS";
-				}
-			}
-
-
-			{
-				const auto& aa = settings::g_combat.m_antiaim;
-				if ( aa.enabled.value && aa.hide_shots.value )
-				{
-					entries[ 2 ].active = true;
-					entries[ 2 ].label = "HS";
-				}
-			}
-
-
-			{
-				const auto& dp = settings::g_combat.m_duckpeek.enabled;
-				if ( dp.value || dp.bind.active )
-				{
-					entries[ 4 ].active = true;
-					entries[ 4 ].label = "DP";
-				}
-			}
-
-			struct row_anim_t
-			{
-				animation::fade alpha;
-			};
-
-			static row_anim_t rows[ max_count ];
-			static bool positioned{ false };
-			static float center_x{ 0.0f };
-			static float center_y{ 0.0f };
-			static float drag_dx{ 0.0f };
-			static float drag_dy{ 0.0f };
-			static bool is_dragging{ false };
-
-			const auto [ screen_w, screen_h ] = xdraw::viewport_size( );
-
-			constexpr auto gap_below_crosshair{ 26.0f };
-			if ( !positioned )
-			{
-				positioned = true;
-				center_x = static_cast< float >( screen_w ) * 0.5f;
-				center_y = static_cast< float >( screen_h ) * 0.5f + gap_below_crosshair;
-			}
-
-			auto* const font = rendering::g_fonts.sfpro_bold[ rendering::fonts::size::petite ];
-
-			constexpr auto row_h{ 15.0f };
-			constexpr auto row_spacing{ 3.0f };
-
-			float visible_count{ 0.0f };
-			float max_w{ 0.0f };
-
-			for ( auto i = 0; i < max_count; ++i )
-			{
-				if ( entries[ i ].active )
-					rows[ i ].alpha.fade_in( 0.12f );
-				else
-					rows[ i ].alpha.fade_out( 0.12f );
-
-				rows[ i ].alpha.update( );
-
-				if ( rows[ i ].alpha.alpha( ) <= 0.001f )
-					continue;
-
-				visible_count += 1.0f;
-				max_w = std::max( max_w, xdraw::measure_text( entries[ i ].label, font ).first );
-			}
-
-			if ( visible_count <= 0.0f )
-				return;
-
-			const auto stack_h = visible_count * row_h + ( visible_count - 1.0f ) * row_spacing;
-
-			const auto& input = xui::ctx( ).input;
-			const auto hit_rect = xui::rect{ center_x - max_w * 0.5f - 6.0f, center_y - stack_h * 0.5f - 4.0f, max_w + 12.0f, stack_h + 8.0f };
-
-			if ( input.in_rect( hit_rect ) && input.mouse_clicked && !is_dragging )
-			{
-				is_dragging = true;
-				drag_dx = input.mouse_x - center_x;
-				drag_dy = input.mouse_y - center_y;
-			}
-
-			if ( is_dragging )
-			{
-				if ( input.mouse_down )
-				{
-					center_x = std::max( max_w * 0.5f, std::min( input.mouse_x - drag_dx, static_cast< float >( screen_w ) - max_w * 0.5f ) );
-					center_y = std::max( stack_h * 0.5f, std::min( input.mouse_y - drag_dy, static_cast< float >( screen_h ) - stack_h * 0.5f ) );
-				}
-				else
-				{
-					is_dragging = false;
-				}
-			}
-
-			const auto base = cfg.color.value;
-			auto& glow = xdraw::get_glow( );
-
-			auto current_y = center_y - stack_h * 0.5f;
-
-			for ( auto i = 0; i < max_count; ++i )
-			{
-				const auto a = rows[ i ].alpha.alpha( );
-				if ( a <= 0.001f )
-					continue;
-
-				const auto sz = xdraw::measure_text( entries[ i ].label, font );
-				const auto tx = center_x - sz.first * 0.5f;
-				const auto ty = current_y + ( row_h - sz.second ) * 0.5f;
-
-				const auto col = xdraw::color{ base.r, base.g, base.b, static_cast< std::uint8_t >( static_cast< float >( base.a ) * a ) };
-
-				if ( cfg.glow.value )
-				{
-					const auto ga = static_cast< std::uint8_t >( static_cast< float >( base.a ) * cfg.glow_strength.value * a );
-					glow.text( tx, ty, entries[ i ].label, xdraw::color{ base.r, base.g, base.b, ga }, font );
-				}
-
-				draw_list.text( tx, ty, entries[ i ].label, col, xdraw::text_style::shadowed, font );
-
-				current_y += row_h + row_spacing;
-			}
-		}
-
-}
+} 

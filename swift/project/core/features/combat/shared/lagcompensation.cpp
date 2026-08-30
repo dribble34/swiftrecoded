@@ -9,129 +9,6 @@
 
 namespace features::combat {
 
-	namespace {
-
-		// how far either side of now a record's simulation time may sit and
-		// still pass the server's lag compensation. depends only on our latency
-		// and the server's unlag limits, not on the record, so it's computed
-		// once per tick (see current_unlag_window) rather than per is_valid call.
-		struct unlag_window
-		{
-			float current_time{};
-
-			// how far into the past a record may sit, and how far into the future
-			float budget{};
-			float correct{};
-
-			// false means no record can be valid this tick at all
-			bool usable{};
-		};
-
-		unlag_window compute_unlag_window( float current_time )
-		{
-			unlag_window out{};
-			out.current_time = current_time;
-
-			const auto local = systems::g_local.get( );
-			const auto net_channel = memory::call<std::uintptr_t>( PATTERN( patterns::get_net_channel ), 0, 0 );
-
-			if ( !local.pawn || !net_channel )
-			{
-				return out;
-			}
-
-			const auto max_unlag = [ ]
-			{
-				const auto server_limit = CONVAR( "sv_maxunlag" )->get<float>( );
-				const auto player_limit = CONVAR( "sv_maxunlag_player" )->get<float>( );
-				return player_limit > 0.0f ? std::min( server_limit, player_limit ) : server_limit;
-			}( );
-
-			// vfunc 10 is the engine's latency accessor (float, seconds). m_iPing on
-			// the controller is the same value in ms; take the larger of the two.
-			const auto channel_latency = memory::call_vfunc<float>( net_channel, 10, 0 );
-
-			const auto reported_ping = local.controller
-				? memory::read<int>( local.controller + SCHEMA( "CCSPlayerController", "m_iPing"_hash ) )
-				: 0;
-
-			const auto ping_latency = reported_ping > 0
-				? static_cast< float >( reported_ping ) / 1000.0f
-				: 0.0f;
-
-			const auto measured = std::max( std::isfinite( channel_latency ) ? channel_latency : 0.0f, ping_latency );
-
-			if ( !std::isfinite( max_unlag ) || !std::isfinite( current_time ) || !std::isfinite( measured ) )
-			{
-				return out;
-			}
-
-			// m_iPing is smoothed and can sit below the real latency;
-			// underestimating costs the shot, so hold the peak and decay it
-			// slowly. jitter_margin only covers sub-tick drift, not spikes.
-			constexpr auto jitter_margin{ 0.005f };
-			constexpr auto decay_per_second{ 0.5f };
-
-			static float held_latency{};
-			static float held_time{};
-
-			if ( measured > held_latency || current_time < held_time )
-			{
-				held_latency = measured;
-			}
-			else
-			{
-				const auto elapsed = current_time - held_time;
-				if ( elapsed > 0.0f && elapsed < 1.0f )
-				{
-					held_latency -= ( held_latency - measured ) * std::min( elapsed * decay_per_second, 1.0f );
-				}
-				else if ( elapsed >= 1.0f )
-				{
-					held_latency = measured;
-				}
-			}
-
-			held_time = current_time;
-
-			const auto latency = std::max( held_latency, 0.0f ) + jitter_margin;
-
-			out.budget = max_unlag - latency;
-			out.correct = std::max( measured, 0.0f );
-			out.usable = out.budget > 0.0f;
-
-			return out;
-		}
-
-		// recomputed once per tick, then reused, so the peak-hold decay advances
-		// once per tick. plain statics: main-thread only, since lagcomp::run
-		// (frame_stage_notify) and get_valid_records (create_move) never overlap.
-		const unlag_window& current_unlag_window( )
-		{
-			static unlag_window cached{};
-			static bool primed{};
-
-			const auto global_vars = memory::read<std::uintptr_t>( addresses::globals::global_vars );
-			if ( !global_vars )
-			{
-				cached = {};
-				primed = false;
-				return cached;
-			}
-
-			const auto current_time = memory::read<float>( global_vars + 0x30 );
-
-			if ( !primed || cached.current_time != current_time )
-			{
-				cached = compute_unlag_window( current_time );
-				primed = true;
-			}
-
-			return cached;
-		}
-
-	}
-
 	bool shared::lagcomp::record::setup( std::uintptr_t pawn_ptr )
 	{
 		this->pawn = pawn_ptr;
@@ -205,14 +82,83 @@ namespace features::combat {
 			return false;
 		}
 
-		const auto& window = current_unlag_window( );
-		if ( !window.usable )
+		const auto local = systems::g_local.get( );
+		const auto local_pawn = local.pawn;
+		const auto net_channel = memory::call<std::uintptr_t>( PATTERN( patterns::get_net_channel ), 0, 0 );
+		const auto global_vars = memory::read<std::uintptr_t>( addresses::globals::global_vars );
+
+		if ( !local_pawn || !net_channel || !global_vars )
 		{
 			return false;
 		}
 
-		return this->simulation_time >= window.current_time - window.budget
-			&& this->simulation_time <= window.current_time + window.correct;
+		const auto max_unlag = [ ]
+		{
+			const auto server_limit = CONVAR( "sv_maxunlag" )->get<float>( );
+			const auto player_limit = CONVAR( "sv_maxunlag_player" )->get<float>( );
+			return player_limit > 0.0f ? std::min( server_limit, player_limit ) : server_limit;
+		}( );
+
+		const auto current_time = memory::read<float>( global_vars + 0x30 );
+
+		// vfunc 10 is the engine's latency accessor (float, seconds). m_iPing on
+		// the controller is the same value in ms; take the larger of the two.
+		const auto channel_latency = memory::call_vfunc<float>( net_channel, 10, 0 );
+
+		const auto reported_ping = local.controller
+			? memory::read<int>( local.controller + SCHEMA( "CCSPlayerController", "m_iPing"_hash ) )
+			: 0;
+
+		const auto ping_latency = reported_ping > 0
+			? static_cast< float >( reported_ping ) / 1000.0f
+			: 0.0f;
+
+		const auto measured = std::max( std::isfinite( channel_latency ) ? channel_latency : 0.0f, ping_latency );
+
+		if ( !std::isfinite( max_unlag ) || !std::isfinite( current_time ) || !std::isfinite( measured ) )
+		{
+			return false;
+		}
+
+		// m_iPing is smoothed and refreshed periodically, so it can sit below
+		// the real latency. underestimating costs the shot, overestimating only
+		// costs range -- so hold the peak and decay it slowly.
+		// only needs to cover sub-tick drift, not spikes -- the peak-hold does
+		// those. at 15ms the budget sat on top of the common 0.1562 record age
+		// and rejected a quarter of them.
+		constexpr auto jitter_margin{ 0.005f };
+		constexpr auto decay_per_second{ 0.5f };
+
+		static float held_latency{};
+		static float held_time{};
+
+		if ( measured > held_latency || current_time < held_time )
+		{
+			held_latency = measured;
+		}
+		else
+		{
+			const auto elapsed = current_time - held_time;
+			if ( elapsed > 0.0f && elapsed < 1.0f )
+			{
+				held_latency -= ( held_latency - measured ) * std::min( elapsed * decay_per_second, 1.0f );
+			}
+			else if ( elapsed >= 1.0f )
+			{
+				held_latency = measured;
+			}
+		}
+
+		held_time = current_time;
+
+		const auto latency = std::max( held_latency, 0.0f ) + jitter_margin;
+
+		const auto budget = max_unlag - latency;
+		const auto correct = std::max( measured, 0.0f );
+
+		return budget > 0.0f
+			&& this->simulation_time >= current_time - budget
+			&& this->simulation_time <= current_time + correct;
 	}
 
 	void shared::lagcomp::record::apply( )
@@ -314,7 +260,7 @@ namespace features::combat {
 			const auto simulation_time = memory::read<float>( pawn + SCHEMA( "C_BaseEntity", "m_flSimulationTime"_hash ) );
 			const auto simulation_tick = cstypes::time_to_ticks( simulation_time );
 
-			// sim time went backwards: teleport/respawn, history is garbage
+			// sim time went backwards — teleport/respawn, history is garbage
 			if ( !records.empty( ) && simulation_tick < records.front( ).tick - 1 )
 			{
 				records.clear( );
@@ -381,7 +327,7 @@ namespace features::combat {
 				continue;
 			}
 
-			// same freshness rule as get_valid_records: stale records miss
+			// same freshness rule as get_valid_records — stale records miss
 			if ( current_tick && ( current_tick - rit->tick ) > max_ticks )
 			{
 				return nullptr;
@@ -485,8 +431,8 @@ namespace features::combat {
 		const auto max_ticks = std::clamp( settings::g_combat.m_lagcomp.max_backtrack_ticks.value, 1, static_cast< int >( rage::k_max_lagcomp_records ) );
 		const auto newest_tick = result.front( )->tick;
 
-		// also gate against the live tick: a server hitch can leave the whole
-		// deque stale, and firing at those is a guaranteed miss
+		// also gate against the live tick — a server hitch can leave the whole
+		// deque stale, firing at those is a guaranteed miss
 		const auto controller = systems::g_local.get( ).controller;
 		const auto current_tick = controller ? memory::read<int>( controller + SCHEMA( "CBasePlayerController", "m_nTickBase"_hash ) ) : newest_tick;
 
@@ -504,9 +450,7 @@ namespace features::combat {
 
 	std::array<systems::bones::data, 27> shared::lagcomp::get_skeleton( const record& record ) const
 	{
-		// value-initialised so an invalid record returns zeroed bones, not
-		// raw stack memory that reaches the hitbox maths as garbage
-		std::array<systems::bones::data, 27> skeleton{};
+		std::array<systems::bones::data, 27> skeleton;
 
 		if ( record.valid )
 		{

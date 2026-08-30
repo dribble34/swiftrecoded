@@ -263,7 +263,24 @@ namespace features::misc {
 		std::string display_name = base_name;
 		if ( cfg.clantag.value )
 		{
-			constexpr std::string_view tag{ "swift.fly" };
+			// Tag variants with swiftfly.xyz:
+			// 0: swiftfly.xyz (default)
+			// 1: 𝚜𝚠𝚒𝚏𝚝𝚏𝚕𝚢.𝚡𝚢𝚣 (monospace)
+			// 2: 𝕤𝕨𝕚𝕗𝕥𝕗𝕝𝕪.𝕩𝕪𝕫 (double-struck)
+			// 3: 𝙨𝙬𝙞𝙛𝙩𝙛𝙡𝙮.𝙭𝙮𝙯 (sans-bold)
+			// 4: 𝘴𝘸𝘪𝘧𝘵𝘧𝘭𝘺.𝘹𝘺𝘻 (sans-italic)
+			// 5: 𝒔𝒘𝒊𝒇𝒕𝒇𝒍𝒚.𝒙𝒚𝒛 (serif-bold-italic)
+			static const std::vector<std::string> k_font_chars[ 6 ] = {
+				{ "s", "w", "i", "f", "t", "f", "l", "y", ".", "x", "y", "z" },
+				{ "𝚜", "𝚠", "𝚒", "𝚏", "𝚝", "𝚏", "𝚕", "𝚢", ".", "𝚡", "𝚢", "𝚣" },
+				{ "𝕤", "𝕨", "𝕚", "𝕗", "𝕥", "𝕗", "𝕝", "𝕪", ".", "𝕩", "𝕪", "𝕫" },
+				{ "𝙨", "𝙬", "𝙞", "𝙛", "𝙩", "𝙛", "𝙡", "𝙮", ".", "𝙭", "𝙮", "𝙯" },
+				{ "𝘴", "𝘸", "𝘪", "𝘧", "𝘵", "𝘧", "𝘭", "𝘺", ".", "𝘹", "𝘺", "𝘻" },
+				{ "𝒔", "𝒘", "𝒊", "𝒇", "𝒕", "𝒇", "𝒍", "𝒚", ".", "𝒙", "𝒚", "𝒛" }
+			};
+
+			const auto font_idx = std::clamp( cfg.clantag_font.value, 0, 5 );
+			const auto& char_list = k_font_chars[ font_idx ];
 			const auto mode = cfg.clantag_type.value;
 
 			const auto global_vars = memory::safe_read<std::uintptr_t>( addresses::globals::global_vars ).value_or( 0 );
@@ -275,53 +292,77 @@ namespace features::misc {
 
 			if ( mode == 0 ) // static
 			{
-				tag_anim = tag;
+				for ( const auto& c : char_list )
+				{
+					tag_anim += c;
+				}
 			}
 			else if ( mode == 1 ) // scroll
 			{
-				std::string padded = std::string( tag );
-				if ( padded.size( ) < 15 )
-					padded.append( 15 - padded.size( ), ' ' );
+				auto list_copy = char_list;
+				while ( list_copy.size( ) < 15 )
+				{
+					list_copy.push_back( " " );
+				}
 
-				const auto shift = ( current_tick / 8 ) % padded.size( );
-				std::rotate( padded.begin( ), padded.begin( ) + static_cast<std::ptrdiff_t>( shift ), padded.end( ) );
-				tag_anim = padded.substr( 0, 15 );
+				const auto shift = ( current_tick / 8 ) % list_copy.size( );
+				std::rotate( list_copy.begin( ), list_copy.begin( ) + static_cast<std::ptrdiff_t>( shift ), list_copy.end( ) );
+
+				for ( std::size_t i = 0; i < 15 && i < list_copy.size( ); ++i )
+				{
+					tag_anim += list_copy[ i ];
+				}
 			}
 			else if ( mode == 2 ) // reverse scroll
 			{
-				std::string padded = std::string( tag );
-				if ( padded.size( ) < 15 )
-					padded.append( 15 - padded.size( ), ' ' );
+				auto list_copy = char_list;
+				while ( list_copy.size( ) < 15 )
+				{
+					list_copy.push_back( " " );
+				}
 
-				const auto shift = padded.size( ) - (( current_tick / 8 ) % padded.size( ));
-				std::rotate( padded.begin( ), padded.begin( ) + static_cast<std::ptrdiff_t>( shift % padded.size( ) ), padded.end( ) );
-				tag_anim = padded.substr( 0, 15 );
+				const auto shift = list_copy.size( ) - (( current_tick / 8 ) % list_copy.size( ));
+				std::rotate( list_copy.begin( ), list_copy.begin( ) + static_cast<std::ptrdiff_t>( shift % list_copy.size( ) ), list_copy.end( ) );
+
+				for ( std::size_t i = 0; i < 15 && i < list_copy.size( ); ++i )
+				{
+					tag_anim += list_copy[ i ];
+				}
 			}
 			else // wave (typewriter expand/contract)
 			{
 				constexpr auto ticks_per_step{ 10 };
-				constexpr auto type_steps{ static_cast< int >( tag.size( ) ) };
+				const auto type_steps = static_cast< int >( char_list.size( ) );
 				constexpr auto hold_steps{ 16 };
-				constexpr auto dissolve_steps{ static_cast< int >( tag.size( ) ) };
+				const auto dissolve_steps = static_cast< int >( char_list.size( ) );
 				constexpr auto blank_steps{ 2 };
-				constexpr auto total_steps{ type_steps + hold_steps + dissolve_steps + blank_steps };
+				const auto total_steps = type_steps + hold_steps + dissolve_steps + blank_steps;
 
 				const auto cycle_step = ( current_tick / ticks_per_step ) % total_steps;
 
 				if ( cycle_step < type_steps )
 				{
 					const auto typed = cycle_step;
-					tag_anim = tag.substr( 0, static_cast< std::size_t >( typed ) );
+					for ( int i = 0; i < typed; ++i )
+					{
+						tag_anim += char_list[ i ];
+					}
 				}
 				else if ( cycle_step < type_steps + hold_steps )
 				{
-					tag_anim = tag;
+					for ( const auto& c : char_list )
+					{
+						tag_anim += c;
+					}
 				}
 				else if ( cycle_step < type_steps + hold_steps + dissolve_steps )
 				{
 					const auto dissolved = cycle_step - ( type_steps + hold_steps );
-					const auto remaining = tag.size( ) - static_cast< std::size_t >( dissolved );
-					tag_anim = tag.substr( 0, remaining );
+					const auto remaining = static_cast< int >( char_list.size( ) ) - dissolved;
+					for ( int i = 0; i < remaining; ++i )
+					{
+						tag_anim += char_list[ i ];
+					}
 				}
 			}
 

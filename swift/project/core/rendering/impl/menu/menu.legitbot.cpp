@@ -24,15 +24,31 @@ namespace rendering {
 		const auto col_w = ( content_w - tokens::gap ) * 0.5f;
 		const auto right_x = content_x + col_w + tokens::gap;
 
+		const auto col_h = ( this->m_body_h - tokens::gap ) * 0.5f;
+
 		xui::layout::set_cursor( content_x - wx, body_y - wy );
 
-		if ( xui::begin_child( "##legitbot_aimbot", col_w ) )
+		if ( xui::begin_child( "##legitbot_left_col", col_w, this->m_body_h, true ) )
 		{
 			xui::checkbox( "aimbot", wg.aimbot );
 
 			xui::slider_float( "fov", wg.fov, 0.5f, 30.0f, "%.1f°" );
 			xui::slider_int( "smooth", wg.smooth, 0, 100, "%d" );
 			xui::multicombo( "hitboxes", wg.hitboxes, detail::hitbox_names_legit, 5 );
+
+			xui::checkbox( "humanization simple", wg.humanization_simple );
+			xui::checkbox( "humanization advanced", wg.humanization_advanced );
+			if ( wg.humanization_advanced.value )
+			{
+				xui::slider_int( "overshoot chance", wg.overshoot_chance, 0, 100, "%d%%" );
+				xui::slider_float( "overshoot amount", wg.overshoot_amount, 0.1f, 3.0f, "%.1f" );
+			}
+
+			xui::checkbox( "multipoint", wg.multipoint );
+			if ( wg.multipoint.value )
+			{
+				xui::slider_float( "multipoint scale", wg.multipoint_scale, 10.0f, 90.0f, "%.0f%%" );
+			}
 
 			xui::checkbox( "draw fov", wg.visualize_fov );
 
@@ -42,11 +58,8 @@ namespace rendering {
 				xui::end_popup( );
 			}
 
-			xui::end_child( );
-		}
+			xui::layout::spacing( 10.0f );
 
-		if ( xui::begin_child( "##legitbot_rcs", col_w ) )
-		{
 			xui::checkbox( "rcs", wg.rcs );
 			if ( xui::begin_popup( "##rcs_popup", 220.0f ) )
 			{
@@ -69,25 +82,30 @@ namespace rendering {
 
 		xui::layout::set_cursor( right_x - wx, body_y - wy );
 
-		if ( xui::begin_child( "##legitbot_triggerbot", col_w ) )
+		if ( xui::begin_child( "##legitbot_right_col", col_w, this->m_body_h, true ) )
 		{
 			xui::checkbox( "triggerbot", wg.triggerbot );
 			xui::slider_int( "delay", wg.trigger_delay, 0, 250, "%d ms" );
+			xui::slider_int( "delay random", wg.trigger_delay_random, 0, 100, "%d ms" );
+			xui::slider_int( "reaction", wg.trigger_reaction, 0, 200, "%d ms" );
 			xui::slider_int( "hitchance", wg.trigger_hitchance, 0, 100, "%d%%" );
 			
 			xui::checkbox( "seed prediction", wg.give_me_your_seed );
 
-			xui::end_child( );
-		}
+			xui::layout::spacing( 10.0f );
 
-		if ( xui::begin_child( "##legitbot_other", col_w ) )
-		{
 			xui::checkbox( "autowall", wg.autowall );
-			if ( xui::begin_popup( "##aw_popup", 220.0f ) )
+			xui::slider_int( "min damage##aw", wg.min_damage, 1, 125, "%d" );
+			xui::checkbox( "min damage override", wg.min_damage_override );
+			if ( wg.min_damage_override.value )
 			{
-				xui::slider_int( "min damage##aw", wg.min_damage, 1, 125, "%d" );
-				xui::end_popup( );
+				xui::slider_int( "override value", wg.min_damage_override_value, 1, 125, "%d" );
 			}
+
+			xui::checkbox( "flash check", wg.flash_check );
+			xui::checkbox( "air check", wg.air_check );
+			xui::checkbox( "smoke check", wg.smoke_check );
+			xui::checkbox( "autostop", wg.autostop );
 
 			xui::end_child( );
 		}

@@ -1,4 +1,4 @@
-﻿#include <external/xorstr.hpp>
+#include <external/xorstr.hpp>
 
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
@@ -190,9 +190,10 @@ namespace systems
 		const auto hud = try_root( addresses::globals::hud );
 		const auto main_menu = try_root( addresses::globals::main_menu_panel );
 
-		// the main-menu root can stay valid after a level loads, so first-valid-
-		// root isn't enough. s_map_name (set by level_initialization, cleared by
-		// level_shutdown) gives an unambiguous menu-vs-match state.
+		// The main-menu root can remain valid after a level is loaded, so
+		// choosing the first valid root is not enough.  s_map_name is populated
+		// by level_initialization and cleared by level_shutdown, which gives us
+		// an unambiguous menu-vs-match state here.
 		const bool in_match = !rendering::g_widgets.s_map_name.empty( );
 
 		if ( in_match )
@@ -469,7 +470,7 @@ namespace systems
 
         m_preview_pawn = owner_entity;
 
-        // apply chams to the preview using the enemy/team/local config for the active subtab
+        // Применяем чамсы к превью игрока, используя настройки для enemy/team в зависимости от активной вкладки
         const auto& chams_cfg = settings::g_esp.m_player.m_chams;
         const auto subtab = rendering::g_menu.get_subtab( );
         
@@ -489,13 +490,14 @@ namespace systems
             target = &chams_cfg.local;
         }
         
-        // chams disabled for this subtab
+        // Если настройки чамсов не включены, просто возвращаем false
         if ( !target || !target->enabled.value )
         {
             return false;
         }
         
-        // reuse the player chams apply logic
+        // Применяем чамсы через систему player chams
+        // Создаем экземпляр chams и используем его логику применения
         const auto apply_preview_chams = [ & ]( const settings::esp::chams_config& cfg )
         {
             if ( cfg.occluded.enabled.value )

@@ -160,7 +160,7 @@ namespace rendering {
 			xui::end_child( );
 		}
 
-		constexpr auto btn_count{ 4 };
+		constexpr auto btn_count{ 5 };
 		const auto btn_w = ( avail_w - s.item_spacing_x * ( btn_count - 1 ) ) / btn_count;
 		const auto has_selection = detail::selected >= 0 && detail::selected < static_cast< int >( detail::config_list.size( ) );
 		const auto save_name = has_selection ? detail::selected_name( ) : detail::search_buf;
@@ -169,6 +169,13 @@ namespace rendering {
 		if ( xui::button( "create", btn_w, btn_h ) && !detail::search_buf.empty( ) )
 		{
 			config::registry::save( detail::utf8_to_wide( detail::search_buf ) );
+			detail::needs_refresh = true;
+		}
+
+		xui::layout::same_line( );
+
+		if ( xui::button( "refresh", btn_w, btn_h ) )
+		{
 			detail::needs_refresh = true;
 		}
 

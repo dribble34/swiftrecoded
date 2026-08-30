@@ -1,4 +1,4 @@
-﻿#include <core/settings.hpp>
+#include <core/settings.hpp>
 #include <core/features/features.hpp>
 
 #include "../../rendering.hpp"
@@ -87,11 +87,8 @@ namespace rendering {
 			auto& mov = settings::g_movement;
 			auto& ab = m.m_autobuy;
 
-			if ( xui::begin_child( "##misc_impacts", col_w ) )
+			if ( xui::begin_child( "##misc_left_col", col_w, this->m_body_h, true ) )
 			{
-				static const char* k_log_modes[ ]{ "screen text", "screen widget", "console" };
-				xui::combo( "log mode", impacts.log_display_mode.value, k_log_modes, 3 );
-
 				xui::checkbox( "hit logs", impacts.hit_log );
 				if ( xui::begin_popup( "##hitlog_popup", 220.0f ) )
 				{
@@ -184,6 +181,7 @@ namespace rendering {
 					if ( show_overlay )
 					{
 						xui::slider_float( "duration##bulletfx", impacts.bullet_impact_effect_duration, 0.1f, 5.0f, "%.1fs" );
+						xui::slider_float( "size##bulletfx", impacts.bullet_impact_effect_size, 0.5f, 15.0f, "%.1f" );
 						xui::color_picker( "fill##bulletfx", impacts.bullet_impact_effect_fill_color );
 						xui::color_picker( "edge##bulletfx", impacts.bullet_impact_effect_edge_color );
 
@@ -210,11 +208,8 @@ namespace rendering {
 					xui::end_popup( );
 				}
 
-				xui::end_child( );
-			}
+				xui::layout::spacing( 10.0f );
 
-			if ( xui::begin_child( "##misc_visuals", col_w ) )
-			{
 				xui::checkbox( "projectile trajectory", traj.enabled );
 				if ( xui::begin_popup( "##traj_popup", 220.0f ) )
 				{
@@ -229,6 +224,8 @@ namespace rendering {
 				xui::checkbox( "penetration crosshair", pen.enabled );
 				if ( xui::begin_popup( "##pen_popup", 220.0f ) )
 				{
+					xui::slider_float( "size##pen", pen.size, 1.0f, 20.0f, "%.1f" );
+					xui::slider_float( "outline##pen", pen.outline_thickness, 0.0f, 5.0f, "%.1f" );
 					xui::checkbox( "glow##pen", pen.glow );
 					xui::slider_float( "glow strength##pen", pen.glow_strength, 0.1f, 1.0f, "%.2f" );
 					xui::color_picker( "can penetrate##pen", pen.can_penetrate_fill );
@@ -243,10 +240,25 @@ namespace rendering {
 
 			xui::layout::set_cursor( right_x - wx, body_y - wy );
 
-			if ( xui::begin_child( "##misc_movement", col_w ) )
+			if ( xui::begin_child( "##misc_right_col", col_w, this->m_body_h, true ) )
 			{
 				xui::checkbox( "bhop", mov.bhop );
 				xui::checkbox( "autostrafe", mov.airstrafe );
+				if ( mov.airstrafe.value )
+				{
+					if ( xui::begin_popup( "##strafe_popup", 220.0f ) )
+					{
+						xui::checkbox( "fully directional", mov.airstrafe_fully_directional );
+						xui::checkbox( "strafe boost", mov.strafe_boost );
+						if ( mov.strafe_boost.value )
+						{
+							xui::slider_float( "boost amount", mov.strafe_boost_value, 0.1f, 5.0f, "%.1f" );
+						}
+						xui::end_popup( );
+					}
+				}
+				xui::checkbox( "slide walk", mov.slide_walk );
+				xui::checkbox( "quick stop", mov.quick_stop );
 				xui::checkbox( "jumpbug", mov.jumpbug );
 				xui::checkbox( "fastladder", mov.fastladder );
 				xui::checkbox( "edgejump", mov.edgejump );
@@ -276,11 +288,8 @@ namespace rendering {
 					xui::checkbox( "duck peek assist", dp.enabled );
 				}
 
-				xui::end_child( );
-			}
+				xui::layout::spacing( 10.0f );
 
-			if ( xui::begin_child( "##misc_other", col_w ) )
-			{
 				xui::checkbox( "reveal radar", m.reveal_radar );
 				xui::checkbox( "preserve killfeed", m.preserve_killfeed );
 				xui::checkbox( "disable game logs", m.disable_game_logs );
@@ -301,7 +310,9 @@ namespace rendering {
 				if ( xui::begin_popup( "##clantag_popup", 220.0f ) )
 				{
 					constexpr const char* clantag_modes[ ]{ "static", "scroll", "reverse scroll", "wave" };
+					constexpr const char* clantag_fonts[ ]{ "default (swift.fly)", "monospace (𝚜𝚠𝚒𝚏𝚝𝚏𝚕𝚢)", "double-struck (𝕤𝕨𝕚𝕗𝕥𝕗𝕝𝕪)", "sans-bold (𝙨𝙬𝙞𝙛𝙩𝙗𝙡𝙮)", "sans-italic (𝘴𝘸𝘪𝘧𝘵𝘧𝘭𝘺)", "serif-bold-italic (𝒔𝒘𝒊𝒇𝒕𝒇𝒍𝒚)" };
 					xui::combo( "animation##ct", m.m_name_changer.clantag_type.value, clantag_modes, 4 );
+					xui::combo( "font##ct", m.m_name_changer.clantag_font.value, clantag_fonts, 6 );
 					xui::end_popup( );
 				}
 				xui::checkbox( "override name", m.m_name_changer.override_name );
@@ -323,12 +334,6 @@ namespace rendering {
 				}
 
 				xui::checkbox( "keybinds", m.keybinds_enabled );
-				if ( xui::begin_popup( "##keybinds_popup", 180.0f ) )
-				{
-					static const char* k_keybind_scales[ ]{ "50%", "75%", "100%", "150%" };
-					xui::combo( "scale##kb", m.keybind_scale_value.value, k_keybind_scales, 4 );
-					xui::end_popup( );
-				}
 
 				xui::end_child( );
 			}
@@ -449,15 +454,6 @@ namespace rendering {
 				}
 
 				xui::checkbox( "indicators", m.indicators_enabled );
-
-				xui::checkbox( "crosshair indicators", m.m_crosshair_indicators.enabled );
-				if ( xui::begin_popup( "##crosshair_indicators_popup", 220.0f ) )
-				{
-					xui::color_picker( "color##xhair_ind", m.m_crosshair_indicators.color );
-					xui::checkbox( "glow##xhair_ind", m.m_crosshair_indicators.glow );
-					xui::slider_float( "glow strength##xhair_ind", m.m_crosshair_indicators.glow_strength, 0.1f, 1.0f, "%.2f" );
-					xui::end_popup( );
-				}
 
 				xui::end_child( );
 			}

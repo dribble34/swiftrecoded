@@ -290,8 +290,9 @@ namespace features::movement {
 					const auto velocity_angle = std::atan2f( velocity.y, velocity.x ) * ( 180.0f / std::numbers::pi_v<float> );
 					const auto accel_speed = sv_airaccelerate * effective_maxspeed * frame_time * surface_friction;
 					const auto half_accel = accel_speed * 0.5f;
+					const auto boost_factor = settings::g_movement.strafe_boost.value ? settings::g_movement.strafe_boost_value.value : 1.0f;
 					const auto optimal_floor = std::fmaxf( half_accel, sv_air_max_wishspeed - half_accel );
-					const auto ideal_angle = std::clamp( std::atanf( optimal_floor / speed_2d ) * ( 180.0f / std::numbers::pi_v<float> ), 0.0f, 45.0f );
+					const auto ideal_angle = std::clamp( std::atanf( optimal_floor / speed_2d ) * ( 180.0f / std::numbers::pi_v<float> ) * boost_factor, 0.0f, 90.0f );
 
 					auto target_yaw = view_angles.y + yaw_offset;
 					math::helpers::normalize_angle( target_yaw );

@@ -8,18 +8,26 @@
 
 // Manual-map-safe replacement for `thread_local`.
 //
-// Compiler `thread_local` storage needs the Windows loader to process the
-// PE's TLS directory (LdrpHandleTlsData). Manual mappers skip that, leaving
-// _tls_index at 0, so post-map `thread_local` access lands in whatever
-// module owns TLS slot 0 (usually the host EXE).
+// Compiler-generated `thread_local` storage depends on the PE's TLS
+// directory being processed by the Windows loader (LdrpHandleTlsData),
+// which writes a per-thread slot into every thread's TEB before any code
+// in the module runs. Generic manual mappers never do this, so any
+// `thread_local` access after a manual map reads/writes garbage --
+// `_tls_index` is left at 0, so the compiled access pattern lands in
+// whatever module happens to occupy TLS slot 0 (usually the host EXE).
 //
-// This avoids the TLS directory entirely: a fixed-capacity static array
-// backs the values (no heap alloc, so it's safe from a vectored exception
-// handler where the game's operator new could deadlock), and FLS (FlsAlloc)
-// only records which slot belongs to the calling thread. FLS is a plain
-// runtime call, independent of the loader and of DLL_THREAD_ATTACH. The FLS
-// slot holds a 1-based index, not a pointer, so there's nothing to free and
-// no dangling callback if the module is unmapped without a clean detach.
+// This gets per-thread storage without touching the TLS directory at
+// all: a fixed-capacity static array backs the values (no heap
+// allocation, so it's safe to call from a vectored exception handler,
+// where routing through the game's overridden operator new could
+// deadlock on its allocator lock), and Fiber-Local Storage (FlsAlloc) is
+// used only to remember which array slot belongs to the calling thread.
+// FLS is a plain runtime API call, independent of the loader and of
+// DLL_THREAD_ATTACH notifications (which this project disables via
+// DisableThreadLibraryCalls). The FLS slot holds a 1-based index, never
+// a pointer, so there is nothing to free -- no destructor callback, and
+// therefore no risk of a dangling callback if the module is ever
+// unmapped without a clean DLL_PROCESS_DETACH.
 namespace tls {
 
 	namespace detail {
@@ -63,9 +71,10 @@ namespace tls {
 			auto index = this->m_next.fetch_add( 1, std::memory_order_relaxed );
 			if ( index >= capacity )
 			{
-				// more than `capacity` threads have touched this slot; alias
-				// the last slot rather than corrupt memory. those threads then
-				// share state - a correctness tradeoff, not a safety one.
+				// More distinct threads have touched this slot than
+				// `capacity` allows for. Degrade to aliasing the last slot
+				// rather than corrupting memory -- a correctness tradeoff
+				// (those threads share state), not a safety one.
 				index = capacity - 1;
 			}
 

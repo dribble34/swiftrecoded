@@ -8,7 +8,6 @@
 #include <utilities/memory/memory.hpp>
 #include <utilities/threadpool/threadpool.hpp>
 #include <utilities/steam/steam.hpp>
-#include <utilities/anti_debug/anti_debug.hpp>
 
 #include <core/hooks/hooks.hpp>
 #include <core/systems/systems.hpp>
@@ -17,6 +16,11 @@
 #include <core/rendering/rendering.hpp>
 
 #include <utilities/diag.hpp>
+
+// tlhelp32.h needs windows.h to already be visible -- included last, after
+// the utility headers pull it in transitively, otherwise the WINAPI /
+// DWORD / HANDLE typedefs it uses don't exist yet.
+#include <tlhelp32.h>
 
 extern "C" BOOL WINAPI _CRT_INIT( HMODULE module_handle, DWORD reason, LPVOID reserved );
 
@@ -31,13 +35,16 @@ namespace {
 
 	LONG WINAPI diag_unhandled_exception_filter( EXCEPTION_POINTERS* info );
 
-	// registers this module's .pdata so x64 SEH (__try/__except, vectored/
-	// unhandled filters) works when the module never went through the Windows
-	// loader - RtlLookupFunctionEntry can't find unwind info for a manually
-	// mapped module otherwise. must run before anything here uses __try/__except
-	// (CRT init below and its static initializers included), so it's the first
-	// thing `entry` does. harmless on a LoadLibrary'd module - just a redundant
-	// dynamic table entry.
+	// Registers this module's own .pdata with the process so x64 SEH
+	// (__try/__except, vectored/unhandled exception filters) works inside
+	// it even when the module never went through the Windows loader --
+	// RtlLookupFunctionEntry has no way to find unwind info for a
+	// manually mapped module otherwise. Must run before any code in this
+	// module relies on __try/__except, including the CRT init below and
+	// any C++ static initializer it runs, so it's the very first thing
+	// `entry` does. Calling this on a normally LoadLibrary'd module is
+	// harmless: it just adds a redundant dynamic table entry alongside
+	// the loader's own static registration.
 	void register_exception_table( HMODULE module_handle )
 	{
 		const auto base = reinterpret_cast<std::uintptr_t>( module_handle );
@@ -344,14 +351,8 @@ namespace {
 
 	DWORD WINAPI init_thread_impl( LPVOID /*param*/ )
 	{
-
 		diag::step( "stage: thread start" );
 		diag::initialize_crash_dumps( );
-
-		// Start the anti-tamper watchdog as early as possible so a debugger
-		// attached during init doesn't get a free window before checks arm.
-		// initialize() is idempotent and non-fatal on failure.
-		anti_debug::initialize( );
 
 		g_previous_exception_filter.store(
 			SetUnhandledExceptionFilter( diag_unhandled_exception_filter ),
@@ -511,6 +512,100 @@ namespace {
 
 		diag::step( "stage: skyboxes" );
 		features::world::g_scene.discover_skyboxes( );
+
+		// Basic debugger detection. Reads PEB.BeingDebugged only -- the
+		// same bit IsDebuggerPresent() reads, minus the API-hook surface.
+		// Kept deliberately minimal after the fuller anti-debug module
+		// false-fired on the dev workflow. Log always; terminate only in
+		// shipping so DEV builds stay debuggable.
+		diag::step( "stage: anti-debug" );
+		{
+			const auto* peb =
+				reinterpret_cast<const std::uint8_t*>( __readgsqword( 0x60 ) );
+			if ( peb[ 0x02 ] != 0 )
+			{
+				diag::write( diag::level::warning, "debugger detected" );
+#if !defined( DEV )
+				TerminateProcess( GetCurrentProcess( ), 0xC0000005 );
+#endif
+			}
+		}
+
+		// Analysis-tool scan. Walk the process list and match against a
+		// blocklist of debuggers, disassemblers, and memory-scan tools
+		// that would only be running if someone is reversing us. Exact
+		// filename compare (case-insensitive) -- no substring matches,
+		// so "ida" doesn't collide with nvidia/hidapi/etc.
+		//
+		// Only runs once at init. A persistent attacker can just start
+		// the tool after we're loaded, but that's a much higher-friction
+		// workflow than "already had x64dbg open".
+		diag::step( "stage: analysis tool scan" );
+		{
+			static const wchar_t* const blocklist[] = {
+				L"x64dbg.exe",
+				L"x32dbg.exe",
+				L"windbg.exe",
+				L"windbgx.exe",              // WinDbg Preview
+				L"ollydbg.exe",
+				L"ida.exe",
+				L"ida64.exe",
+				L"idaq.exe",
+				L"idaq64.exe",
+				L"idaw.exe",
+				L"idaw64.exe",
+				L"binaryninja.exe",
+				L"dnspy.exe",
+				L"dnspy-x86.exe",
+				L"dnspy-x64.exe",
+				L"cheatengine.exe",
+				L"cheatengine-i386.exe",
+				L"cheatengine-x86_64.exe",
+				L"reclass.exe",
+				L"reclass.net.exe",
+				L"scylla.exe",
+				L"scylla_x64.exe",
+				L"scylla_x86.exe",
+				L"pe-sieve.exe",
+				L"pe-sieve64.exe",
+				L"processhacker.exe",
+				L"SystemInformer.exe",       // Process Hacker successor
+			};
+
+			HANDLE snap = CreateToolhelp32Snapshot( TH32CS_SNAPPROCESS, 0 );
+			bool hit = false;
+			if ( snap != INVALID_HANDLE_VALUE )
+			{
+				PROCESSENTRY32W pe{};
+				pe.dwSize = sizeof( pe );
+				if ( Process32FirstW( snap, &pe ) )
+				{
+					do
+					{
+						for ( auto* name : blocklist )
+						{
+							if ( _wcsicmp( pe.szExeFile, name ) == 0 )
+							{
+								diag::writef(
+									diag::level::warning,
+									"analysis tool detected: %ls",
+									pe.szExeFile );
+								hit = true;
+								break;
+							}
+						}
+					} while ( Process32NextW( snap, &pe ) );
+				}
+				CloseHandle( snap );
+			}
+
+			if ( hit )
+			{
+#if !defined( DEV )
+				TerminateProcess( GetCurrentProcess( ), 0xC0000005 );
+#endif
+			}
+		}
 
 		diag::step( "stage: done" );
 		return 1;

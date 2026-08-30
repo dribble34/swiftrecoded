@@ -1,4 +1,4 @@
-﻿#include <external/xorstr.hpp>
+#include <external/xorstr.hpp>
 
 #include <utilities/memory/memory.hpp>
 #include <utilities/addresses/addresses.hpp>
@@ -136,9 +136,9 @@ namespace features::misc {
 				container.style.border           = "1px solid rgba(255,255,255,0.18)";
 			}
 
-			// scoreboard rows cache their paint commands; deleting children while
-			// Panorama updates that cache can leave native panel refs dangling
-			// until the next paint pass, so keep panel identities stable
+			// Scoreboard rows cache their paint commands. Keep panel identities stable:
+			// deleting children while Panorama is updating that cache can leave native
+			// panel references dangling until the next paint pass.
 			var children = container.Children();
 			for (var i = 0; i < children.length; ++i) {
 				if (isValid(children[i])) children[i].style.visibility = "collapse";
@@ -162,8 +162,8 @@ namespace features::misc {
 
 		return {
 			update: function (xuid, account_id, weapons, active_path) {
-				// RunScript already enters this panel's V8 context; scheduling each
-				// update also churns CUIEngine's native async-event queue
+				// RunScript already enters this panel's V8 context. Scheduling each
+				// update additionally churns CUIEngine's native async-event queue.
 				updateNow(xuid, account_id, weapons, active_path);
 			},
 

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <array>
 #include <cstddef>
@@ -130,7 +130,6 @@ namespace rendering {
 		void watermark( xdraw::draw_list& draw_list );
 		void keybinds( xdraw::draw_list& draw_list );
 		void indicators( xdraw::draw_list& draw_list );
-		void crosshair_indicators( xdraw::draw_list& draw_list );
 	};
 
 	class fonts

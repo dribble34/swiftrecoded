@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -218,8 +218,6 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="project\utilities\anti_debug\impl\anti_debug.cpp" />
-    <MASM Include="project\utilities\anti_debug\impl\anti_debug_syscall.asm" />
     <ClCompile Include="project\utilities\addresses\impl\functions.cpp" />
     <ClCompile Include="project\utilities\addresses\impl\globals.cpp" />
     <ClCompile Include="project\utilities\addresses\impl\interfaces\engine_cvar.cpp" />
@@ -270,7 +268,6 @@
     <ClInclude Include="project\external\zydis\zydis.h" />
     <ClInclude Include="project\protection\game_addresses.hpp" />
     <ClInclude Include="project\protection\patterns.hpp" />
-    <ClInclude Include="project\utilities\anti_debug\anti_debug.hpp" />
     <ClInclude Include="project\utilities\addresses\addresses.hpp" />
     <ClInclude Include="project\utilities\addresses\interfaces.hpp" />
     <ClInclude Include="project\utilities\animation.hpp" />
@@ -285,6 +282,7 @@
     <ClInclude Include="project\utilities\random\random.hpp" />
     <ClInclude Include="project\utilities\steam\steam.hpp" />
     <ClInclude Include="project\utilities\threadpool\threadpool.hpp" />
+    <ClInclude Include="project\utilities\vmp.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

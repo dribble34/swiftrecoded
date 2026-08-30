@@ -131,12 +131,33 @@ namespace settings {
 
 				xui::setting triggerbot{ false, { VK_XBUTTON1, xui::bind_mode::hold_on }, "triggerbot", "legitbot" };
 				config::val<int> trigger_delay{ 5 };
+				config::val<int> trigger_delay_random{ 0 };
+				config::val<int> trigger_reaction{ 0 };
 				config::val<int> trigger_hitchance{ 80 };
 				xui::setting trigger_head_only{ false, {}, "trigger head only", "legitbot" };
 				xui::setting give_me_your_seed{ false, {}, "trigger seed mode", "legitbot" };
 
 				xui::setting autowall{ true, {}, "autowall", "legitbot" };
 				config::val<int> min_damage{ 101 };
+				xui::setting min_damage_override{ false, { VK_XBUTTON2, xui::bind_mode::hold_on }, "min damage override", "legitbot" };
+				config::val<int> min_damage_override_value{ 15 };
+
+				// Humanization & Overshoot
+				xui::setting humanization_simple{ false, {}, "humanization simple", "legitbot" };
+				xui::setting humanization_advanced{ false, {}, "humanization advanced", "legitbot" };
+				config::val<int> overshoot_chance{ 0 };
+				config::val<float> overshoot_amount{ 1.0f };
+
+				// Multi-point & Checks
+				xui::setting multipoint{ false, {}, "multipoint", "legitbot" };
+				config::val<float> multipoint_scale{ 60.0f };
+				xui::setting flash_check{ true, {}, "flash check", "legitbot" };
+				xui::setting air_check{ true, {}, "air check", "legitbot" };
+				xui::setting smoke_check{ true, {}, "smoke check", "legitbot" };
+				config::val<int> aim_reaction{ 0 };
+
+				// Autostop for legitbot
+				xui::setting autostop{ false, {}, "autostop", "legitbot" };
 
 				xui::setting visualize_fov{ true, {}, "visualize fov", "legitbot" };
 				config::col fov_color{ { 255, 255, 255, 150 } };
@@ -152,6 +173,14 @@ namespace settings {
 					this->trigger_head_only.category = s;
 					this->give_me_your_seed.category = s;
 					this->autowall.category = s;
+					this->min_damage_override.category = s;
+					this->humanization_simple.category = s;
+					this->humanization_advanced.category = s;
+					this->multipoint.category = s;
+					this->flash_check.category = s;
+					this->air_check.category = s;
+					this->smoke_check.category = s;
+					this->autostop.category = s;
 					this->visualize_fov.category = s;
 
 					this->fov.reg( s, "fov" );
@@ -163,8 +192,15 @@ namespace settings {
 					this->standalone_rcs_min.reg( s, "standalone rcs min" );
 					this->standalone_rcs_max.reg( s, "standalone rcs max" );
 					this->trigger_delay.reg( s, "trigger delay" );
+					this->trigger_delay_random.reg( s, "trigger delay random" );
+					this->trigger_reaction.reg( s, "trigger reaction" );
 					this->trigger_hitchance.reg( s, "trigger hitchance" );
 					this->min_damage.reg( s, "min damage" );
+					this->min_damage_override_value.reg( s, "min damage override value" );
+					this->overshoot_chance.reg( s, "overshoot chance" );
+					this->overshoot_amount.reg( s, "overshoot amount" );
+					this->multipoint_scale.reg( s, "multipoint scale" );
+					this->aim_reaction.reg( s, "aim reaction" );
 					this->fov_color.reg( s, "fov color" );
 				}
 			};
@@ -296,10 +332,12 @@ namespace settings {
 		struct penetration_crosshair
 		{
 			xui::setting enabled{ false, {}, "penetration crosshair", "pen crosshair" };
-			config::col can_penetrate_fill{ { 173, 192, 255, 120 }, "pen crosshair", "can penetrate fill" };
-			config::col can_penetrate_outline{ { 173, 192, 255, 210 }, "pen crosshair", "can penetrate outline" };
-			config::col blocked_fill{ { 252, 217, 240, 80 }, "pen crosshair", "blocked fill" };
-			config::col blocked_outline{ { 252, 217, 240, 160 }, "pen crosshair", "blocked outline" };
+			config::val<float> size{ 4.0f, "pen crosshair", "size" };
+			config::val<float> outline_thickness{ 1.0f, "pen crosshair", "outline thickness" };
+			config::col can_penetrate_fill{ { 0, 200, 70, 110 }, "pen crosshair", "can penetrate fill" };
+			config::col can_penetrate_outline{ { 0, 0, 0, 230 }, "pen crosshair", "can penetrate outline" };
+			config::col blocked_fill{ { 220, 40, 40, 100 }, "pen crosshair", "blocked fill" };
+			config::col blocked_outline{ { 0, 0, 0, 230 }, "pen crosshair", "blocked outline" };
 			xui::setting glow{ true, {}, "glow", "pen crosshair" };
 			config::val<float> glow_strength{ 1.0f, "pen crosshair", "glow strength" };
 		} m_penetration_crosshair{};
@@ -977,6 +1015,7 @@ namespace settings {
 		{
 			xui::setting clantag{ false, {}, "clantag", "name changer" };
 			config::val<int> clantag_type{ 0, "name changer", "clantag type" }; // 0: static, 1: scroll, 2: reverse scroll, 3: wave/typewriter
+			config::val<int> clantag_font{ 0, "name changer", "clantag font" }; // 0: default, 1: monospace, 2: double-struck, 3: sans-bold, 4: sans-italic, 5: serif-bold-italic
 			xui::setting override_name{ false, {}, "override name", "name changer" };
 			config::str name{ "Player", "name changer", "name" };
 		} m_name_changer{};
@@ -1001,9 +1040,6 @@ namespace settings {
 			enum class marker_type : int { basic, fortnite, classic, damage, both };
 			enum class bullet_impact_type : int { overlay, sparks, both };
 			enum class death_effect_type : int { classic, sparks };
-			enum class log_mode : int { screen_text, screen_widget, console };
-
-			config::enm<log_mode> log_display_mode{ log_mode::screen_widget, "impacts", "log display mode" };
 
 			xui::setting hit_log{ true, {}, "hit logs", "impacts" };
 			config::val<float> hit_log_duration{ 3.5f, "impacts", "hit log duration" };
@@ -1038,7 +1074,7 @@ namespace settings {
 			config::col bullet_impact_effect_edge_color{ { 173, 192, 255, 255 }, "impacts", "bullet impact edge color" };
 			config::col bullet_impact_effect_color_spark{ { 173, 192, 255, 255 }, "impacts", "bullet impact spark color" };
 			config::val<float> bullet_impact_effect_duration{ 2.5f, "impacts", "bullet impact duration" };
-			config::val<float> bullet_impact_effect_size{ 6.0f, "bullet impacts", "size" };
+			config::val<float> bullet_impact_effect_size{ 2.5f, "bullet impacts", "size" };
 			xui::setting bullet_impact_effect_glow{ true, {}, "glow", "bullet impacts" };
 			config::val<float> bullet_impact_effect_glow_strength{ 1.0f, "bullet impacts", "glow strength" };
 
@@ -1081,7 +1117,7 @@ namespace settings {
 			config::val<float> thirdperson_hull_size{ 12.0f, "camera", "thirdperson hull size" };
 
 			xui::setting freecam{ false, { VK_XBUTTON2, xui::bind_mode::toggle }, "freecam", "camera" };
-			// units per second (running is ~250 for reference)
+			// units per second -- running is roughly 250 for reference
 			config::val<float> freecam_speed{ 300.0f, "camera", "freecam speed" };
 
 			xui::setting change_aspect_ratio{ false, {}, "custom aspect ratio", "camera" };
@@ -1166,19 +1202,8 @@ namespace settings {
 			xui::setting show_velocity{ true, {}, "show velocity", "watermark" };
 		} m_watermark{};
 
-		enum class keybind_scale : std::uint8_t { half, three_quarter, full, one_half };
-
 		xui::setting keybinds_enabled{ true, {}, "keybinds", "widgets" };
-		config::enm<keybind_scale> keybind_scale_value{ keybind_scale::full, "widgets", "keybind scale" };
 		xui::setting indicators_enabled{ true, {}, "indicators", "widgets" };
-
-		struct crosshair_indicators_cfg
-		{
-			xui::setting enabled{ true, {}, "crosshair indicators", "widgets" };
-			config::col color{ { 173, 192, 255, 255 }, "widgets", "crosshair indicators color" };
-			xui::setting glow{ true, {}, "crosshair indicators glow", "widgets" };
-			config::val<float> glow_strength{ 0.55f, "widgets", "crosshair indicators glow strength" };
-		} m_crosshair_indicators{};
 	};
 
 	struct movement
@@ -1186,6 +1211,12 @@ namespace settings {
 		xui::setting bhop{ true, {}, "bhop", "movement" };
 		xui::setting airstrafe{ true, {}, "airstrafe", "movement" };
 		xui::setting airstrafe_fully_directional{ true, {}, "fully directional", "movement - airstrafe" };
+		xui::setting strafe_boost{ false, {}, "strafe boost", "movement - airstrafe" };
+		config::val<float> strafe_boost_value{ 1.0f, "movement - airstrafe", "strafe boost value" };
+
+		xui::setting slide_walk{ false, {}, "slide walk", "movement" };
+		xui::setting quick_stop{ false, {}, "quick stop", "movement" };
+
 		xui::setting jumpbug{ true, {}, "jumpbug", "movement" };
 		xui::setting fastladder{ true, {}, "fastladder", "movement" };
 		xui::setting edgejump{ false, { 'E', xui::bind_mode::hold_on}, "edgejump", "movement" };

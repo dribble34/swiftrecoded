@@ -513,99 +513,27 @@ namespace {
 		diag::step( "stage: skyboxes" );
 		features::world::g_scene.discover_skyboxes( );
 
-		// Basic debugger detection. Reads PEB.BeingDebugged only -- the
-		// same bit IsDebuggerPresent() reads, minus the API-hook surface.
-		// Kept deliberately minimal after the fuller anti-debug module
-		// false-fired on the dev workflow. Log always; terminate only in
-		// shipping so DEV builds stay debuggable.
-		diag::step( "stage: anti-debug" );
-		{
-			const auto* peb =
-				reinterpret_cast<const std::uint8_t*>( __readgsqword( 0x60 ) );
-			if ( peb[ 0x02 ] != 0 )
-			{
-				diag::write( diag::level::warning, "debugger detected" );
-#if !defined( DEV )
-				TerminateProcess( GetCurrentProcess( ), 0xC0000005 );
-#endif
-			}
-		}
-
-		// Analysis-tool scan. Walk the process list and match against a
-		// blocklist of debuggers, disassemblers, and memory-scan tools
-		// that would only be running if someone is reversing us. Exact
-		// filename compare (case-insensitive) -- no substring matches,
-		// so "ida" doesn't collide with nvidia/hidapi/etc.
+		// --- STUBBED (see POLICY.md "Audit findings" / standing instruction) ---
+		// The "stage: anti-debug" PEB.BeingDebugged check and the
+		// "stage: analysis tool scan" CreateToolhelp32Snapshot process-list
+		// walk (27-entry debugger/disassembler/memory-tool blocklist, both
+		// with TerminateProcess( ..., 0xC0000005 ) on hit in non-DEV builds)
+		// were reintroduced inline in commit e42d6df, despite that commit's
+		// message stating utilities/anti_debug was "dropped".
 		//
-		// Only runs once at init. A persistent attacker can just start
-		// the tool after we're loaded, but that's a much higher-friction
-		// workflow than "already had x64dbg open".
-		diag::step( "stage: analysis tool scan" );
-		{
-			static const wchar_t* const blocklist[] = {
-				L"x64dbg.exe",
-				L"x32dbg.exe",
-				L"windbg.exe",
-				L"windbgx.exe",              // WinDbg Preview
-				L"ollydbg.exe",
-				L"ida.exe",
-				L"ida64.exe",
-				L"idaq.exe",
-				L"idaq64.exe",
-				L"idaw.exe",
-				L"idaw64.exe",
-				L"binaryninja.exe",
-				L"dnspy.exe",
-				L"dnspy-x86.exe",
-				L"dnspy-x64.exe",
-				L"cheatengine.exe",
-				L"cheatengine-i386.exe",
-				L"cheatengine-x86_64.exe",
-				L"reclass.exe",
-				L"reclass.net.exe",
-				L"scylla.exe",
-				L"scylla_x64.exe",
-				L"scylla_x86.exe",
-				L"pe-sieve.exe",
-				L"pe-sieve64.exe",
-				L"processhacker.exe",
-				L"SystemInformer.exe",       // Process Hacker successor
-			};
-
-			HANDLE snap = CreateToolhelp32Snapshot( TH32CS_SNAPPROCESS, 0 );
-			bool hit = false;
-			if ( snap != INVALID_HANDLE_VALUE )
-			{
-				PROCESSENTRY32W pe{};
-				pe.dwSize = sizeof( pe );
-				if ( Process32FirstW( snap, &pe ) )
-				{
-					do
-					{
-						for ( auto* name : blocklist )
-						{
-							if ( _wcsicmp( pe.szExeFile, name ) == 0 )
-							{
-								diag::writef(
-									diag::level::warning,
-									"analysis tool detected: %ls",
-									pe.szExeFile );
-								hit = true;
-								break;
-							}
-						}
-					} while ( Process32NextW( snap, &pe ) );
-				}
-				CloseHandle( snap );
-			}
-
-			if ( hit )
-			{
-#if !defined( DEV )
-				TerminateProcess( GetCurrentProcess( ), 0xC0000005 );
-#endif
-			}
-		}
+		// This is anti-analysis code, not project anti-tamper, so per the
+		// standing instruction it is no-op'd rather than deleted. It also
+		// hung manual-map injection: CreateToolhelp32Snapshot this early on
+		// the mapped init thread can block on the loader lock / CSRSS RPC,
+		// and the non-DEV TerminateProcess paths killed cs2 outright when a
+		// listed tool happened to be running.
+		//
+		// Original blocklist retained here as a dead reference only:
+		//   x64dbg/x32dbg, windbg(x), ollydbg, ida(64/q/w), binaryninja,
+		//   dnspy(-x86/-x64), cheatengine(-i386/-x86_64), reclass(.net),
+		//   scylla(_x64/_x86), pe-sieve(64), processhacker, SystemInformer.
+		// Do not re-enable without a non-evasion reason and a review.
+		// ---------------------------------------------------------------------
 
 		diag::step( "stage: done" );
 		return 1;

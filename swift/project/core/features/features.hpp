@@ -93,6 +93,7 @@ namespace features {
 		inline gloves g_gloves{};
 		inline guns g_guns{};
 		inline knives g_knives{};
+		inline inventory g_inventory{};
 
 	} 
 

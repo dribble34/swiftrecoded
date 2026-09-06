@@ -13,6 +13,8 @@ namespace features::combat {
 
 		if ( !settings::g_combat.m_antiaim.enabled.value )
 		{
+			// slide walk works independently of anti aim.
+			this->apply_standalone_slide_walk( cmd );
 			return;
 		}
 
@@ -45,6 +47,8 @@ namespace features::combat {
 		const auto view_angles = systems::g_input.get_view_angles( );
 		const auto& ctx = g_shared.ctx( );
 
+		// interagieren: aa komplett aus, echte winkel behalten ( sonst laeuft man
+		// rueckwaerts / kann nicht sauber defusen ). fake-pitch wuerde eh geclampt.
 		if ( cmd->buttons.value & cstypes::command_buttons::in_use )
 		{
 			return;
@@ -71,19 +75,80 @@ namespace features::combat {
 
 		this->m_old_angles = view_angles;
 		this->m_antiaim_active = true;
+		this->m_jitter = !this->m_jitter; // jitter-seite pro tick wechseln
 
 		this->m_modified_angles = this->m_old_angles;
 		this->m_modified_angles.x = this->get_pitch( this->m_old_angles.x );
 		this->m_modified_angles.y = this->get_yaw( this->m_old_angles, local );
 
+		// preserve invalid pitch: normalize_angles folds pitch back into [-89, 89],
+		// so keep our wanted pitch and only let it normalize yaw / zero roll.
+		const float wanted_pitch = this->m_modified_angles.x;
 		math::helpers::normalize_angles( this->m_modified_angles );
+		this->m_modified_angles.x = wanted_pitch;
 
-		base->mutable_viewangles( )->set_x( this->m_modified_angles.x );
+		// slide walk: erzwinge pitch/roll nur am boden ( in der luft wuerde es den
+		// autostrafer stoeren ).
+		float out_pitch = this->m_modified_angles.x;
+		float out_roll  = this->m_modified_angles.z;
+		const auto grounded = ( systems::g_prediction.pre( ).flags & cstypes::entity_flags::on_ground ) != 0;
+		if ( settings::g_movement.slide_walk && grounded )
+		{
+			out_pitch = 90.0f;
+			out_roll  = 179.9f;
+		}
+		else if ( !grounded )
+		{
+			// luft: gueltiger pitch ( +-89 ) + roll 0, damit der strafer nicht bricht.
+			out_pitch = out_pitch >= 0.0f ? 89.0f : -89.0f;
+			out_roll  = 0.0f;
+		}
+
+		// bewegungskorrektur nutzt m_send_angles ( echte gesendete winkel )
+		this->m_send_angles = { out_pitch, this->m_modified_angles.y, out_roll };
+
+		base->mutable_viewangles( )->set_x( out_pitch );
 		base->mutable_viewangles( )->set_y( this->m_modified_angles.y );
-		base->mutable_viewangles( )->set_z( this->m_modified_angles.z );
+		base->mutable_viewangles( )->set_z( out_roll );
 
 		this->m_should_correct = true;
 
+		this->correct_movement( cmd );
+	}
+
+	void misc::antiaim::apply_standalone_slide_walk( systems::input::usercmd* cmd )
+	{
+		if ( !settings::g_movement.slide_walk )
+		{
+			return;
+		}
+
+		const auto local = systems::g_local.get( );
+		if ( !local.pawn )
+		{
+			return;
+		}
+
+		const auto move_type = memory::read<int>( local.pawn + SCHEMA( "C_BaseEntity", "m_nActualMoveType"_hash ) );
+		if ( move_type == cstypes::move_type::ladder || move_type == cstypes::move_type::noclip )
+		{
+			return;
+		}
+
+		const auto base = cmd->csgo_user_cmd.mutable_base( );
+		const auto view_angles = systems::g_input.get_view_angles( );
+
+		this->m_yaw_side = 0;
+		this->m_old_angles = view_angles;
+
+		// anti-aim is off: keep the real pitch/yaw ( pitch stays normal ) and only apply
+		// the slide-walk roll.
+		base->mutable_viewangles( )->set_x( view_angles.x );
+		base->mutable_viewangles( )->set_y( view_angles.y );
+		base->mutable_viewangles( )->set_z( 180.0f );
+		this->m_send_angles = { view_angles.x, view_angles.y, 180.0f };
+
+		this->m_should_correct = true;
 		this->correct_movement( cmd );
 	}
 
@@ -200,17 +265,24 @@ namespace features::combat {
 
 	float misc::antiaim::get_pitch( float view_pitch )
 	{
-		switch ( settings::g_combat.m_antiaim.pitch )
+		const auto& aa = settings::g_combat.m_antiaim;
+
+		float pitch;
+		switch ( aa.pitch )
 		{
-		case settings::combat::antiaim::pitch_mode::down:
-			return 89.0f;
-		case settings::combat::antiaim::pitch_mode::up:
-			return -89.0f;
-		case settings::combat::antiaim::pitch_mode::custom:
-			return std::clamp( settings::g_combat.m_antiaim.custom_pitch.value, -90.0f, 90.0f );
-		default:
-			return view_pitch;
+		case settings::combat::antiaim::pitch_mode::down:   pitch = 89.0f; break;
+		case settings::combat::antiaim::pitch_mode::up:     pitch = -179.0f; break;
+		case settings::combat::antiaim::pitch_mode::custom: pitch = std::clamp( aa.custom_pitch.value, -180.0f, 180.0f ); break;
+		default:                                            pitch = view_pitch; break;
 		}
+
+		// jitter: wechselt pro tick die seite
+		if ( aa.pitch_jitter.value )
+		{
+			pitch += this->m_jitter ? aa.pitch_jitter_amount.value : -aa.pitch_jitter_amount.value;
+		}
+
+		return pitch;
 	}
 
 	float misc::antiaim::get_yaw( const math::vector3& view_angles, const systems::local::snapshot& local )
@@ -239,7 +311,7 @@ namespace features::combat {
 		const auto players = systems::g_entities.get_by_type( systems::entities::type::player );
 		const auto eye_pos = local_origin + memory::read<math::vector3>( local.pawn + SCHEMA( "C_BaseModelEntity", "m_vecViewOffset"_hash ) );
 
-		if ( settings::g_combat.m_antiaim.avoid_backstab.value )
+		if ( settings::g_combat.m_antiaim.antibackstab.value )
 		{
 			constexpr auto backstab_range_sq = 350.0f * 350.0f;
 			auto knife_dist = std::numeric_limits<float>::max( );
@@ -332,10 +404,11 @@ namespace features::combat {
 				}
 			}
 
+			// messer in der naehe -> aa nach vorne kippen ( front zum gegner )
 			if ( knife_found )
 			{
-				this->m_indicator_yaw = knife_yaw;
-				return knife_yaw;
+				this->m_indicator_yaw = view_angles.y;
+				return view_angles.y;
 			}
 		}
 
@@ -417,12 +490,21 @@ namespace features::combat {
 				return best_threat_score < std::numeric_limits<float>::max( ) ? std::optional<float>{ best_yaw } : std::nullopt;
 			};
 
-		if ( settings::g_combat.m_antiaim.at_target.value && !settings::g_combat.m_antiaim.use_view_yaw.value )
+		// at target: yaw zum gegner drehen ( unabhaengig von use_view_yaw )
+		if ( settings::g_combat.m_antiaim.at_target.value )
 		{
 			if ( const auto target_yaw = pick_target_yaw( ) )
 			{
 				base_yaw = *target_yaw;
 			}
+		}
+
+		// spin: dreht den yaw kontinuierlich um die echte sicht
+		if ( settings::g_combat.m_antiaim.yaw == settings::combat::antiaim::yaw_mode::spin )
+		{
+			this->m_spin_yaw += settings::g_combat.m_antiaim.spin_speed.value;
+			math::helpers::normalize_angle( this->m_spin_yaw );
+			base_yaw = view_yaw + this->m_spin_yaw;
 		}
 
 		auto indicator = base_yaw;
@@ -448,7 +530,14 @@ namespace features::combat {
 		}
 
 		if (settings::g_combat.m_antiaim.auto_yaw_adjust.value)
-			yaw += 33.0f; 
+			yaw += 33.0f;
+
+		// jitter: wechselt pro tick die seite
+		if ( settings::g_combat.m_antiaim.yaw_jitter.value )
+		{
+			const auto amt = settings::g_combat.m_antiaim.yaw_jitter_amount.value;
+			yaw += this->m_jitter ? amt : -amt;
+		}
 
 		return yaw;
 	}
@@ -461,6 +550,16 @@ namespace features::combat {
 
 		this->m_should_correct = false;
 
+		// luft + autostrafer aktiv: der strafer korrigiert die richtung schon per
+		// yaw-subtick. hier NICHT nochmal drehen ( sonst doppelte korrektur -> laeuft
+		// bei rueckwaerts/spin seitwaerts oder rueckwaerts ).
+		if ( settings::g_movement.airstrafe.value
+			&& !( systems::g_prediction.pre( ).flags & cstypes::entity_flags::on_ground ) )
+		{
+			this->m_quantizer = {};
+			return;
+		}
+
 		const auto base = cmd->csgo_user_cmd.mutable_base ();
 		const auto forward_move = base->forwardmove ();
 		const auto side_move = base->leftmove ();
@@ -471,7 +570,7 @@ namespace features::combat {
 		}
 
 		math::vector3 new_forward {}, new_left {};
-		math::helpers::angle_vectors_left (this->m_modified_angles, &new_forward, &new_left, nullptr);
+		math::helpers::angle_vectors_left (this->m_send_angles, &new_forward, &new_left, nullptr);
 
 		math::vector3 old_forward {}, old_left {};
 		math::helpers::angle_vectors_left (this->m_old_angles, &old_forward, &old_left, nullptr);
@@ -504,14 +603,21 @@ namespace features::combat {
 			
 			
 			
-			const auto snapped_forward = wanted_forward + this->m_quantizer.forward_error;
-			const auto snapped_side = wanted_side + this->m_quantizer.side_error;
+			// KEIN fehler-akkumulator hier: der liess cardinal-richtungen ( die durch die
+			// aa-drehung auf ~45 grad projizieren -> beide achsen ~0.7 ) periodisch unter
+			// 0.5 fallen -> (0,0)-ticks -> abbremsen -> langsamer als diagonal.
+			auto quant_forward = wanted_forward >= 0.5f ? 1 : ( wanted_forward <= -0.5f ? -1 : 0 );
+			auto quant_side = wanted_side >= 0.5f ? 1 : ( wanted_side <= -0.5f ? -1 : 0 );
 
-			const auto quant_forward = snapped_forward >= 0.5f ? 1 : ( snapped_forward <= -0.5f ? -1 : 0 );
-			const auto quant_side = snapped_side >= 0.5f ? 1 : ( snapped_side <= -0.5f ? -1 : 0 );
-
-			this->m_quantizer.forward_error = snapped_forward - static_cast< float >( quant_forward );
-			this->m_quantizer.side_error = snapped_side - static_cast< float >( quant_side );
+			// nie (0,0) senden wenn bewegung gewollt ist -> dominante achse erzwingen,
+			// damit jede richtung volle geschwindigkeit behaelt.
+			if ( quant_forward == 0 && quant_side == 0 )
+			{
+				if ( std::fabsf( wanted_forward ) >= std::fabsf( wanted_side ) )
+					quant_forward = wanted_forward >= 0.0f ? 1 : -1;
+				else
+					quant_side = wanted_side >= 0.0f ? 1 : -1;
+			}
 
 			corrected_forward = static_cast< float >( quant_forward );
 			corrected_side = static_cast< float >( quant_side );
@@ -858,8 +964,76 @@ namespace features::combat {
 		this->m_prev_movement_bits = 0;
 	}
 
+	bool misc::autostop::handle_quick_stop( systems::input::usercmd* cmd )
+	{
+		if ( !settings::g_movement.quick_stop )
+		{
+			return false;
+		}
+
+		// only kick in once the player has released every movement key, so we are
+		// killing leftover momentum rather than fighting active input.
+		const auto move_bits = static_cast< std::uintptr_t >(
+			cstypes::command_buttons::in_forward | cstypes::command_buttons::in_back |
+			cstypes::command_buttons::in_moveleft | cstypes::command_buttons::in_moveright );
+		if ( cmd->buttons.value & move_bits )
+		{
+			return false;
+		}
+
+		const auto& prestate = systems::g_prediction.pre( );
+		if ( !( prestate.flags & cstypes::entity_flags::on_ground ) )
+		{
+			return false; // counter-strafing only makes sense with ground friction
+		}
+
+		const auto base = cmd->csgo_user_cmd.mutable_base( );
+		const auto velocity = prestate.networked_velocity;
+		const auto speed = velocity.length_2d( );
+
+		// below the cutoff: stop sending inputs entirely and let friction settle the
+		// rest. counter-strafing this slow overshoots past zero and jitters forever.
+		if ( speed < 10.0f )
+		{
+			base->set_forwardmove( 0.0f );
+			base->set_leftmove( 0.0f );
+			return true;
+		}
+
+		// projiziere gegen die vollen gesendeten winkel ( yaw+pitch+roll ) - der server
+		// nutzt dieselbe basis, also stimmt die richtung unabhaengig von aa.
+		const math::vector3 sent{ base->viewangles( )->x( ), base->viewangles( )->y( ), base->viewangles( )->z( ) };
+		math::vector3 fwd{}, left{};
+		math::helpers::angle_vectors_left( sent, &fwd, &left );
+		fwd.z = 0.0f; left.z = 0.0f;
+		fwd.normalize( ); left.normalize( );
+
+		const auto inv_speed = 1.0f / speed;
+		const math::vector3 wish{ -velocity.x * inv_speed, -velocity.y * inv_speed, 0.0f };
+
+		const auto forward_move = std::clamp( fwd.dot( wish ), -1.0f, 1.0f );
+		const auto left_move = std::clamp( -left.dot( wish ), -1.0f, 1.0f );
+
+		base->set_forwardmove( forward_move );
+		base->set_leftmove( left_move );
+
+		auto buttons = cmd->buttons.value;
+		if ( forward_move > 0.0f ) { buttons |= cstypes::command_buttons::in_forward; }
+		else if ( forward_move < 0.0f ) { buttons |= cstypes::command_buttons::in_back; }
+		if ( left_move > 0.0f ) { buttons |= cstypes::command_buttons::in_moveleft; }
+		else if ( left_move < 0.0f ) { buttons |= cstypes::command_buttons::in_moveright; }
+		cmd->buttons.value = buttons;
+
+		return true;
+	}
+
 	void misc::autostop::on_create_move( systems::input::usercmd* cmd )
 	{
+		if ( this->handle_quick_stop( cmd ) )
+		{
+			return; // manual quick-stop handled this tick
+		}
+
 		if ( !features::combat::g_rage.should_stop( ) )
 		{
 			return;
@@ -871,133 +1045,72 @@ namespace features::combat {
 		const auto& prestate = systems::g_prediction.pre( );
 		const auto& ctx = g_shared.ctx( );
 
-		const auto& config = settings::g_combat.m_ragebot.get_group( ctx.weapon_type );
 		const auto on_ground = ( prestate.flags & cstypes::entity_flags::on_ground ) != 0;
 
-		auto velocity = prestate.networked_velocity;
-		auto speed = velocity.length_2d( );
-
-		if ( speed <= 1.0f )
-		{
-			return;
-		}
+		const auto& velocity = prestate.networked_velocity;
+		const auto speed = velocity.length_2d( );
 
 		if ( !on_ground )
 		{
-			
-			
-			
-			
-			
-			if ( CONVAR ("sv_quantize_movement_input")->get<bool>( ) )
+			if ( speed > 1.0f )
 			{
-				const auto inv_speed = 1.0f / speed;
-				this->apply_counter_strafe( cmd, -velocity.x * inv_speed, -velocity.y * inv_speed, 1.0f );
+				// with quantized input create_move runs test_strafer instead of the
+				// airstrafer, so nothing else brakes us and we do it here. without it,
+				// sprint is what airstrafe watches for to run its own air stop.
+				if ( CONVAR ("sv_quantize_movement_input")->get<bool>( ) )
+				{
+					const auto inv_speed = 1.0f / speed;
+					this->apply_counter_strafe( cmd, -velocity.x * inv_speed, -velocity.y * inv_speed );
+				}
+				else
+				{
+					cmd->buttons.value |= static_cast< std::uintptr_t >( cstypes::command_buttons::in_sprint );
+				}
 			}
-			else
-			{
-				cmd->buttons.value |= static_cast< std::uintptr_t >( cstypes::command_buttons::in_sprint );
-			}
+
 			return;
 		}
 
-		const auto sv_friction = CONVAR ("sv_friction")->get<float>( );
-		const auto sv_stopspeed = CONVAR ("sv_stopspeed")->get<float>( );
-		const auto surface_friction = prestate.surface_friction;
-
-		const auto control = std::fmaxf( speed, sv_stopspeed );
-		const auto drop = control * sv_friction * surface_friction * cstypes::tick_interval;
-		const auto post_friction = std::fmaxf( speed - drop, 0.0f );
-
-		if ( post_friction > 0.0f )
-		{
-			velocity *= ( post_friction / speed );
-			speed = post_friction;
-		}
-		else
-		{
-			base->set_forwardmove( 0.0f );
-			base->set_leftmove( 0.0f );
-			return;
-		}
-
-		if ( speed < 2.0f )
-		{
-			base->set_forwardmove( 0.0f );
-			base->set_leftmove( 0.0f );
-			return;
-		}
-
-		auto accel = CONVAR ("sv_accelerate")->get<float>( );
+		// a full counter-strafe adds up to one tick of acceleration in the opposite
+		// direction, so once less speed than that is left it pushes past zero and the
+		// stop oscillates. cut the input there and let friction settle the remainder,
+		// the same cutoff quick stop uses -- derived rather than fixed because the
+		// achievable deceleration halves again while ducked or scoped.
 		const auto accel_base = this->get_effective_accel_base( local.pawn, movement_services, prestate.flags, ctx.weapon_max_speed );
+		const auto max_decel = CONVAR ("sv_accelerate")->get<float>( ) * accel_base * prestate.surface_friction * cstypes::tick_interval;
 
-		if ( ctx.is_scoped )
+		if ( speed < std::fmaxf( max_decel, 1.0f ) )
 		{
-			const auto weapon_ratio = std::fminf( 1.0f, ctx.weapon_max_speed / 250.0f );
-			const auto v20 = std::fmaxf( 250.0f, memory::read<float>( movement_services + SCHEMA( "CPlayer_MovementServices", "m_flMaxspeed"_hash ) ) ) * weapon_ratio;
-			const auto scoped_max = v20 * 0.52f;
-
-			if ( speed > scoped_max - 5.0f )
-			{
-				const auto t = 1.0f - std::fmaxf( 0.0f, speed - ( scoped_max - 5.0f ) ) / std::fmaxf( 0.01f, 5.0f );
-				accel *= std::clamp( t, 0.0f, 1.0f );
-			}
+			base->set_forwardmove( 0.0f );
+			base->set_leftmove( 0.0f );
+			return;
 		}
 
-		const auto wish_x = -velocity.x / speed;
-		const auto wish_y = -velocity.y / speed;
-		// the most speed the engine can shave off this tick at full input
-		const auto max_decel = accel * accel_base * surface_friction * cstypes::tick_interval;
-		const auto accel_speed = std::fminf( max_decel, speed );
-
-		velocity.x += wish_x * accel_speed;
-		velocity.y += wish_y * accel_speed;
-
-		
-		
-		// use whatever fraction of full input actually cancels the remaining
-		// speed, tapering only once it drops below one tick of acceleration.
-		// scaling by speed / weapon_max_speed is a different quantity and ran
-		// the stop at a fraction of the available deceleration.
-		auto move_magnitude = max_decel > 0.0f
-			? std::clamp( speed / max_decel, 0.0f, 1.0f )
-			: 1.0f;
-		if ( config.autostop_early.value )
-		{
-			move_magnitude = std::clamp( move_magnitude, 0.35f, 1.0f );
-		}
-
-		this->apply_counter_strafe( cmd, wish_x, wish_y, move_magnitude );
+		const auto inv_speed = 1.0f / speed;
+		this->apply_counter_strafe( cmd, -velocity.x * inv_speed, -velocity.y * inv_speed );
 	}
 
-	void misc::autostop::apply_counter_strafe( systems::input::usercmd* cmd, float wish_x, float wish_y, float move_magnitude )
+	void misc::autostop::apply_counter_strafe( systems::input::usercmd* cmd, float wish_x, float wish_y )
 	{
 		const auto base = cmd->csgo_user_cmd.mutable_base( );
-		const auto& prestate = systems::g_prediction.pre( );
 
-		const auto yaw_rad = base->viewangles( )->y( ) * ( std::numbers::pi_v<float> / 180.0f );
-		const auto sy = std::sinf( yaw_rad );
-		const auto cy = std::cosf( yaw_rad );
+		// projiziere gegen die vollen gesendeten winkel ( gleiche basis wie der server ).
+		const math::vector3 sent{ base->viewangles( )->x( ), base->viewangles( )->y( ), base->viewangles( )->z( ) };
+		math::vector3 fwd{}, left{};
+		math::helpers::angle_vectors_left( sent, &fwd, &left );
+		fwd.z = 0.0f; left.z = 0.0f;
+		fwd.normalize( ); left.normalize( );
 
-		const auto forward_move = std::clamp( ( wish_x * cy + wish_y * sy ) * move_magnitude, -1.0f, 1.0f );
-		const auto left_move = std::clamp( ( wish_x * sy - wish_y * cy ) * -move_magnitude, -1.0f, 1.0f );
+		const math::vector3 wish{ wish_x, wish_y, 0.0f };
+		const auto forward_move = std::clamp( fwd.dot( wish ), -1.0f, 1.0f );
+		const auto left_move = std::clamp( -left.dot( wish ), -1.0f, 1.0f );
 
 		base->set_forwardmove( forward_move );
 		base->set_leftmove( left_move );
 
-		const auto subtick_moves = base->mutable_subtick_moves( );
-		if ( subtick_moves )
-		{
-			const auto step = systems::g_input.acquire_subtick_step( subtick_moves );
-			if ( step )
-			{
-				step->set_button( 0 );
-				step->set_pressed( false );
-				step->set_when( 0.0f );
-				step->set_analog_forward_delta( forward_move - prestate.last_movement_impulses.x );
-				step->set_analog_left_delta( left_move - prestate.last_movement_impulses.y );
-			}
-		}
+		// deliberately no subtick step: writing one makes create_move zero the base
+		// move values it just set, and suppresses the equivalent step input::apply
+		// writes from the final values. quick stop brakes on that same path.
 
 		if ( forward_move > 0.0f )
 		{

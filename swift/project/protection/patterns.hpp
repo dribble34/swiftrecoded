@@ -144,6 +144,7 @@ namespace patterns {
 	inline constexpr std::string_view weapon_update_composite_material = "client.dll:48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 44 0F B6 F2 48 8B F9";
 	inline constexpr std::string_view weapon_update_mesh = "client.dll:> E8 ?? ?? ?? ?? 49 8D 8C 24 08 06 00 00";
 	inline constexpr std::string_view weapon_update_skin = "client.dll:40 55 53 41 57 48 8D AC 24 00 FE FF FF 48 81 EC 00 03 00 00 44 0F B6 FA 48 8B D9";
+	inline constexpr std::string_view get_item_in_loadout = "client.dll:40 55 48 83 EC 30 49 63 E8";
 	inline constexpr std::string_view econ_item_view_set_attribute = "client.dll:40 53 48 83 EC 20 48 8B D9 48 81 C1 08 02 00 00";
 	inline constexpr std::string_view econ_item_view_remove_attribute = "client.dll:40 53 48 83 EC 20 48 63 81 ?? ?? ?? ?? 44 0F B7 CA";
 	inline constexpr std::string_view econ_item_view_invalidate_description = "client.dll:48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC 20 48 8D B9 ?? ?? ?? ?? 48 8B F1";

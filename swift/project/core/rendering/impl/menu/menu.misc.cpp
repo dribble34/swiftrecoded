@@ -252,7 +252,7 @@ namespace rendering {
 						xui::checkbox( "strafe boost", mov.strafe_boost );
 						if ( mov.strafe_boost.value )
 						{
-							xui::slider_float( "boost amount", mov.strafe_boost_value, 0.1f, 5.0f, "%.1f" );
+							xui::slider_float( "subticks", mov.strafe_boost_value, 2.0f, 16.0f, "%.0f" );
 						}
 						xui::end_popup( );
 					}
@@ -293,6 +293,7 @@ namespace rendering {
 				xui::checkbox( "reveal radar", m.reveal_radar );
 				xui::checkbox( "preserve killfeed", m.preserve_killfeed );
 				xui::checkbox( "disable game logs", m.disable_game_logs );
+				xui::checkbox( "unlock spectator", m.unlock_spectator );
 
 				xui::checkbox( "auto buy", ab.enabled );
 				if ( xui::begin_popup( "##autobuy_popup", 220.0f ) )

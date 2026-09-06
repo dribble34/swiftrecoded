@@ -442,7 +442,13 @@ bool shared::penetration::can( const math::vector3& start, const math::vector3& 
 			// for one that fully absorbed the shot, and the two need to be
 			// told apart by can_penetrate, not by whether anything further
 			// was in the trace.
-			if ( hit.damage_applied < 0.03f )
+			//
+			// damage_applied here is raw, pre scale_damage -- no armor/hitgroup
+			// context reaches this call. armor only ever reduces the delivered
+			// amount, and run()'s output is always floored to whole HP, so
+			// anything under 1 raw unit is guaranteed to floor to 0 real damage
+			// even unarmored. 0.03 let that dead range read as "penetrable".
+			if ( hit.damage_applied < 1.0f )
 			{
 				return false;
 			}

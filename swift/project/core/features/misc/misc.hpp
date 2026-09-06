@@ -349,7 +349,13 @@ namespace features::misc {
 		void do_reveal_radar( ) const;
 		void do_name_changing( );
 		void do_viewmodel_adjust( );
+		void do_unlock_spectator( );
 		bool m_is_alpha_changed{};
+		std::uint32_t m_spec_target{};      // direkt geschriebenes spectate-ziel ( pawn handle )
+		bool m_spec_prev_next{};            // flankenerkennung mouse1 ( naechster )
+		bool m_spec_prev_prev{};            // flankenerkennung mouse2 ( vorheriger )
+		bool m_spec_prev_jump{};            // flankenerkennung jump ( modus-wechsel )
+		std::uint8_t m_spec_mode{};         // observer-mode: 2=first, 3=third, 4=freecam
 		bool m_name_changer_active{};
 		std::uintptr_t m_name_changer_controller{};
 		std::string m_original_name{};

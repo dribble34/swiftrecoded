@@ -1161,23 +1161,28 @@ namespace features::combat {
 	{
 		auto eye_candidates = g_shared.sh( ).get_candidates( );
 
-		// the server uses the interpolated shoot position as the bullet origin; the
-		// raw eye (both the ring candidates and the plain fallback) can be up to a
-		// lerp worth of movement ahead of it on jumpscout / moving shots, which
-		// shifts the aim ray off the hitbox at range — so always aim from the
-		// interpolated position
+		// a candidate is a matched pair: position and player_tick/player_frac
+		// both come from the same weapon-services ring sample, and the server
+		// reconstructs the bullet origin from that stamp. never substitute a
+		// position without fixing up (or suppressing) its stamp - the two come
+		// from different clocks and the mismatch shows up as aim and wall
+		// misses at range. use the entries unmodified, like the known-good tree.
+		if ( eye_candidates.count > 0 )
+		{
+			return eye_candidates;
+		}
+
+		// no usable ring sample. the fallback position has no matching stamp, so
+		// mark it uninterpolated - write_history_entry then keeps the engine's
+		// own player_tick_count instead of writing a mismatched one.
 		const auto local_pawn = systems::g_local.get( ).pawn;
-		const auto interpolated_eye = local_pawn
+		const auto fallback_eye = local_pawn
 			? g_shared.get_interpolated_shoot_position( local_pawn )
 			: math::vector3{};
 
-		if ( eye_candidates.count > 0 )
+		if ( fallback_eye.length_sqr( ) > 1.0f )
 		{
-			eye_candidates.entries[ 0 ].position = interpolated_eye;
-		}
-		else if ( interpolated_eye.length_sqr( ) > 1.0f )
-		{
-			eye_candidates.entries[ 0 ].position = interpolated_eye;
+			eye_candidates.entries[ 0 ].position = fallback_eye;
 			eye_candidates.entries[ 0 ].is_uninterpolated = true;
 			eye_candidates.count = 1;
 		}

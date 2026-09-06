@@ -9,7 +9,7 @@ namespace rendering {
 
 		constexpr const char* hitbox_names[ ]{ "head", "chest", "stomach", "arms", "legs", "feet" };
 		constexpr const char* pitch_items[ ]{ "none", "down", "up", "custom" };
-		constexpr const char* yaw_items[ ]{ "backwards", "forward", "custom" };
+		constexpr const char* yaw_items[ ]{ "backwards", "forward", "custom", "spin" };
 
 	} 
 
@@ -104,7 +104,8 @@ namespace rendering {
 
 		xui::layout::set_cursor( right_x - wx, body_y - wy );
 
-		if ( xui::begin_child( "##ragebot_antiaim", col_w ) )
+		// scrollbar + feste hoehe: aa hat viele optionen, sonst laeuft es unten raus.
+		if ( xui::begin_child( "##ragebot_antiaim", col_w, this->m_body_h - 120.0f, true ) )
 		{
 			xui::checkbox( "anti aim", aa.enabled );
 			xui::checkbox( "at target", aa.at_target );
@@ -112,14 +113,31 @@ namespace rendering {
 			xui::combo( "pitch", aa.pitch.value, detail::pitch_items, 4 );
 				if ( aa.pitch.value == settings::combat::antiaim::pitch_mode::custom )
 				{
-					xui::slider_float( "custom pitch", aa.custom_pitch.value, -90.0f, 90.0f, "%.0f°" );
+					xui::slider_float( "custom pitch", aa.custom_pitch.value, -180.0f, 180.0f, "%.0f°" );
 				}
 
-			xui::combo( "yaw", aa.yaw.value, detail::yaw_items, 3 );
+			xui::combo( "yaw", aa.yaw.value, detail::yaw_items, 4 );
 			if ( aa.yaw.value == settings::combat::antiaim::yaw_mode::custom )
 			{
 				xui::slider_float( "custom yaw", aa.custom_yaw.value, -180.0f, 180.0f, "%.0f°" );
 			}
+
+			if ( aa.yaw.value == settings::combat::antiaim::yaw_mode::spin )
+			{
+				xui::slider_float( "spin speed", aa.spin_speed.value, 1.0f, 50.0f, "%.1f" );
+			}
+
+			xui::checkbox( "pitch jitter", aa.pitch_jitter );
+			if ( aa.pitch_jitter.value )
+			{
+				xui::slider_float( "pitch jitter amount", aa.pitch_jitter_amount.value, 0.0f, 90.0f, "%.0f" );
+			}
+			xui::checkbox( "yaw jitter", aa.yaw_jitter );
+			if ( aa.yaw_jitter.value )
+			{
+				xui::slider_float( "yaw jitter amount", aa.yaw_jitter_amount.value, 0.0f, 90.0f, "%.0f" );
+			}
+			xui::checkbox( "antibackstab", aa.antibackstab );
 
 			xui::checkbox( "yaw from view", aa.use_view_yaw );
 			xui::checkbox( "compensate roll", aa.auto_yaw_adjust );

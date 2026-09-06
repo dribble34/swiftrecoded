@@ -32,6 +32,7 @@ namespace hooks {
 		const hooking::manager::entry feature_hooks[] {
 			{ &m_cmd_interpreter, &cmd_interpreter, xs ("cmd_interpreter"), PATTERN (patterns::cmd_interpreter) },
 			{ &m_frame_stage_notify, &frame_stage_notify, xs ("frame_stage_notify"), PATTERN (patterns::frame_stage_notify) },
+			{ &m_get_item_in_loadout, &get_item_in_loadout, xs ("get_item_in_loadout"), PATTERN (patterns::get_item_in_loadout) },
 			{ &m_create_move, &create_move, xs ("create_move"), PATTERN (patterns::create_move) },
 			{ &m_handle_view_angles, &handle_view_angles, xs ("handle_view_angles"), PATTERN (patterns::handle_view_angles) },
 			{ &m_add_entity, &add_entity, xs ("add_entity"), PATTERN (patterns::add_entity) },
@@ -95,6 +96,7 @@ namespace hooks {
 		m_resize_buffers.reset( );
 		m_cmd_interpreter.reset( );
 		m_frame_stage_notify.reset( );
+		m_get_item_in_loadout.reset( );
 		m_create_move.reset( );
 		m_handle_view_angles.reset( );
 		m_add_entity.reset( );
@@ -300,6 +302,13 @@ namespace hooks {
 		}
 	}
 
+	std::uintptr_t __fastcall cheat::get_item_in_loadout( std::uintptr_t thisptr, std::uint32_t team, std::uint32_t slot )
+	{
+		const auto original = m_get_item_in_loadout.call<std::uintptr_t>( thisptr, team, slot );
+
+		return features::changer::g_inventory.on_get_item_in_loadout( team, slot, original );
+	}
+
 	void __fastcall cheat::create_move( std::uintptr_t thisptr, int slot, bool active )
 	{
 		const auto local = systems::g_local.get( );
@@ -408,7 +417,13 @@ namespace hooks {
 
 				diag::set_exception_phase( "create_move: post-combat movement" );
 				features::combat::g_misc.duckpeek( ).on_create_move( current_cmd );
-				if ( CONVAR ("sv_quantize_movement_input")->get<bool>( ) )
+				// subtick-strafer braucht subtick-view-angles + quantized input, sonst
+				// faellt es auf den analogen airstrafer zurueck.
+				const auto subtick_angles_cv = CONVAR ("sv_subtick_view_angles");
+				const auto quantize_cv = CONVAR ("sv_quantize_movement_input");
+				const bool use_subtick = ( !subtick_angles_cv || subtick_angles_cv->get<bool>( ) )
+					&& quantize_cv && quantize_cv->get<bool>( );
+				if ( use_subtick )
 				{
 					features::movement::g_test_strafer.on_create_move( current_cmd );
 				}

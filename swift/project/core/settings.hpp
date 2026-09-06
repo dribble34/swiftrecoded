@@ -244,7 +244,8 @@ namespace settings {
 			{
 				backwards,
 				forward,
-				custom
+				custom,
+				spin
 			};
 
 			xui::setting enabled{ true, {}, "anti aim", "anti aim" };
@@ -264,6 +265,8 @@ namespace settings {
 			config::val<float> pitch_jitter_amount{ 45.0f, "anti aim", "pitch jitter amount" };
 			xui::setting yaw_jitter{ false, {}, "yaw jitter", "anti aim" };
 			config::val<float> yaw_jitter_amount{ 30.0f, "anti aim", "yaw jitter amount" };
+			config::val<float> spin_speed{ 12.0f, "anti aim", "spin speed" };
+			xui::setting antibackstab{ true, {}, "flip forward vs knife", "anti aim" };
 
 			enum class visualizer_style : int { circle, arrow };
 
@@ -1190,6 +1193,10 @@ namespace settings {
 		xui::setting preserve_killfeed{ true, {}, "preserve killfeed", "misc" };
 		xui::setting reveal_radar{ true, {}, "reveal radar", "misc" };
 		xui::setting disable_game_logs{ true, {}, "disable game logs", "misc" };
+
+		// unlock spectator: im tot-zustand jeden spieler frei spectaten ( wie casual ).
+		// wechsel per attack/attack2 ( mouse1/mouse2 ), third person per jump ( nativ ).
+		xui::setting unlock_spectator{ false, {}, "unlock spectator", "misc" };
 		config::val<int> menu_key{ VK_INSERT, "misc", "menu key" };
 
 		struct watermark_cfg
@@ -1212,7 +1219,7 @@ namespace settings {
 		xui::setting airstrafe{ true, {}, "airstrafe", "movement" };
 		xui::setting airstrafe_fully_directional{ true, {}, "fully directional", "movement - airstrafe" };
 		xui::setting strafe_boost{ false, {}, "strafe boost", "movement - airstrafe" };
-		config::val<float> strafe_boost_value{ 1.0f, "movement - airstrafe", "strafe boost value" };
+		config::val<float> strafe_boost_value{ 16.0f, "movement - airstrafe", "strafe boost value" };
 
 		xui::setting slide_walk{ false, {}, "slide walk", "movement" };
 		xui::setting quick_stop{ false, {}, "quick stop", "movement" };

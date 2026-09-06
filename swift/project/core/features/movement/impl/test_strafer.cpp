@@ -1,3 +1,5 @@
+#include <numbers>
+
 #include <utilities/memory/memory.hpp>
 #include <core/systems/systems.hpp>
 #include <core/features/features.hpp>
@@ -120,7 +122,11 @@ namespace features::movement {
 			return false;
 		}
 
-		return CONVAR ("sv_quantize_movement_input")->get<bool>( );
+		// active only when the server honours view-angle subticks AND movement input is
+		// quantized; otherwise the analog airstrafe handles it ( see cheat.cpp ).
+		const auto sva = CONVAR ("sv_subtick_view_angles");
+		const auto quantize = CONVAR ("sv_quantize_movement_input");
+		return ( !sva || sva->get<bool>( ) ) && quantize && quantize->get<bool>( );
 	}
 
 	math::vector2 test_strafer::movement_from_buttons( std::uintptr_t pressed )
@@ -251,8 +257,14 @@ namespace features::movement {
 		const auto speed_2d = velocity.length_2d( );
 		const auto command_yaw = base->viewangles( )->y( );
 
-		const auto player_move = movement_from_buttons( this->m_last_pressed );
+		auto player_move = movement_from_buttons( this->m_last_pressed );
 		if ( player_move.x == 0.0f && player_move.y == 0.0f )
+		{
+			return;
+		}
+
+		// multi directional aus: nur strafen wenn vorwaerts ( W ). x=+1 vor, -1 zurueck.
+		if ( !settings::g_movement.airstrafe_fully_directional.value && player_move.x <= 0.0f )
 		{
 			return;
 		}
@@ -273,24 +285,52 @@ namespace features::movement {
 		const auto sv_air_max_wishspeed = CONVAR ("sv_air_max_wishspeed")->get<float>( );
 		const auto surface_friction = prestate.surface_friction;
 
+		// ziel relativ zur ECHTEN sicht bei aktivem aa ( sonst gefaketer yaw ), subticks
+		// steuern ab command_yaw ( = gesendeter yaw ).
+		const auto ref_yaw = settings::g_combat.m_antiaim.enabled.value
+			? systems::g_input.get_view_angles( ).y
+			: command_yaw;
 		const auto base_yaw_offset = std::atan2f( -player_move.y, player_move.x ) * ( 180.0f / std::numbers::pi_v<float> );
-		auto target_yaw = command_yaw + base_yaw_offset;
+		auto target_yaw = ref_yaw + base_yaw_offset;
 		math::helpers::normalize_angle( target_yaw );
 
-		const auto sub_frame = cstypes::tick_interval / static_cast< float >( k_max_subticks );
-		const auto when_step = ( 1.0f - start_when ) / static_cast< float >( k_max_subticks + 1 );
+		// grosser statischer fake-offset ( z.b. backwards = 180 ): die sicht kann pro tick
+		// nicht so weit drehen. statt zu drehen die bewegung umkehren - "zurueck" mit
+		// rueckwaerts-sicht = vorwaerts in der welt -> noetiger view-delta bleibt klein.
+		// nicht bei spin ( offset wandert staendig ueber 90 -> flackern ).
+		const bool is_spin = settings::g_combat.m_antiaim.yaw.value == settings::combat::antiaim::yaw_mode::spin;
+
+		auto fake_offset = command_yaw - ref_yaw;
+		math::helpers::normalize_angle( fake_offset );
+
+		auto view_offset = base_yaw_offset;
+		if ( !is_spin && std::fabsf( fake_offset ) > 90.0f )
+		{
+			base->set_forwardmove( -base->forwardmove( ) );
+			base->set_leftmove( -base->leftmove( ) );
+			view_offset += 180.0f;
+			math::helpers::normalize_angle( view_offset );
+		}
+
+		// boost an -> slider ( 2..16 subticks ), aus -> 2 subticks.
+		const auto subticks = settings::g_movement.strafe_boost.value
+			? std::clamp( static_cast< int >( std::lroundf( settings::g_movement.strafe_boost_value.value ) ), 2, k_max_subticks )
+			: 2;
+
+		const auto sub_frame = cstypes::tick_interval / static_cast< float >( subticks );
+		const auto when_step = ( 1.0f - start_when ) / static_cast< float >( subticks + 1 );
 
 		auto acc_yaw = command_yaw;
 		auto sim_vx = velocity.x;
 		auto sim_vy = velocity.y;
 		auto injected = 0;
 
-		for ( auto i = 1; i <= k_max_subticks; ++i )
+		for ( auto i = 1; i <= subticks; ++i )
 		{
 			const auto entry_side = ( ( this->m_substep_counter + i ) % 2 ) == 0;
 			const auto wishdir_yaw = ref_air_strafer( sim_vx, sim_vy, target_yaw, sub_frame, entry_side, sv_maxspeed, sv_airaccelerate, sv_air_max_wishspeed );
 
-			auto target_view_yaw = wishdir_yaw - base_yaw_offset;
+			auto target_view_yaw = wishdir_yaw - view_offset;
 			math::helpers::normalize_angle( target_view_yaw );
 
 			auto yaw_delta = target_view_yaw - acc_yaw;

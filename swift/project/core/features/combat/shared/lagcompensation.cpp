@@ -94,8 +94,12 @@ namespace features::combat {
 
 		const auto max_unlag = [ ]
 		{
-			const auto server_limit = CONVAR( "sv_maxunlag" )->get<float>( );
-			const auto player_limit = CONVAR( "sv_maxunlag_player" )->get<float>( );
+			// null-check: diese convars existieren nicht auf jedem server/build; ein
+			// ungeprueftes ->get() auf einen nullptr crasht ( u.a. auf official servern ).
+			const auto server_cv = CONVAR( "sv_maxunlag" );
+			const auto player_cv = CONVAR( "sv_maxunlag_player" );
+			const auto server_limit = server_cv ? server_cv->get<float>( ) : 1.0f;
+			const auto player_limit = player_cv ? player_cv->get<float>( ) : 0.0f;
 			return player_limit > 0.0f ? std::min( server_limit, player_limit ) : server_limit;
 		}( );
 

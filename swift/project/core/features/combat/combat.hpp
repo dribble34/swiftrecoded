@@ -236,7 +236,9 @@ namespace features::combat {
 		[[nodiscard]] std::uint32_t get_spread_seed( const math::vector3& angles, int tick ) const;
 		[[nodiscard]] math::vector2 calculate_spread( int seed, float accuracy, float spread, float recoil_index, int item_def_idx, int num_bullets ) const;
 		[[nodiscard]] math::vector3 get_aim_punch( std::uintptr_t local_pawn ) const;
-		[[nodiscard]] float calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples = 256, float needed = 0.0f ) const;
+		// abort_below: give up early once the result can no longer reach it. the
+		// value returned in that case is a lower bound, not a hitchance.
+		[[nodiscard]] float calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples = 256, float abort_below = 0.0f ) const;
 		// out_error: 0 on an exact fixed point, else the residual spread error
 		[[nodiscard]] math::vector3 find_spread_correction( const math::vector3& aim_angle, int tick, float* out_error = nullptr ) const;
 		[[nodiscard]] math::vector3 get_eye_position( std::uintptr_t local_pawn ) const;
@@ -281,6 +283,7 @@ namespace features::combat {
 			[[nodiscard]] float get_pitch( float view_pitch );
 			[[nodiscard]] float get_yaw( const math::vector3& view_angles, const systems::local::snapshot& local );
 			void correct_movement( systems::input::usercmd* cmd );
+			void apply_standalone_slide_walk( systems::input::usercmd* cmd );
 			[[nodiscard]] bool is_near_ladder( std::uintptr_t local_pawn ) const;
 
 			struct movement_quantizer
@@ -291,11 +294,14 @@ namespace features::combat {
 
 			math::vector3 m_old_angles{};
 			math::vector3 m_modified_angles{};
+			math::vector3 m_send_angles{};
 			movement_quantizer m_quantizer{};
 
 			int m_yaw_side{};
 			bool m_should_correct{};
 			bool m_antiaim_active{};
+			bool m_jitter{};        // jitter-seite pro tick
+			float m_spin_yaw{};     // spin akkumulator
 			float m_indicator_yaw{};
 		};
 
@@ -340,7 +346,8 @@ namespace features::combat {
 
 		private:
 			[[nodiscard]] float get_effective_accel_base( std::uintptr_t local_pawn, std::uintptr_t movement_services, std::uint32_t flags, float max_weapon_speed ) const;
-			void apply_counter_strafe( systems::input::usercmd* cmd, float wish_x, float wish_y, float move_magnitude );
+			void apply_counter_strafe( systems::input::usercmd* cmd, float wish_x, float wish_y );
+			[[nodiscard]] bool handle_quick_stop( systems::input::usercmd* cmd );
 		};
 
 		antiaim m_antiaim{};

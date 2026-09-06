@@ -100,7 +100,7 @@ namespace features::combat {
 		return out;
 	}
 
-	float shared::calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples, float needed ) const
+	float shared::calculate_hitchance( const math::vector3& shoot_position, const math::vector3& aim_angle, const systems::hitboxes::entry& hitbox, const systems::bones::data& bone, float inaccuracy, float spread, int samples, float abort_below ) const
 	{
 		const auto total = spread + inaccuracy;
 		if ( total < 0.0001f )
@@ -189,10 +189,15 @@ namespace features::combat {
 		}
 		cache.count = std::max( cache.count, cached_samples );
 
-		auto hits{ 0 };
-		const auto needed_hits = needed > 0.0f
-			? static_cast< int >( std::ceil( std::clamp( needed, 0.0f, 1.0f ) * static_cast< float >( samples ) ) )
+		// the denominator is always `samples` on every return path, so results
+		// are comparable between calls and safe to rank on. the only early exit
+		// is when the result can no longer reach `abort_below`; in that case the
+		// value returned is a lower bound and callers must not read it.
+		const auto abort_hits = abort_below > 0.0f
+			? static_cast< int >( std::ceil( std::clamp( abort_below, 0.0f, 1.0f ) * static_cast< float >( samples ) ) )
 			: 0;
+
+		auto hits{ 0 };
 
 		for ( auto i = 0; i < samples; ++i )
 		{
@@ -218,17 +223,11 @@ namespace features::combat {
 				++hits;
 			}
 
-			if ( needed_hits > 0 )
+			// even if every remaining sample hit, the total could not reach the
+			// threshold the caller cares about
+			if ( abort_hits > 0 && hits + ( samples - i - 1 ) < abort_hits )
 			{
-				if ( hits >= needed_hits )
-				{
-					return static_cast< float >( hits ) / static_cast< float >( i + 1 );
-				}
-
-				if ( hits + ( samples - i - 1 ) < needed_hits )
-				{
-					return static_cast< float >( hits ) / static_cast< float >( samples );
-				}
+				return static_cast< float >( hits ) / static_cast< float >( samples );
 			}
 		}
 
@@ -240,20 +239,21 @@ namespace features::combat {
 		// seed = SHA1( q(pitch), q(yaw), tick )[0], q() snapping to 0.5 deg
 		// steps; roll is never hashed.
 		//
-		// a fixed point needs the fired pitch to land in the same bucket as
-		// the seed we cancelled. the correction is well under a degree, so
-		// only buckets adjacent to the aim pitch can ever match.
+		// a fixed point needs the fired pitch to land in the same bucket as the
+		// seed we cancelled. the pitch offset is atan of the whole spread
+		// magnitude and is never negative, so candidates sit at or above the aim
+		// pitch and run several degrees out once the weapon is at all inaccurate
+		// -- a window around the aim pitch only ever solves near-max-accuracy
+		// shots, so sweep the whole bucket space.
 		constexpr auto k_bucket{ 0.5f };
-		constexpr auto k_window{ 6 };
-
-		const auto base_bucket = std::roundf( aim_angle.x * 2.0f ) * k_bucket;
+		constexpr auto k_bucket_count{ 720 };
 
 		auto best = math::vector3{};
 		auto best_error{ 1.0e30f };
 
-		for ( auto i = -k_window; i <= k_window; ++i )
+		for ( auto i = 0; i < k_bucket_count; ++i )
 		{
-			const auto test_angles = math::vector3{ base_bucket + static_cast< float >( i ) * k_bucket, aim_angle.y, 0.0f };
+			const auto test_angles = math::vector3{ static_cast< float >( i ) * k_bucket, aim_angle.y, 0.0f };
 			const auto seed = this->get_spread_seed( test_angles, tick );
 			const auto spread = this->calculate_spread( seed, this->m_ctx.inaccuracy, this->m_ctx.spread, this->m_ctx.recoil_index, this->m_ctx.item_def_idx, this->m_ctx.num_bullets );
 

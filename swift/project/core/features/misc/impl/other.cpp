@@ -34,7 +34,7 @@ namespace features::misc {
 			other::s_name_change_pending = false;
 		}
 
-	} 
+	}
 
 	void other::on_round_start( )
 	{
@@ -58,6 +58,141 @@ namespace features::misc {
 		this->do_reveal_radar( );
 		this->do_name_changing( );
 		this->do_viewmodel_adjust( );
+		this->do_unlock_spectator( );
+	}
+
+	void other::do_unlock_spectator( )
+	{
+		if ( !settings::g_misc.unlock_spectator.value )
+		{
+			this->m_spec_target = 0;
+			this->m_spec_mode = 0;
+			return;
+		}
+
+		// 1) UI + native kameramodi ( first / third / freecam via V/jump ) freischalten:
+		// mp_forcecamera 0 = wie casual. jeden frame setzen ( server spiegelt zurueck ).
+		if ( const auto force_camera = CONVAR( "mp_forcecamera" ) )
+		{
+			if ( force_camera->get<int>( ) != 0 )
+				force_camera->m_value.i32 = 0;
+		}
+
+		const auto local = systems::g_local.get( );
+		if ( !local.controller || local.is_alive )
+		{
+			this->m_spec_target = 0;
+			this->m_spec_mode = 0;
+			return;
+		}
+
+		// 2) das native "next player" ist server-gated und erreicht keine gegner. daher
+		// den observer-target direkt schreiben - das zeigt gegner ( wir haben die daten ),
+		// und mouse1/mouse2 cyclen manuell durch ALLE spieler.
+		const auto obs_pawn_handle = memory::read<std::uint32_t>( local.controller + SCHEMA( "CCSPlayerController", "m_hObserverPawn"_hash ) );
+		const auto obs_pawn = systems::g_entities.lookup( obs_pawn_handle );
+		if ( !obs_pawn )
+			return;
+
+		const auto obs_services = memory::read<std::uintptr_t>( obs_pawn + SCHEMA( "C_BasePlayerPawn", "m_pObserverServices"_hash ) );
+		if ( !obs_services )
+			return;
+
+		const auto target_off = obs_services + SCHEMA( "CPlayer_ObserverServices", "m_hObserverTarget"_hash );
+
+		// lebende spieler-pawns sammeln ( beide teams; eigene leiche ist nie dabei ).
+		std::uint32_t targets[ 64 ]{};
+		int count = 0;
+		for ( const auto& player : systems::g_entities.get_by_type( systems::entities::type::player ) )
+		{
+			if ( count >= 64 )
+				break;
+
+			const auto controller = player.ptr;
+			if ( !controller || !memory::read<bool>( controller + SCHEMA( "CCSPlayerController", "m_bPawnIsAlive"_hash ) ) )
+				continue;
+
+			const auto ph = memory::read<std::uint32_t>( controller + SCHEMA( "CBasePlayerController", "m_hPawn"_hash ) );
+			if ( ph == 0u || ph == 0xFFFFFFFFu )
+				continue;
+
+			targets[ count++ ] = ph;
+		}
+
+		if ( count == 0 )
+			return;
+
+		int idx = -1;
+		for ( int i = 0; i < count; ++i )
+		{
+			if ( targets[ i ] == this->m_spec_target )
+			{
+				idx = i;
+				break;
+			}
+		}
+
+		// nur lesen wenn das spielfenster im vordergrund ist - sonst waere GetAsyncKeyState
+		// global und wuerde auch ausgeloest wenn man rausgetabbt ist.
+		DWORD fg_pid = 0;
+		GetWindowThreadProcessId( GetForegroundWindow( ), &fg_pid );
+		const bool focused = ( fg_pid == GetCurrentProcessId( ) );
+
+		const bool atk  = focused && ( GetAsyncKeyState( VK_LBUTTON ) & 0x8000 ) != 0;
+		const bool atk2 = focused && ( GetAsyncKeyState( VK_RBUTTON ) & 0x8000 ) != 0;
+		int step = 0;
+		if ( atk && !this->m_spec_prev_next )
+			step = 1;
+		else if ( atk2 && !this->m_spec_prev_prev )
+			step = -1;
+		this->m_spec_prev_next = atk;
+		this->m_spec_prev_prev = atk2;
+
+		if ( step != 0 )
+			this->m_spec_target = targets[ ( idx < 0 ) ? 0 : ( idx + step + count ) % count ];
+		else if ( idx < 0 )
+			this->m_spec_target = targets[ 0 ];
+
+		if ( this->m_spec_target != 0 &&
+			memory::read<std::uint32_t>( target_off ) != this->m_spec_target )
+		{
+			memory::write<std::uint32_t>( target_off, this->m_spec_target );
+		}
+
+		// jump cyclet first -> third -> freecam -> first ( natives jump ist server-gated,
+		// also den observer-mode direkt schreiben ). basis = first person, +1 chase,
+		// +2 roaming ( freecam ).
+		const auto mode_field = SCHEMA( "CPlayer_ObserverServices", "m_iObserverMode"_hash );
+		if ( mode_field != 0 )
+		{
+			const auto mode_off = obs_services + mode_field;
+			const auto cur = memory::read<std::uint8_t>( mode_off );
+
+			// feld verifizieren: gueltige observer-modes sind klein. bei muell nicht schreiben.
+			if ( cur < 16 )
+			{
+				// cs2 observer-modes: in-eye(2)=first, chase(3)=third, roaming(4)=freecam.
+				// immer einen FOLGE-mode erzwingen ( nie deathcam ) -> kamera klebt beim tod
+				// nicht an der eigenen leiche.
+				if ( this->m_spec_mode < 2 || this->m_spec_mode > 4 )
+					this->m_spec_mode = 2;   // first person
+
+				// jump aus dem command lesen ( respektiert den bind ), space als fallback.
+				const auto cmd = systems::g_input.get_current_cmd( local.controller );
+				const bool jmp = ( cmd && ( cmd->buttons.value & cstypes::command_buttons::in_jump ) != 0 )
+					|| ( focused && ( GetAsyncKeyState( VK_SPACE ) & 0x8000 ) != 0 );
+
+				// jump cyclet: first(2) -> third(3) -> freecam(4) -> first.
+				if ( jmp && !this->m_spec_prev_jump )
+					this->m_spec_mode = ( this->m_spec_mode >= 4 )
+						? 2
+						: static_cast< std::uint8_t >( this->m_spec_mode + 1 );
+				this->m_spec_prev_jump = jmp;
+
+				if ( cur != this->m_spec_mode )
+					memory::write<std::uint8_t>( mode_off, this->m_spec_mode );
+			}
+		}
 	}
 
 	void other::do_reveal_radar( ) const
@@ -426,7 +561,10 @@ namespace features::misc {
 
 		const auto set_float_cvar = [ ]( std::uint32_t hash, float value )
 			{
-			addresses::globals::cvar->find(hash)->m_value.fl = value;
+			// null-check: auf vac/official servern kann ein convar fehlen/gesperrt sein;
+			// ohne pruefung crasht der deref.
+			if ( const auto cv = addresses::globals::cvar->find( hash ) )
+				cv->m_value.fl = value;
 			};
 
 		if ( cfg.offset_x.value != this->m_cached_vm_x )

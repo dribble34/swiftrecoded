@@ -285,4 +285,24 @@ namespace features::changer {
 		std::chrono::steady_clock::time_point m_hud_clear_time{};
 	};
 
-} 
+	// basic inventory changer: repoints the melee loadout slot at the knife the
+	// user picked in the skin changer, so it shows in the game's own LOADOUT
+	// picker (and spawns) even with no real item owned. driven by the
+	// CCSPlayerInventory::GetItemInLoadout hook, no per-frame tick.
+	class inventory
+	{
+	public:
+		[[nodiscard]] std::uintptr_t on_get_item_in_loadout( std::uint32_t team, std::uint32_t slot, std::uintptr_t original );
+
+	private:
+		struct slot_state
+		{
+			std::uintptr_t address{};
+			std::uint16_t original_def{};
+			bool active{};
+		};
+
+		slot_state m_slot[ 4 ]{};
+	};
+
+}

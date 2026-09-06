@@ -28,6 +28,7 @@ namespace hooks {
 		static void __stdcall om_set_render_targets( ID3D11DeviceContext* ctx, UINT num_views, ID3D11RenderTargetView* const* rtvs, ID3D11DepthStencilView* dsv );
 		static void __fastcall cmd_interpreter( std::uintptr_t render_thread, std::uintptr_t item, std::uint8_t flag );
 		static void __fastcall frame_stage_notify( std::uintptr_t thisptr, int stage );
+		static std::uintptr_t __fastcall get_item_in_loadout( std::uintptr_t thisptr, std::uint32_t team, std::uint32_t slot );
 		static void __fastcall create_move( std::uintptr_t thisptr, int slot, bool active );
 		static void __fastcall handle_view_angles( std::uintptr_t thisptr, int a2 );
 		static void __fastcall add_entity( std::uintptr_t thisptr, std::uintptr_t entity, std::uint32_t handle );
@@ -75,6 +76,7 @@ namespace hooks {
 		inline static hooking::jmp m_om_set_render_targets{};
 		inline static hooking::jmp m_cmd_interpreter{};
 		inline static hooking::jmp m_frame_stage_notify{};
+		inline static hooking::jmp m_get_item_in_loadout{};
 		inline static hooking::jmp m_create_move{};
 		inline static hooking::jmp m_handle_view_angles{};
 		inline static hooking::jmp m_add_entity{};

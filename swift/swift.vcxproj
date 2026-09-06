@@ -138,6 +138,7 @@
     <ClCompile Include="project\core\features\changer\impl\gloves.cpp" />
     <ClCompile Include="project\core\features\changer\impl\guns.cpp" />
     <ClCompile Include="project\core\features\changer\impl\econ_item_system.cpp" />
+    <ClCompile Include="project\core\features\changer\impl\inventory.cpp" />
     <ClCompile Include="project\core\features\changer\impl\knives.cpp" />
     <ClCompile Include="project\core\features\combat\impl\legit.cpp" />
     <ClCompile Include="project\core\features\combat\impl\misc.cpp" />
